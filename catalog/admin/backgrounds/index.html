@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stillroom | Backgrounds</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#f3f2ee;background:#080d13}*{box-sizing:border-box}body{margin:0;overflow:hidden}button,input{font:inherit}button{cursor:pointer;color:inherit}button:focus-visible,input:focus-visible{outline:2px solid #eac69c;outline-offset:5px}canvas{position:fixed;inset:0;width:100%;height:100%}.shade{position:fixed;inset:0;background:linear-gradient(90deg,rgba(4,9,14,.85),rgba(4,9,14,.08) 85%);pointer-events:none;transition:opacity .6s}main{position:relative;height:100dvh;overflow:auto;padding:clamp(24px,5vw,72px);max-width:760px;transition:opacity .4s}header{display:flex;gap:12px;align-items:center;font-size:12px;letter-spacing:.25em;text-transform:uppercase}.mark{height:28px;width:28px;border:1px solid #f3e3c278;border-radius:50%;display:grid;place-items:center}.mark:after{content:'';width:10px;height:10px;border-radius:50%;background:#ead5ae}h1{font-family:Georgia,serif;font-weight:normal;letter-spacing:-.045em;font-size:clamp(48px,7vw,82px);line-height:1.04;margin:52px 0 18px;max-width:570px}.intro{color:#c1c9ce;line-height:1.6;font-size:15px;max-width:400px}.label{font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:#b1bdc4;margin:30px 0 12px}.scenes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.scene{text-align:left;padding:0;background:#17232b99;border:1px solid #ffffff26;border-radius:12px;overflow:hidden;transition:border-color .2s,transform .2s}.scene:hover{transform:translateY(-2px);border-color:#e8d2a2}.scene[aria-pressed=true]{border-color:#e8d2a2;box-shadow:0 0 0 1px #e8d2a2}.swatch{display:block;height:69px;position:relative;overflow:hidden}.swatch:after{content:'';position:absolute;inset:15px -20px -30px;border-radius:50%;background:#ffffff17;transform:rotate(-20deg)}.scene-name{display:flex;justify-content:space-between;padding:11px 12px;font-size:12px}.scene[aria-pressed=true] .scene-name:after{content:'\2713';color:#e8d2a2}.aurora{background:linear-gradient(145deg,#08142c,#245c66,#747b8e)}.dunes{background:linear-gradient(165deg,#573e59 20%,#c08567 58%,#423147 60%,#bd8264)}.ocean{background:linear-gradient(170deg,#091a2f,#216173 65%,#528a91)}.orbit{background:radial-gradient(ellipse at 70% 60%,#283b68,#060917 60%)}.rain{background:repeating-linear-gradient(103deg,transparent 0 12px,#8bafc222 13px 14px),linear-gradient(#132027,#4c5b61)}.embers{background:radial-gradient(ellipse at bottom,#b35436,#2e1a25 60%,#100d18)}.options{display:flex;gap:20px;flex-wrap:wrap;margin:22px 0;color:#c1c9ce;font-size:12px}.options label{display:flex;align-items:center;gap:8px}input{accent-color:#ddc49c}.actions{display:flex;gap:10px;flex-wrap:wrap}.primary,.secondary,.exit{border-radius:100px;padding:13px 21px;border:1px solid #ffffff40;background:#12232a88}.primary{background:#eee7d6;color:#152028;border-color:#eee7d6;font-weight:600}.hint{font-size:11px;color:#9caeb8;margin-top:17px;line-height:1.6}.status{min-height:20px;font-size:12px;color:#e9ceaa}.corner{position:fixed;right:30px;bottom:25px;text-align:right;font-size:10px;letter-spacing:.18em;color:#e4e6e899;pointer-events:none}.corner strong{display:block;color:#e5e9eb;font-size:12px;letter-spacing:.06em;font-weight:400;margin-bottom:6px}.exit{position:fixed;right:20px;top:20px;display:none;backdrop-filter:blur(12px)}.clock{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(55px,10vw,130px);font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:-.06em;text-shadow:0 2px 30px #0006;pointer-events:none;display:none}body.present main,body.present .shade{opacity:0;pointer-events:none}body.present main{visibility:hidden}body.present .exit{display:block}body.present.quiet .exit{opacity:0;pointer-events:none}body.present.quiet{cursor:none}body.present.show-clock .clock{display:block}@media(max-width:480px){h1{margin-top:32px}.swatch{height:54px}main{padding:24px}.corner{display:none}.options{gap:14px}.label{margin-top:24px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(min-width:600px) and (max-height:820px){main{padding:30px 48px}h1{font-size:58px;margin:25px 0 12px}.swatch{height:42px}.label{margin-top:20px}.intro{font-size:13px}.options{margin:18px 0}.hint{margin-top:12px}}body.present .corner{display:none}body.present.quiet .exit:focus-visible{opacity:1;pointer-events:auto}</style>
+</head>
+<body>
+<canvas id="view" aria-label="Animated ambient background"></canvas><canvas id="cinematic" aria-hidden="true"></canvas><div class="shade"></div>
+<main id="panel">
+<header><span class="mark" aria-hidden="true"></span>Stillroom <span style="color:#8a9ba6;letter-spacing:.1em">/ BACKGROUNDS</span></header>
+<h1>A little space<br>to do nothing.</h1>
+<p class="intro">Set the room's mood. Pick a living landscape, go fullscreen, and let your screen breathe.</p>
+<p class="label">01 / Choose your atmosphere</p><div class="scenes" id="scenes"></div>
+<div class="options"><label><input id="motion" type="checkbox" checked> Gentle motion</label><label><input id="showClock" type="checkbox"> Show clock</label><label><input id="dim" type="range" min="30" max="100" value="100" aria-label="Brightness"> Brightness</label></div>
+<div class="actions"><button class="primary" id="fullscreen">Go fullscreen <span aria-hidden="true">&#8599;</span></button><button class="secondary" id="present">Hide controls</button></div>
+<p class="hint">Move your pointer or tap to reveal the controls. Escape returns here.<br>No sound, no downloads, no account needed. Your device's sleep settings still apply.</p>
+<p class="status" id="status" role="status"></p>
+</main>
+<div class="clock" id="clock" aria-hidden="true"></div><div class="corner"><strong id="currentName">Northern lights</strong>STILLROOM / BATCHLY</div><button class="exit" id="exit">Change atmosphere</button>
+<script>
+(() => {
+  'use strict';
+  const canvas=document.getElementById('view'), ctx=canvas.getContext('2d');
+  const scenes=[['aurora','Northern lights'],['dunes','Desert dusk'],['ocean','Blue hour'],['orbit','Deep orbit'],['rain','Window rain'],['embers','Warm embers']];
+  const motion=document.getElementById('motion'), dim=document.getElementById('dim'), clockOption=document.getElementById('showClock');
+  let scene='aurora', width=1,height=1,time=0,last=0,frame=0,idleTimer;
+  const cinematic=document.getElementById('cinematic');
+  // A fragment shader paints light and depth on the GPU. No downloaded textures or libraries.
+  // Keep the original canvas painter for devices where WebGL is unavailable or loses its context.
+  let gpu=createRenderer(cinematic);
+  cinematic.addEventListener('webglcontextlost',event=>{event.preventDefault();gpu=null;cinematic.style.display='none';draw();});
+  cinematic.addEventListener('webglcontextrestored',()=>{gpu=createRenderer(cinematic);resize();});
+  function createRenderer(surface){
+    const gl=surface.getContext('webgl',{alpha:false,antialias:false,depth:false,powerPreference:'low-power'});
+    if(!gl){surface.style.display='none';return null;}
+    const vertex='attribute vec2 position;void main(){gl_Position=vec4(position,0.,1.);}';
+    const fragment=`
+precision highp float;
+uniform vec2 resolution;
+uniform float time;
+uniform float brightness;
+uniform int scene;
+#define PI 3.14159265
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.;float a=.5;for(int i=0;i<4;i++){v+=a*noise(p);p=mat2(1.6,1.2,-1.2,1.6)*p+7.3;a*=.5;}return v;}
+float starfield(vec2 p){vec2 cell=floor(p*180.);vec2 f=fract(p*180.)-.5;float h=hash(cell);return smoothstep(.987,1.,h)*exp(-dot(f,f)*65.)*(.6+.4*sin(time*.3+h*60.));}
+float disc(vec2 p,vec2 center,float radius){return 1.-smoothstep(radius-.003,radius+.003,length(p-center));}
+vec3 aurora(vec2 p){
+  vec3 col=mix(vec3(.018,.025,.09),vec3(.02,.12,.16),p.y);
+  col+=starfield(p)*vec3(.65,.79,1.);
+  float t=time*.035;
+  // Layered, vertically stretched noise gives the curtains their fine light filaments.
+  for(int i=0;i<5;i++){
+    float fi=float(i);float x=p.x+fi*.23;
+    float bend=.47+sin(x*2.8+t+fi*.65)*.14+sin(x*7.-t*.8+fi)*.035;
+    float d=p.y-bend;float strands=fbm(vec2(x*9.+t, t*.2+fi*12.));
+    float curtain=exp(-abs(d)*10.)*smoothstep(-.08,.02,d)*(1.-smoothstep(.02,.5,d));
+    float edge=exp(-abs(d)*100.);
+    vec3 tint=mix(vec3(.12,.82,.55),vec3(.35,.25,.85),smoothstep(.01,.32,d));
+    col+=tint*(curtain*(.15+strands*.55)+edge*.13)*(.55-fi*.065);
+  }
+  float horizon=.14+noise(vec2(p.x*4.,3.))*.06+noise(vec2(p.x*15.,2.))*.018;
+  col=mix(vec3(.014,.027,.043),col,smoothstep(horizon-.003,horizon+.004,p.y));
+  col+=vec3(.09,.25,.28)*exp(-abs(p.y-horizon)*25.)*.07;
+  return col;
+}
+vec3 dunes(vec2 p){
+  vec3 col=mix(vec3(.87,.46,.30),vec3(.14,.16,.29),smoothstep(.12,1.,p.y));
+  vec2 sun=vec2(.78,.58);col+=vec3(.8,.34,.16)*exp(-length(p-sun)*6.)*.3;
+  col=mix(col,vec3(1.,.83,.56),disc(p,sun,.042));
+  for(int i=0;i<5;i++){
+    float fi=float(i);float ridge=.37-fi*.065+sin(p.x*3.+fi*1.8+time*.004)*(.038+fi*.014)+sin(p.x*7.+fi)*.018;
+    float depth=clamp((ridge-p.y)*5.,0.,1.);
+    vec3 sand=mix(vec3(.70,.39,.31),vec3(.12,.12,.21),fi/5.);
+    sand*=.67+.4*exp(-depth*5.);
+    float ripples=sin(p.x*140.+p.y*40.+sin(p.x*6.+fi)*8.);
+    sand+=vec3(.035,.019,.013)*ripples*smoothstep(.01,.13,ridge-p.y);
+    sand+=vec3(.18,.08,.03)*exp(-abs(p.y-ridge)*250.);
+    col=mix(col,sand,1.-smoothstep(ridge-.002,ridge+.002,p.y));
+  }
+  float dust=fbm(vec2(p.x*4.-time*.015,p.y*8.));col+=vec3(.26,.12,.05)*dust*.05;
+  return col;
+}
+vec3 ocean(vec2 p){
+  float horizon=.49;vec2 moon=vec2(.72,.72);
+  vec3 col=mix(vec3(.22,.39,.49),vec3(.018,.04,.12),smoothstep(horizon,1.,p.y));
+  col+=vec3(.2,.31,.43)*exp(-length(p-moon)*9.)*.3;
+  col=mix(col,vec3(.9,.92,.83),disc(p,moon,.021));
+  col+=starfield(p)*smoothstep(.6,.95,p.y)*.3;
+  if(p.y<horizon){
+    float depth=horizon-p.y;float z=1./(depth+.045);
+    vec2 uv=vec2((p.x-.72)*z*.8,z*.6);
+    float n=fbm(uv*1.3+vec2(time*.055,-time*.07));
+    float waves=sin(uv.y*6.+n*6.+time*.65)*.5+.5;
+    float ripple=pow(waves,14.)*(.3+n*.7);
+    col=mix(vec3(.018,.085,.14),vec3(.05,.21,.27),depth*1.3);
+    col+=vec3(.13,.29,.34)*ripple*smoothstep(0.,.2,depth);
+    float reflection=exp(-abs(p.x-.72)*(8.+z*2.5));
+    col+=vec3(.6,.75,.72)*reflection*(.1+ripple*.9)*.65;
+    col+=vec3(.10,.17,.19)*exp(-depth*35.);
+  }
+  return col;
+}
+vec3 orbit(vec2 p){
+  vec3 col=vec3(.008,.012,.03)+starfield(p)*vec3(.65,.76,1.);
+  float nebula=fbm(p*3.+vec2(time*.004,0.));col+=vec3(.10,.055,.2)*pow(nebula,3.)*.65;
+  vec2 q=(p-vec2(.71,.51));float r=.235;float d=length(q);
+  float atmosphere=exp(-abs(d-r)*65.);col+=vec3(.16,.4,.8)*atmosphere*.24;
+  if(d<r){
+    vec3 normal=vec3(q/r,sqrt(max(0.,1.-dot(q,q)/(r*r))));
+    float light=max(0.,dot(normal,normalize(vec3(-.8,.45,.6))));
+    float cloud=fbm(normal.xy*6.+vec2(time*.006,0.));
+    vec3 surface=mix(vec3(.035,.12,.23),vec3(.44,.55,.58),smoothstep(.38,.7,cloud));
+    col=surface*(.035+light*.95)+vec3(.17,.35,.6)*pow(1.-normal.z,3.)*light*.6;
+  }
+  vec2 ring=mat2(.94,.342,-.342,.94)*q;float ellipse=length(vec2(ring.x,ring.y*3.3));
+  float band=smoothstep(.29,.30,ellipse)*(1.-smoothstep(.38,.40,ellipse));
+  float grooves=.55+.45*sin(ellipse*800.);
+  if(d>r||ring.y<0.)col=mix(col,vec3(.57,.52,.43)*(grooves*.3+.4),band*.65);
+  return col;
+}
+vec3 rain(vec2 p){
+  vec3 col=mix(vec3(.11,.16,.20),vec3(.02,.06,.10),p.y);
+  for(int i=0;i<16;i++){
+    float fi=float(i);vec2 center=vec2(hash(vec2(fi,1.))*2.,hash(vec2(fi,2.))*.6);
+    float radius=.018+hash(vec2(fi,4.))*.04;float d=length(p-center);
+    vec3 tint=mix(vec3(.20,.62,.70),vec3(.92,.48,.22),hash(vec2(fi,7.)));
+    col+=tint*exp(-pow(d/radius,2.)*.8)*.45;
+  }
+  vec2 grid=vec2(36.,6.);vec2 uv=p*grid;uv.y+=time*.38+hash(vec2(floor(uv.x),17.));vec2 cell=floor(uv);vec2 f=fract(uv)-.5;
+  float h=hash(cell);float x=(h-.5)*.65;float drop=length(vec2((f.x-x)*2.,(f.y+.12)*.8));
+  float bead=exp(-drop*45.)*smoothstep(.25,.85,h);
+  float trail=exp(-abs(f.x-x)*110.)*smoothstep(-.1,.45,f.y)*.11*smoothstep(.25,.85,h);
+  col+=vec3(.36,.49,.56)*(bead+trail);
+  col+=vec3(.10,.15,.19)*pow(noise(p*vec2(120.,2.)+time*.08),12.)*.2;
+  return col;
+}
+vec3 embers(vec2 p){
+  vec3 col=mix(vec3(.15,.025,.012),vec3(.018,.013,.026),smoothstep(0.,.8,p.y));
+  float smoke=fbm(p*3.+vec2(time*.015,-time*.025));col+=vec3(.28,.055,.016)*smoke*(1.-p.y)*.22;
+  col+=vec3(.6,.18,.03)*exp(-length((p-vec2(.75,-.3))*vec2(1.,.6))*4.)*.4;
+  for(int i=0;i<42;i++){
+    float fi=float(i);float speed=.014+hash(vec2(fi,3.))*.025;
+    vec2 center=vec2(hash(vec2(fi,1.))*2.,fract(hash(vec2(fi,2.))+time*speed));
+    center.x+=sin(time*.2+fi+center.y*3.)*.035;
+    vec2 delta=p-center;float d=length(delta*vec2(1.,.65));float size=.001+hash(vec2(fi,5.))*.002;
+    float glow=exp(-d*100.)*.11+exp(-d/size);
+    col+=vec3(1.,.36+hash(vec2(fi,7.))*.28,.13)*glow*sin(center.y*PI)*.9;
+  }
+  return col;
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/resolution;vec2 p=vec2((uv.x-.5)*resolution.x/resolution.y+.5,uv.y);
+  if(scene==3 && resolution.x<resolution.y)p=(gl_FragCoord.xy-resolution*.5)/resolution.x+.5;
+  vec3 col;
+  if(scene==0)col=aurora(p);else if(scene==1)col=dunes(p);else if(scene==2)col=ocean(p);else if(scene==3)col=orbit(p);else if(scene==4)col=rain(p);else col=embers(p);
+  col*=1.-.2*pow(length(uv-.5)*1.35,2.);
+  col+=vec3((hash(gl_FragCoord.xy)-.5)/255.);
+  gl_FragColor=vec4(max(vec3(0.),col)*brightness,1.);
+}`;
+    const program=gl.createProgram(), shaders=[];
+    try{
+      for(const [type,source] of [[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]){const s=gl.createShader(type);shaders.push(s);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error('Shader unavailable');gl.attachShader(program,s);}
+      gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error('Renderer unavailable');gl.useProgram(program);
+      const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+      const attr=gl.getAttribLocation(program,'position');gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,2,gl.FLOAT,false,0,0);
+      const uniforms=Object.fromEntries(['resolution','time','brightness','scene'].map(key=>[key,gl.getUniformLocation(program,key)]));surface.style.display='block';
+      return (id,t,w,h,light)=>{gl.viewport(0,0,surface.width,surface.height);gl.uniform2f(uniforms.resolution,surface.width,surface.height);gl.uniform1f(uniforms.time,t);gl.uniform1f(uniforms.brightness,light);gl.uniform1i(uniforms.scene,scenes.findIndex(s=>s[0]===id));gl.drawArrays(gl.TRIANGLES,0,6);};
+    }catch{gl.deleteProgram(program);surface.style.display='none';return null;}finally{shaders.forEach(s=>gl.deleteShader(s));}
+  }
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)');motion.checked=!reduced.matches;
+  // Seeded particles stay in place across frames; resizing changes only their projection.
+  let seed=83;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+  const particles=Array.from({length:90},()=>({x:random(),y:random(),s:random(),v:random()}));
+  for(const [id,name] of scenes){
+    const button=document.createElement('button');button.className='scene';button.dataset.scene=id;button.setAttribute('aria-pressed',String(id===scene));
+    button.innerHTML='<span class="swatch '+id+'" aria-hidden="true"></span><span class="scene-name">'+name+'</span>';
+    button.onclick=()=>{scene=id;document.querySelectorAll('.scene').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));document.getElementById('currentName').textContent=name;draw();};document.getElementById('scenes').append(button);
+  }
+  function background(top,bottom){const g=ctx.createLinearGradient(0,0,0,height);g.addColorStop(0,top);g.addColorStop(1,bottom);ctx.fillStyle=g;ctx.fillRect(0,0,width,height);}
+  function stars(){for(const p of particles){ctx.globalAlpha=.25+p.s*.55;ctx.fillStyle='#d8e8f3';ctx.beginPath();ctx.arc(p.x*width,p.y*height,p.s*1.3+.3,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+  function waves(colors,base,amplitude){for(let layer=0;layer<colors.length;layer++){ctx.fillStyle=colors[layer];ctx.beginPath();ctx.moveTo(0,height);for(let x=0;x<=width+12;x+=12){const y=height*(base+layer*.075)+Math.sin(x/width*5+time*.08+layer*1.6)*height*amplitude+Math.sin(x/width*10-time*.05+layer)*height*amplitude*.25;ctx.lineTo(x,y);}ctx.lineTo(width,height);ctx.closePath();ctx.fill();}}
+  function draw(){
+    if(gpu){gpu(scene,time,width,height,Number(dim.value)/100);return;}
+    if(!ctx)return;ctx.globalAlpha=1;
+    if(scene==='aurora'){
+      background('#070e25','#203c4c');stars();
+      for(let i=0;i<5;i++){const g=ctx.createLinearGradient(0,height*.15,0,height*.8);g.addColorStop(0,'#62e2b100');g.addColorStop(.5,i%2?'#81a2ed25':'#69e9c029');g.addColorStop(1,'#71dec900');ctx.fillStyle=g;ctx.beginPath();for(let x=0;x<=width+15;x+=15){ctx.lineTo(x,height*(.24+i*.025)+Math.sin(x/width*4+time*.06+i*.27)*height*.14);}for(let x=width+15;x>=0;x-=15){ctx.lineTo(x,height*(.62+i*.025)+Math.sin(x/width*4+time*.06+i*.27)*height*.1);}ctx.fill();}
+      waves(['#102636','#0c1d2b','#08151f'],.85,.035);
+    }else if(scene==='dunes'){
+      background('#46334e','#da9c72');const g=ctx.createRadialGradient(width*.73,height*.35,0,width*.73,height*.35,height*.16);g.addColorStop(0,'#f5d8a47d');g.addColorStop(1,'#f5d8a400');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);waves(['#9f695f','#755064','#533c53','#322c42'],.57,.07);
+    }else if(scene==='ocean'){
+      background('#08182c','#3b7183');for(let i=0;i<20;i++){const y=height*(.47+i*.03);ctx.strokeStyle='rgba(148,210,217,'+(.04+i*.004)+')';ctx.lineWidth=1+i*.12;ctx.beginPath();for(let x=0;x<=width+10;x+=10)ctx.lineTo(x,y+Math.sin(x/width*10+time*.25+i)*height*(.002+i*.0005));ctx.stroke();}
+    }else if(scene==='orbit'){
+      background('#040817','#101429');stars();const x=width*.67,y=height*.48,r=Math.min(width,height)*.24;const glow=ctx.createRadialGradient(x,y,r*.9,x,y,r*1.8);glow.addColorStop(0,'#6987d331');glow.addColorStop(1,'#253a7600');ctx.fillStyle=glow;ctx.fillRect(0,0,width,height);const g=ctx.createRadialGradient(x-r*.4,y-r*.5,0,x,y,r);g.addColorStop(0,'#879aa7');g.addColorStop(.5,'#374863');g.addColorStop(1,'#080d1c');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#a0b2d23d';ctx.lineWidth=r*.08;ctx.beginPath();ctx.ellipse(x,y,r*1.6,r*.32,-.4,0,Math.PI*2);ctx.stroke();
+    }else if(scene==='rain'){
+      background('#111d28','#455660');for(const p of particles){const x=p.x*width,y=((p.y+time*(.035+p.v*.025))%1)*height;ctx.strokeStyle='rgba(194,216,226,'+(.1+p.s*.22)+')';ctx.lineWidth=.7+p.s;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-4,y+18+p.s*28);ctx.stroke();}
+    }else{
+      background('#100d19','#3a2028');const g=ctx.createRadialGradient(width*.6,height*1.2,0,width*.6,height,Math.max(width,height)*.65);g.addColorStop(0,'#ac563547');g.addColorStop(1,'#ac563500');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);for(const p of particles){const y=height*(1-((p.y+time*(.009+p.v*.008))%1));ctx.fillStyle='rgba(242,172,110,'+(.2+p.s*.5)+')';ctx.beginPath();ctx.arc(p.x*width+Math.sin(time*.3+p.y*10)*20,y,1+p.s*1.8,0,Math.PI*2);ctx.fill();}
+    }
+    ctx.fillStyle='rgba(0,0,0,'+(1-Number(dim.value)/100)+')';ctx.fillRect(0,0,width,height);
+  }
+  function resize(){width=innerWidth;height=innerHeight;const ratio=Math.min(devicePixelRatio||1,1.5);canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);if(ctx)ctx.setTransform(ratio,0,0,ratio,0,0);const gpuRatio=Math.min(devicePixelRatio||1,1.25,Math.sqrt(1200000/(width*height)));cinematic.width=Math.max(1,Math.round(width*gpuRatio));cinematic.height=Math.max(1,Math.round(height*gpuRatio));draw();}
+  function tick(now){frame=0;if(document.hidden||!motion.checked)return;if(now-last>=1000/30){time+=Math.min((now-last)/1000,.1);last=now;draw();}frame=requestAnimationFrame(tick);}
+  function animate(){cancelAnimationFrame(frame);frame=0;last=performance.now();if(motion.checked&&!document.hidden)frame=requestAnimationFrame(tick);else draw();}
+  function reveal(){document.body.classList.remove('quiet');clearTimeout(idleTimer);if(document.body.classList.contains('present'))idleTimer=setTimeout(()=>document.body.classList.add('quiet'),2600);}
+  function enter(){document.body.classList.add('present');document.activeElement?.blur();document.getElementById('exit').focus({preventScroll:true});reveal();}
+  function leave(){document.body.classList.remove('present','quiet');clearTimeout(idleTimer);document.getElementById('present').focus();}
+  document.getElementById('present').onclick=enter;
+  document.getElementById('fullscreen').onclick=async()=>{try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();document.getElementById('status').textContent='';enter();}catch{document.getElementById('status').textContent='Fullscreen is unavailable here. Hide controls fills the app, or use Batchly\'s fullscreen button.';}};
+  document.getElementById('exit').onclick=async()=>{leave();if(document.fullscreenElement)try{await document.exitFullscreen();}catch{document.getElementById('status').textContent='Use Escape to leave fullscreen.';}};
+  document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)leave();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')leave();else reveal();});
+  document.addEventListener('pointermove',()=>{if(document.activeElement===document.getElementById('exit'))document.activeElement.blur();reveal();});document.addEventListener('pointerdown',reveal);
+  document.getElementById('exit').addEventListener('focus',reveal);
+  motion.onchange=animate;dim.oninput=draw;clockOption.onchange=()=>document.body.classList.toggle('show-clock',clockOption.checked);
+  reduced.addEventListener('change',event=>{motion.checked=!event.matches;animate();});
+  function updateClock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}updateClock();setInterval(updateClock,15000);
+  addEventListener('resize',resize);document.addEventListener('visibilitychange',animate);resize();animate();
+})();
+</script></body></html>

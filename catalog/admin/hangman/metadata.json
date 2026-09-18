@@ -1,0 +1,20 @@
+{
+  "folder": "admin/hangman",
+  "title": "Hangman",
+  "description": "Guess the hidden word before the drawing is finished. Win to keep your streak alive. How many in a row can you get?",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/hangman",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 31972,
+      "sha256": "adbab3f9684bb0b690c3c717ff6d5e75103fdea13ecff316f1a04803d0badd62",
+      "source": "published catalog HTML"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "folder": "admin/checksum",
+  "title": "Checksum",
+  "description": "Hash files with SHA-256/384/512 and compare against a published checksum to verify a download.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/checksum",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 67036,
+      "sha256": "88c61529c2ae93cbcfa45aa75b2442aa799a0dcf419131de860bf9630d93605a",
+      "source": "published catalog HTML"
+    }
+  ]
+}

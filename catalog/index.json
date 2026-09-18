@@ -1,0 +1,586 @@
+{
+  "checkedOn": "2026-09-18",
+  "awaitingRightsReview": 84,
+  "games": [
+    {
+      "folder": "admin/backgrounds",
+      "title": "Stillroom Backgrounds",
+      "description": "Six living backgrounds for your screen: northern lights, desert dusk, ocean, orbit, rain and embers. Go fullscreen, dim the scene, or add a clock.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/backgrounds",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 22729,
+          "sha256": "3661872c4676714fcdb34a9ed77b8cd5fe1c45765eb0fea029fa5f85ff7e72d2",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/checkers",
+      "title": "Checkers",
+      "description": "Play checkers against a computer that plans ahead: jump, chain multi-captures, and crown your kings. Easy to hard.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/checkers",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 39074,
+          "sha256": "84dcf5f01816ca0623c1220ef17dcf9cab16b1b724df19b481ee644fd3fffc6c",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/checksum",
+      "title": "Checksum",
+      "description": "Hash files with SHA-256/384/512 and compare against a published checksum to verify a download.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/checksum",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 67036,
+          "sha256": "88c61529c2ae93cbcfa45aa75b2442aa799a0dcf419131de860bf9630d93605a",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/connect-four",
+      "title": "Connect Four",
+      "description": "Drop discs and line up four in a row before the computer does. Simple to pick up, tricky to beat on hard.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/connect-four",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 48200,
+          "sha256": "5ffba8f59a562a971aeee2eac7096a3fc110fa818d38b9c3000a34c33686bb15",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/cryptogram",
+      "title": "Cryptogram",
+      "description": "Crack the cipher: every letter stands for another. Use frequency and common words to decode the hidden quote.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/cryptogram",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 35244,
+          "sha256": "884b4fdd5d5ae5a6a37b163bad21ebd1a70df6340905f80f85ee264bffbb138e",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/diff",
+      "title": "Diff",
+      "description": "Compare two texts and see exactly what changed, down to the word, side by side or unified.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/diff",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 63516,
+          "sha256": "c8464ada17d487c3d916506bcdf6f8e0498f7a8cb35addb9def3d7b4caf4d934",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/dots-and-boxes",
+      "title": "Dots and Boxes",
+      "description": "Draw lines, complete boxes, and claim more than the computer. Master the chains to win the endgame.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/dots-and-boxes",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 43366,
+          "sha256": "779db64f19c654609b7e593ce71075be9083214edcce02ecd0f2baf823429bd6",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/encode",
+      "title": "Encode",
+      "description": "Base64, URL, hex and HTML entity encoding both ways, plus a JWT decoder. All local.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/encode",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 57273,
+          "sha256": "88759b6194fd4b9a7ab85de58afb7c8f4bd9a0798b33601250e25b4b6e1179de",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/gomoku",
+      "title": "Gomoku",
+      "description": "Five-in-a-row on a big board against a computer that builds and blocks threats. Get five before it does.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/gomoku",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 39306,
+          "sha256": "7ad594f8954d4e01578f6f4e53e9810b814a6520656473ed53f3ad660a8b35b8",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/hangman",
+      "title": "Hangman",
+      "description": "Guess the hidden word before the drawing is finished. Win to keep your streak alive. How many in a row can you get?",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/hangman",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 31972,
+          "sha256": "adbab3f9684bb0b690c3c717ff6d5e75103fdea13ecff316f1a04803d0badd62",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/lights-out",
+      "title": "Lights Out",
+      "description": "Toggle every light off: each press flips a tile and its neighbours. Always solvable, with an optimal-solution hint.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/lights-out",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 36563,
+          "sha256": "1740e5ae30edc05dc5ea0ea7ab31e0c3972449ebad93b13b00e742d6f71f60ef",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/mastermind",
+      "title": "Mastermind",
+      "description": "Crack the hidden colour code in ten guesses. Black and white pegs tell you how close you are. A pure deduction classic.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/mastermind",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 42451,
+          "sha256": "01b28cd84050e8150cd9b661e7e3a7760014dceef5c7f42e94b5eaf39b3efabe",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/memory-match",
+      "title": "Memory Match",
+      "description": "Flip cards two at a time and find every matching pair from memory. Two grid sizes, smooth flips, and a move counter.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/memory-match",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 40173,
+          "sha256": "c81c616af60115051731847f5992716a68f2b79464241655a471fbb0b2e96772",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/minesweeper",
+      "title": "Minesweeper",
+      "description": "Classic minesweeper with a twist: the faster you clear a safe board, the higher your leaderboard score. First click is always safe.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/minesweeper",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 37150,
+          "sha256": "fd42515c3da0de052cb93e7d35b46f6caf3b2e457a16c59e27bd7ce0282ce1b6",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/nonogram",
+      "title": "Nonogram",
+      "description": "Solve picture logic puzzles from the row and column clues to reveal a hidden image. Sizes from a gentle 5×5 up to a tricky 15×15.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/nonogram",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 52787,
+          "sha256": "9a672dff6069d6881c207263396c96cad8253380ba5ab8db16fc65c4e8699e14",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/passphrase",
+      "title": "Passphrase",
+      "description": "Generate strong passwords and diceware passphrases with real entropy figures. Nothing is stored or sent.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/passphrase",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 56120,
+          "sha256": "056c5a5097a949eecb4fadc2a607346a09b0db76db1a8f77f8b521dcc0fc9412",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/reversi",
+      "title": "Reversi",
+      "description": "Play Reversi (Othello) against a computer that thinks ahead. Flank your opponent's discs to flip them and own the most at the end.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/reversi",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 46270,
+          "sha256": "2cfec34a5438106293a6a7ff107fcddf32b380ba23a32162aa6a0d5e0385dd16",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/ruler",
+      "title": "Ruler",
+      "description": "A calibrated on-screen ruler in cm and inches. Calibrate against a card or coin so the measurements are real.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/ruler",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 55644,
+          "sha256": "2409470d8d5becbcdee7468dcb8488676d1128d47790cbf7e8da52476163acfc",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/simon",
+      "title": "Simon",
+      "description": "Watch the colour sequence, then repeat it back; each round adds a step. How long a sequence can you remember? Top the board.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/simon",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 31151,
+          "sha256": "0f0724c8351e4281bc243cdef3559d1fe4eb4577b80b60d75cdd1ce58eeffcbd",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/sliding-puzzle",
+      "title": "Sliding Puzzle",
+      "description": "Slide the tiles back into order. The classic 15-puzzle plus 3×3 and 5×5, in numbers or a gradient-image mode. Always solvable.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/sliding-puzzle",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 37034,
+          "sha256": "9d94ffeb6d8829a30a27bb0aae24c67e535bf92988c4e4ae11e6ea84991c98a5",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/snake",
+      "title": "Snake",
+      "description": "The classic snake: eat, grow, and don't crash. Speeds up as you get longer, with a wrap-walls mode. Longest run tops the board.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/snake",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 37711,
+          "sha256": "5413bd055be7d1458a306d9b1c7834860bda18ae74ed099f5a7ab29c37563048",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/sokoban",
+      "title": "Sokoban",
+      "description": "Push every crate onto its goal, but you can only push, never pull. Twelve hand-built levels with undo and a move counter.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/sokoban",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 50164,
+          "sha256": "20642ed0710aa718030651abf039a49fb2451aa094249af49168f8e91fb3e878",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/sudoku",
+      "title": "Sudoku",
+      "description": "A real Sudoku: four difficulties, every puzzle uniquely solvable, with pencil notes, hints, mistake-checking and undo.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/sudoku",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 67012,
+          "sha256": "88523a1c475619f5acc70a23be27aa312e0e86bf1751f77363d75510ba993adb",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/timer",
+      "title": "Timer",
+      "description": "Stopwatch, countdown and pomodoro in one, accurate even when the tab is in the background.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/timer",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 61555,
+          "sha256": "49afbc58d4b62ea1dbc056bb2daad7b1c59850c06418844eb1f8a6fc05138173",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/timezone",
+      "title": "Timezone",
+      "description": "A world clock and meeting planner across time zones, with working hours and DST handled properly.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/timezone",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 71051,
+          "sha256": "95541b222f0f8e4d9ad622ff202d3bdf87abc8938210d355908b9cae339cdd72",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/unit-converter",
+      "title": "Unit Converter",
+      "description": "Convert length, mass, temperature, volume and more, plus a tip calculator and date maths. Works offline.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/unit-converter",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 64849,
+          "sha256": "e62b914fbe9257a957ae06f84409ad6ae225ad5d0440df16399664b610d39389",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/word-ladder",
+      "title": "Word Ladder",
+      "description": "Turn one word into another by changing a single letter at a time; every rung must be a real word. Find the shortest path.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/word-ladder",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 41569,
+          "sha256": "c1c32bf60a8de6b2acb04854dd9a28f619d4a24a9d23abb1a7271dc669266932",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "admin/word-search",
+      "title": "Word Search",
+      "description": "Find every hidden word in the letter grid: across, down, and diagonally, forwards or back. Fresh themed puzzles each round.",
+      "author": "Batchly catalog",
+      "play": "https://batch-ly.com/play/word-search",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": "pyodide",
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 32611,
+          "sha256": "0e0c4d715da629ce6c1c519e831b14ae90cfce66c37424151e39c77f5fbe41a3",
+          "source": "published catalog HTML"
+        }
+      ]
+    },
+    {
+      "folder": "community/afterloop-4s2m",
+      "title": "Afterloop",
+      "description": "Circle a glowing ring while every lap you fly comes back as a ghost racing the other way. Hold to dive, release to drift. Outfly your past.",
+      "author": "Ishiaki",
+      "play": "https://batch-ly.com/c/afterloop-4s2m",
+      "type": "html",
+      "pythonDependencies": [],
+      "pythonMode": "script",
+      "pythonRuntime": null,
+      "omittedDevelopmentOrUnsupportedAssets": 0,
+      "files": [
+        {
+          "path": "index.html",
+          "bytes": 43922,
+          "sha256": "7aa4a53b58c5b6e21f7c9dce84dcd707deed92834b5f1a263c05d813544cf99b",
+          "source": "published catalog HTML"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Reversi</title>
+<!--
+================================================================================
+REVERSI: Batchly
+================================================================================
+The classic disc-flipping strategy game on an 8x8 board, versus a computer
+opponent. Place a disc so that it flanks one or more of the opponent's discs in
+a straight line (horizontal, vertical or diagonal) with another of your discs
+at the far end; every flanked disc flips to your colour. If you have no legal
+flanking move you must pass. When neither side can move, the player with more
+discs wins.
+
+--------------------------------------------------------------------------------
+THE AI
+--------------------------------------------------------------------------------
+Negamax search with alpha-beta pruning over a make/unmake board (no per-node
+array copies), plus iterative deepening under a wall-clock budget so the search
+never freezes the tab: it deepens ply by ply and keeps the best move from the
+last DEPTH THAT FINISHED, aborting cleanly the moment the deadline passes.
+
+Move ordering puts corners first and X-squares last, which is exactly the order
+that makes alpha-beta prune hard; iterative deepening also seeds each pass with
+the previous pass's best move.
+
+The leaf evaluation is a weighted blend, phased by how full the board is:
+  * a positional weight table (corners +100, the X/C squares next to an empty
+    corner heavily negative: giving one away usually hands over the corner);
+  * a dynamic corner term (own a corner: bonus; corner still empty: penalise
+    your own discs sitting on the adjacent danger squares);
+  * mobility: the normalised difference in legal-move counts, which dominates
+    the midgame (strangling the opponent's options wins Reversi);
+  * disc parity, which only ramps up in the endgame, where raw count decides it.
+When few squares remain the search deepens to the end of the game, so the
+endgame is solved exactly rather than estimated.
+
+Easy / Medium / Hard change the search depth and time budget. Easy also plays a
+random legal move now and then so it is genuinely beatable; Medium and Hard do
+not. Legal-move dots, a would-flip hover preview, live disc counts, automatic
+pass handling and an end-of-game result are all shown.
+
+--------------------------------------------------------------------------------
+CONTRACT
+--------------------------------------------------------------------------------
+Single self-contained file. No network of any kind: no CDN, no webfonts, no
+fetch/XHR/WebSocket, no external images. Every visual is plain CSS on the system
+monospace stack; every sound is synthesised with WebAudio on demand. Runs in a
+sandboxed, possibly opaque-origin iframe, so localStorage is feature-detected
+and falls back to memory rather than throwing.
+
+NO LEADERBOARD, BY DESIGN. This is a game against the computer, so there is no
+score to rank: a "win vs the AI" is not comparable across players and the host
+keeps each player's HIGHEST number, which would be meaningless here. Nothing is
+ever posted to the parent frame: there is no postMessage call anywhere in this
+file, and that absence is deliberate and required by the spec.
+================================================================================
+-->
+<style>
+:root{
+  --bg:#10100e;
+  --panel:#18181d;
+  --panel-2:#20202a;
+  --well:#0b0b09;
+  --board:#12261b;         /* deep felt-green well, still reads on the dark site */
+  --board-line:#0a1711;
+  --line:#33333d;
+  --bone:#f5f2e8;
+  --muted:#9a978c;
+  --red:#ef3a3a;
+  --red-hi:#ff7a5e;
+  --disc-black:#0c0c10;
+  --disc-black-hi:#3a3a44;
+  --disc-white:#f5f2e8;
+  --disc-white-lo:#b9b4a4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  font-size:14px;
+  line-height:1.3;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  touch-action:manipulation;
+}
+#app{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px clamp(8px,2vw,16px) 8px;
+  max-width:720px;
+  margin:0 auto;
+}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:0 0 auto;}
+h1{
+  margin:0;
+  font-size:clamp(15px,4.4vw,22px);
+  font-weight:800;
+  letter-spacing:.14em;
+  line-height:1;
+  white-space:nowrap;
+}
+h1 .o{color:var(--red);}
+.spacer{flex:1 1 auto;min-width:0;}
+.stats{display:flex;gap:6px;flex:0 0 auto;}
+.stat{
+  border:2px solid var(--line);
+  background:var(--panel);
+  padding:3px 8px;
+  min-width:58px;
+  text-align:center;
+}
+.stat .k{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  font-size:10px;
+  letter-spacing:.1em;
+  color:var(--muted);
+  font-weight:700;
+}
+.stat .v{
+  display:block;
+  font-size:16px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  line-height:1.2;
+}
+.pip{width:11px;height:11px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+.pip.b{background:var(--disc-black);border:1px solid var(--disc-black-hi);}
+.pip.w{background:var(--disc-white);border:1px solid var(--disc-white-lo);}
+.stat.turn{border-color:var(--red);}
+.stat.turn .v{color:var(--red-hi);}
+
+/* ---------- controls ---------- */
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.btn{
+  appearance:none;
+  border:2px solid var(--bone);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  cursor:pointer;
+  border-radius:0;
+  box-shadow:3px 3px 0 0 var(--bone);
+  transition:transform .06s ease,box-shadow .06s ease,background-color .12s ease;
+}
+.btn:hover:not(:disabled){background:var(--panel-2);}
+.btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 0 var(--bone);}
+.btn:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+  box-shadow:3px 3px 0 0 var(--line);
+  border-color:var(--line);
+  color:var(--muted);
+}
+.btn.on{background:var(--red);border-color:var(--red);color:#fff;}
+.btn.on:hover:not(:disabled){background:var(--red-hi);border-color:var(--red-hi);}
+.btn:focus-visible{outline:2px solid var(--red-hi);outline-offset:3px;}
+.btn.icon{padding:6px 9px;font-size:13px;line-height:1;text-transform:none;}
+
+.seg{display:flex;border:2px solid var(--bone);box-shadow:3px 3px 0 0 var(--bone);flex:0 0 auto;}
+.seg button{
+  appearance:none;
+  border:0;
+  border-left:2px solid var(--line);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  padding:6px 9px;
+  cursor:pointer;
+  transition:background-color .12s ease;
+}
+.seg button:first-child{border-left:0;}
+.seg button:hover{background:var(--panel-2);}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff;}
+.seg button:focus-visible{outline:2px solid var(--red-hi);outline-offset:-3px;}
+.seg .lbl{font-size:9px;color:var(--muted);align-self:center;padding:0 6px 0 2px;letter-spacing:.1em;font-weight:700;}
+
+/* ---------- status ---------- */
+#status{
+  flex:0 0 auto;
+  font-size:11px;
+  color:var(--muted);
+  border-left:3px solid var(--line);
+  padding:2px 0 2px 8px;
+  min-height:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#status.hi{color:var(--bone);border-left-color:var(--red);}
+#status .think{display:inline-block;animation:think 1s steps(4,end) infinite;overflow:hidden;vertical-align:bottom;width:0;}
+@keyframes think{to{width:1.2em;}}
+
+/* ---------- board ---------- */
+#boardWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;}
+#board{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);
+  gap:2px;
+  padding:6px;
+  background:var(--board-line);
+  border:2px solid var(--bone);
+  box-shadow:5px 5px 0 0 var(--bone);
+  touch-action:manipulation;
+}
+.cell{
+  position:relative;
+  appearance:none;
+  border:0;
+  background:var(--board);
+  border-radius:0;
+  padding:0;
+  margin:0;
+  cursor:default;
+  display:grid;
+  place-items:center;
+  min-width:0;min-height:0;
+}
+.cell.play{cursor:pointer;}
+/* legal-move dot */
+.cell.legal::after{
+  content:"";
+  position:absolute;
+  width:26%;height:26%;
+  border-radius:50%;
+  border:2px solid rgba(245,242,232,.55);
+  background:rgba(245,242,232,.06);
+  pointer-events:none;
+  animation:dot .28s ease-out;
+}
+@keyframes dot{from{transform:scale(.2);opacity:0;}to{transform:scale(1);opacity:1;}}
+.cell.last::before{
+  content:"";
+  position:absolute;
+  inset:8%;
+  border:2px solid var(--red);
+  pointer-events:none;
+  opacity:.85;
+}
+.cell:focus-visible{outline:3px solid var(--red-hi);outline-offset:-3px;z-index:3;}
+
+.disc{
+  width:80%;height:80%;
+  border-radius:50%;
+  pointer-events:none;
+  transform:scale(1);
+  will-change:transform;
+}
+.disc.empty{opacity:0;}
+.disc.b{
+  background:radial-gradient(circle at 34% 30%, var(--disc-black-hi), var(--disc-black) 62%);
+  border:1px solid #000;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.10), 0 2px 3px rgba(0,0,0,.5);
+}
+.disc.w{
+  background:radial-gradient(circle at 34% 30%, #fffdf6, var(--disc-white) 55%, var(--disc-white-lo) 100%);
+  border:1px solid var(--disc-white-lo);
+  box-shadow:inset 0 -2px 3px rgba(0,0,0,.15), 0 2px 3px rgba(0,0,0,.45);
+}
+/* translucent preview of the disc you would place */
+.disc.ghost.gb{background:rgba(12,12,16,.5);border:2px dashed rgba(245,242,232,.5);box-shadow:none;opacity:1;}
+.disc.ghost.gw{background:rgba(245,242,232,.28);border:2px dashed rgba(245,242,232,.7);box-shadow:none;opacity:1;}
+/* discs that would flip if you played the hovered square */
+.disc.willflip{box-shadow:0 0 0 2px var(--red-hi), 0 0 10px rgba(255,122,94,.55);}
+.disc.place{animation:place .22s ease-out;}
+@keyframes place{0%{transform:scale(.2);opacity:.25;}70%{transform:scale(1.09);}100%{transform:scale(1);opacity:1;}}
+.disc.flipping{animation:flip .3s ease-in-out;}
+@keyframes flip{0%{transform:scaleX(1);}50%{transform:scaleX(.08);}100%{transform:scaleX(1);}}
+
+/* ---------- footer ---------- */
+footer{
+  flex:0 0 auto;
+  font-size:10px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  white-space:nowrap;
+  overflow:hidden;
+}
+footer .keys{overflow:hidden;text-overflow:ellipsis;}
+
+/* ---------- overlays ---------- */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(8,8,7,.88);
+  display:none;
+  place-items:center;
+  padding:14px;
+  z-index:30;
+}
+.overlay.show{display:grid;}
+/* NOTE: no hover transform on modals: a shifting transform fights centering. */
+.modal{
+  background:var(--panel);
+  border:2px solid var(--bone);
+  box-shadow:8px 8px 0 0 var(--red);
+  padding:16px;
+  width:min(440px,94vw);
+  max-height:88vh;
+  overflow:auto;
+}
+.modal h2{margin:0 0 4px;font-size:17px;letter-spacing:.1em;font-weight:800;}
+.modal .verdict{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--red-hi);margin-bottom:10px;}
+.modal p{margin:0 0 8px;font-size:12px;color:var(--muted);line-height:1.55;}
+.modal p b{color:var(--bone);font-weight:700;}
+.modal ul{margin:0 0 10px;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.6;}
+.modal ul b{color:var(--bone);}
+.modal hr{border:0;border-top:2px solid var(--line);margin:12px 0;}
+.tally{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.tally .stat{flex:1 1 0;min-width:70px;}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+kbd{
+  display:inline-block;
+  border:1px solid var(--line);
+  background:var(--well);
+  color:var(--bone);
+  padding:0 4px;
+  font:inherit;
+  font-size:10px;
+  font-weight:700;
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::after,*::before{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+@media (max-width:460px){
+  .stat{min-width:48px;padding:3px 5px;}
+  .stat .v{font-size:14px;}
+  .seg .lbl{display:none;}
+  footer .keys{display:none;}
+}
+@media (max-height:480px){
+  h1{font-size:15px;}
+  footer{display:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>REVERS<span class="o">/</span>I</h1>
+    <div class="spacer"></div>
+    <div class="stats">
+      <div class="stat"><span class="k"><span class="pip b" id="pipYou"></span>YOU</span><span class="v" id="sYou">2</span></div>
+      <div class="stat"><span class="k"><span class="pip w" id="pipCpu"></span>CPU</span><span class="v" id="sCpu">2</span></div>
+      <div class="stat turn"><span class="k">TURN</span><span class="v" id="sTurn">YOU</span></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Difficulty">
+      <span class="lbl">LVL</span>
+      <button type="button" data-diff="Easy" aria-pressed="false">Easy</button>
+      <button type="button" data-diff="Medium" aria-pressed="true">Med</button>
+      <button type="button" data-diff="Hard" aria-pressed="false">Hard</button>
+    </div>
+    <div class="seg" role="group" aria-label="Your colour">
+      <span class="lbl">YOU</span>
+      <button type="button" data-human="1" aria-pressed="true">Black</button>
+      <button type="button" data-human="2" aria-pressed="false">White</button>
+    </div>
+    <button type="button" class="btn" id="bNew">New</button>
+    <button type="button" class="btn" id="bUndo" disabled>Undo</button>
+    <button type="button" class="btn on" id="bHints" aria-pressed="true">Hints</button>
+    <div class="spacer"></div>
+    <button type="button" class="btn icon" id="bSound" aria-pressed="true" aria-label="Sound on" title="Sound">&#9835;</button>
+    <button type="button" class="btn icon" id="bHelp" aria-label="How to play" title="How to play">?</button>
+  </div>
+
+  <div id="status" aria-live="polite">Black moves first. Place a disc to flank the computer.</div>
+
+  <div id="boardWrap">
+    <div id="board" role="grid" aria-label="Reversi board, 8 by 8"></div>
+  </div>
+
+  <footer>
+    <span>Flank the opponent between two of your discs to flip them.</span>
+    <span class="keys"><kbd>&larr;&uarr;&darr;&rarr;</kbd> move <kbd>&crarr;</kbd> place <kbd>N</kbd> new <kbd>U</kbd> undo <kbd>H</kbd> hints</span>
+  </footer>
+</div>
+
+<!-- result -->
+<div class="overlay" id="endOverlay" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="modal">
+    <h2 id="endTitle">GAME OVER</h2>
+    <div class="verdict" id="endVerdict"></div>
+    <div class="tally">
+      <div class="stat"><span class="k"><span class="pip b" id="pipYou2"></span>YOU</span><span class="v" id="eYou">0</span></div>
+      <div class="stat"><span class="k"><span class="pip w" id="pipCpu2"></span>CPU</span><span class="v" id="eCpu">0</span></div>
+      <div class="stat"><span class="k">EMPTY</span><span class="v" id="eEmpty">0</span></div>
+    </div>
+    <p id="endNote"></p>
+    <div class="row">
+      <button type="button" class="btn on" id="eAgain">Play again</button>
+      <button type="button" class="btn" id="eClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- help -->
+<div class="overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modal">
+    <h2 id="helpTitle">HOW TO PLAY</h2>
+    <div class="verdict">OUTFLANK. FLIP. OWN THE BOARD.</div>
+    <p>You and the computer take turns placing discs. A move is legal only if it <b>flanks</b> a straight line of the opponent's discs (horizontal, vertical or diagonal) that ends in one of <b>your</b> discs. Every flanked disc between the two flips to your colour.</p>
+    <ul>
+      <li>Legal squares are marked with a <b>dot</b>. Hover or focus one to preview which discs would flip.</li>
+      <li>If you have <b>no legal move you must pass</b>: the game does this for you and tells you.</li>
+      <li>The game ends when neither side can move. <b>Most discs wins.</b></li>
+      <li><b>Corners are gold</b>: they can never be flipped back. Beware the squares next to an empty corner; playing there often hands the corner over.</li>
+      <li><b>Mobility matters:</b> keeping more options than your opponent is usually stronger than grabbing the most discs early.</li>
+    </ul>
+    <hr>
+    <p><b>Difficulty</b> sets how deep the computer thinks. <b>Easy</b> slips up on purpose; <b>Hard</b> searches several moves ahead and solves the endgame exactly.</p>
+    <p><b>Keyboard:</b> <kbd>&larr;&uarr;&darr;&rarr;</kbd> move &middot; <kbd>Enter</kbd>/<kbd>Space</kbd> place &middot; <kbd>N</kbd> new &middot; <kbd>U</kbd> undo &middot; <kbd>H</kbd> hints &middot; <kbd>Esc</kbd> close</p>
+    <p style="font-size:11px">This is a game against the computer, so there is no leaderboard and no score is posted.</p>
+    <div class="row"><button type="button" class="btn on" id="hClose">Got it</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   Storage: an opaque-origin iframe throws on localStorage. Detect once,
+   fall back to memory so preferences still work for the session.
+   ====================================================================== */
+var mem = Object.create(null), lsOK = false;
+try{
+  var probe = "__rv_probe";
+  window.localStorage.setItem(probe,"1");
+  window.localStorage.removeItem(probe);
+  lsOK = true;
+}catch(e){ lsOK = false; }
+function stGet(k){
+  try{ return lsOK ? window.localStorage.getItem(k) : (k in mem ? mem[k] : null); }
+  catch(e){ return (k in mem) ? mem[k] : null; }
+}
+function stSet(k,v){
+  try{ if(lsOK) window.localStorage.setItem(k,v); else mem[k]=v; }
+  catch(e){ mem[k]=v; }
+}
+
+var $ = function(id){ return document.getElementById(id); };
+var reducedMotion = false;
+try{ reducedMotion = window.matchMedia("(prefers-reduced-motion:reduce)").matches; }catch(e){}
+var canHover = false;
+try{ canHover = window.matchMedia("(hover:hover) and (pointer:fine)").matches; }catch(e){}
+
+/* ======================================================================
+   Rules constants
+   ====================================================================== */
+var EMPTY=0, BLACK=1, WHITE=2;
+var DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+/* Positional weight table. Corners are decisive (+100); the diagonal
+   "X-square" and edge "C-square" beside a corner are punished because
+   occupying them early usually lets the opponent take the corner. */
+var W = [
+ 100,-25, 10,  5,  5, 10,-25,100,
+ -25,-40, -3, -3, -3, -3,-40,-25,
+  10, -3,  2, -1, -1,  2, -3, 10,
+   5, -3, -1, -1, -1, -1, -3,  5,
+   5, -3, -1, -1, -1, -1, -3,  5,
+  10, -3,  2, -1, -1,  2, -3, 10,
+ -25,-40, -3, -3, -3, -3,-40,-25,
+ 100,-25, 10,  5,  5, 10,-25,100
+];
+var CORNERS=[0,7,56,63];
+/* each corner -> [X-square, C-square, C-square] adjacent to it */
+var ADJ={0:[9,1,8], 7:[14,6,15], 56:[49,57,48], 63:[54,62,55]};
+
+/* Difficulty: search depth cap, wall-clock budget (ms), endgame-exact
+   threshold (solve to the end when empties <= this), and the chance Easy
+   throws a random legal move so a human can actually beat it. */
+var DIFF={
+  Easy:   {depth:2, time:350,  endgame:0,  random:0.30},
+  Medium: {depth:5, time:850,  endgame:10, random:0},
+  Hard:   {depth:9, time:1600, endgame:16, random:0}
+};
+
+/* ======================================================================
+   Board primitives. `board` is an Int8Array of 64 cells.
+   ====================================================================== */
+var board = new Int8Array(64);
+
+function legalAt(bd,i,p){
+  if(bd[i]!==EMPTY) return false;
+  var opp=3-p, r=i>>3, c=i&7, d, rr, cc, seen, v;
+  for(d=0; d<8; d++){
+    rr=r+DIRS[d][0]; cc=c+DIRS[d][1]; seen=false;
+    while(rr>=0&&rr<8&&cc>=0&&cc<8){
+      v=bd[(rr<<3)+cc];
+      if(v===opp){ seen=true; rr+=DIRS[d][0]; cc+=DIRS[d][1]; }
+      else{ if(v===p&&seen) return true; break; }
+    }
+  }
+  return false;
+}
+
+/* Indices flipped if `p` plays `i` (empty array if the move is illegal). */
+function flipsFor(bd,i,p){
+  var out=[];
+  if(bd[i]!==EMPTY) return out;
+  var opp=3-p, r=i>>3, c=i&7, d, rr, cc, line, v, k;
+  for(d=0; d<8; d++){
+    rr=r+DIRS[d][0]; cc=c+DIRS[d][1]; line=[];
+    while(rr>=0&&rr<8&&cc>=0&&cc<8){
+      v=bd[(rr<<3)+cc];
+      if(v===opp){ line.push((rr<<3)+cc); rr+=DIRS[d][0]; cc+=DIRS[d][1]; }
+      else{ if(v===p&&line.length){ for(k=0;k<line.length;k++) out.push(line[k]); } break; }
+    }
+  }
+  return out;
+}
+
+function movesFor(bd,p){
+  var out=[], i;
+  for(i=0;i<64;i++) if(legalAt(bd,i,p)) out.push(i);
+  return out;
+}
+function countMoves(bd,p){
+  var c=0, i;
+  for(i=0;i<64;i++) if(legalAt(bd,i,p)) c++;
+  return c;
+}
+
+/* make/unmake keep the search allocation-light: no board copies per node. */
+function make(bd,i,p){
+  var flips=flipsFor(bd,i,p), k;
+  bd[i]=p;
+  for(k=0;k<flips.length;k++) bd[flips[k]]=p;
+  return flips;
+}
+function unmake(bd,i,flips,p){
+  var opp=3-p, k;
+  bd[i]=EMPTY;
+  for(k=0;k<flips.length;k++) bd[flips[k]]=opp;
+}
+
+/* ======================================================================
+   Leaf evaluation (from the perspective of player `p`). `myMob` may be
+   passed in when the caller already generated p's moves.
+   ====================================================================== */
+function evaluate(bd,p,myMob){
+  var opp=3-p, myD=0, oppD=0, pos=0, i, v;
+  for(i=0;i<64;i++){
+    v=bd[i];
+    if(v===p){ myD++; pos+=W[i]; }
+    else if(v===opp){ oppD++; pos-=W[i]; }
+  }
+  var empties=64-myD-oppD;
+  if(myMob===undefined) myMob=countMoves(bd,p);
+  var oppMob=countMoves(bd,opp);
+  var mob=0;
+  if(myMob+oppMob>0) mob=100*(myMob-oppMob)/(myMob+oppMob);
+
+  var cor=0, k, a, j, s, cr;
+  for(k=0;k<4;k++){
+    cr=CORNERS[k]; a=ADJ[cr];
+    if(bd[cr]===p) cor+=30;
+    else if(bd[cr]===opp) cor-=30;
+    else{
+      for(j=0;j<a.length;j++){ s=a[j]; if(bd[s]===p) cor-=10; else if(bd[s]===opp) cor+=10; }
+    }
+  }
+
+  var score = pos + cor + (empties>12 ? 2.0 : 0.8)*mob;
+  if(empties<=16) score += (myD-oppD)*(empties<=8 ? 6 : 2.5);
+  return score;
+}
+
+/* Exact value of a finished position, from `p`'s perspective. Scaled far
+   above any heuristic so a proven win always beats a "nice-looking" loss. */
+function terminalValue(bd,p){
+  var opp=3-p, my=0, op=0, i, v;
+  for(i=0;i<64;i++){ v=bd[i]; if(v===p) my++; else if(v===opp) op++; }
+  var s = my>op ? 1 : (my<op ? -1 : 0);
+  return s*(1000000+Math.abs(my-op));
+}
+
+/* ======================================================================
+   Negamax + alpha-beta over make/unmake, with a cooperative deadline.
+   ====================================================================== */
+var nodeCount=0, deadline=0, aborted=false;
+
+function negamax(bd,p,depth,alpha,beta){
+  if(aborted) return 0;
+  if((++nodeCount & 2047)===0 && Date.now()>deadline){ aborted=true; return 0; }
+
+  var moves=movesFor(bd,p), opp=3-p;
+  if(moves.length===0){
+    if(countMoves(bd,opp)===0) return terminalValue(bd,p);   /* game over */
+    var v=-negamax(bd,opp,depth-1,-beta,-alpha);              /* forced pass */
+    return v;
+  }
+  if(depth<=0) return evaluate(bd,p,moves.length);
+
+  moves.sort(function(x,y){ return W[y]-W[x]; });            /* corners first */
+  var best=-Infinity, k, i, flips, val;
+  for(k=0;k<moves.length;k++){
+    i=moves[k];
+    flips=make(bd,i,p);
+    val=-negamax(bd,opp,depth-1,-beta,-alpha);
+    unmake(bd,i,flips,p);
+    if(aborted) return 0;
+    if(val>best) best=val;
+    if(best>alpha) alpha=best;
+    if(alpha>=beta) break;
+  }
+  return best;
+}
+
+function moveToFront(arr,val){
+  var idx=arr.indexOf(val);
+  if(idx>0){ arr.splice(idx,1); arr.unshift(val); }
+  return arr;
+}
+
+/* Root: iterative deepening. Keeps the best move from the last depth that
+   FINISHED before the deadline, so we never act on a half-searched ply. */
+function chooseAIMove(p){
+  var rootMoves=movesFor(board,p);
+  if(rootMoves.length===0) return null;
+  if(rootMoves.length===1) return rootMoves[0];
+
+  var cfg=DIFF[difficulty], i;
+  var empties=0;
+  for(i=0;i<64;i++) if(board[i]===EMPTY) empties++;
+  var maxDepth=cfg.depth;
+  if(empties<=cfg.endgame) maxDepth=Math.max(maxDepth, empties);  /* solve to end */
+
+  rootMoves.sort(function(x,y){ return W[y]-W[x]; });
+  nodeCount=0; aborted=false; deadline=Date.now()+cfg.time;
+
+  var bestMove=rootMoves[0], prevBest=bestMove, opp=3-p, d, ordered, k, mv, flips, val;
+  for(d=1; d<=maxDepth; d++){
+    var localBest=-Infinity, localMove=prevBest, alpha=-Infinity, completed=true;
+    ordered=moveToFront(rootMoves.slice(), prevBest);
+    for(k=0;k<ordered.length;k++){
+      mv=ordered[k];
+      flips=make(board,mv,p);
+      val=-negamax(board,opp,d-1,-Infinity,-alpha);
+      unmake(board,mv,flips,p);
+      if(aborted){ completed=false; break; }
+      if(val>localBest){ localBest=val; localMove=mv; }
+      if(localBest>alpha) alpha=localBest;
+    }
+    if(!completed) break;                 /* out of time: keep last full depth */
+    bestMove=localMove; prevBest=localMove;
+    if(Math.abs(localBest)>=1000000) break;  /* result is proven; no deeper needed */
+  }
+
+  /* Easy blunders on purpose so it is genuinely beatable. */
+  if(cfg.random>0 && Math.random()<cfg.random){
+    bestMove=rootMoves[(Math.random()*rootMoves.length)|0];
+  }
+  return bestMove;
+}
+
+/* ======================================================================
+   Audio: synthesised, created lazily on first gesture (autoplay policy).
+   ====================================================================== */
+var actx=null, sound = stGet("rv.sound") !== "0";
+function ac(){
+  if(!sound) return null;
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return null;
+    if(!actx) actx=new C();
+    if(actx.state==="suspended" && actx.resume) actx.resume();
+    return actx;
+  }catch(e){ return null; }
+}
+function blip(freq,dur,type,vol,delay){
+  var a=ac(); if(!a) return;
+  try{
+    var o=a.createOscillator(), g=a.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    o.connect(g); g.connect(a.destination);
+    var t=a.currentTime+(delay||0);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.05,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }catch(e){}
+}
+function sPlace(){ blip(300,0.06,"square",0.05); }
+function sFlip(){ blip(520,0.035,"sine",0.035); }
+function sPass(){ blip(200,0.12,"triangle",0.05); }
+function sWin(){ blip(523.25,0.1,"square",0.05,0); blip(659.25,0.1,"square",0.05,0.09); blip(783.99,0.1,"square",0.05,0.18); blip(1046.5,0.22,"square",0.055,0.27); }
+function sLose(){ blip(392,0.14,"sawtooth",0.045,0); blip(311,0.14,"sawtooth",0.045,0.13); blip(233,0.28,"sawtooth",0.05,0.26); }
+
+/* ======================================================================
+   Game state
+   ====================================================================== */
+var difficulty="Medium", humanColor=BLACK, current=BLACK;
+var over=false, busy=false, hintsOn=true;
+var lastMove=-1, cursor=27;
+var history=[];          /* snapshots at each human decision point (for Undo) */
+var timers=[];           /* pending timeouts, cancelled on new game / undo */
+var cells=[];
+
+/* restore prefs */
+(function loadPrefs(){
+  var d=stGet("rv.diff"); if(d==="Easy"||d==="Medium"||d==="Hard") difficulty=d;
+  var h=parseInt(stGet("rv.human"),10); if(h===BLACK||h===WHITE) humanColor=h;
+  var hi=stGet("rv.hints"); if(hi==="0") hintsOn=false;
+})();
+var cpuColor = 3-humanColor;
+
+/* ======================================================================
+   Timers: clearing these on reset stops stale flip animations / pending
+   AI turns from painting the previous game onto a fresh board.
+   ====================================================================== */
+function T(fn,ms){
+  var id=setTimeout(function(){
+    var p=timers.indexOf(id); if(p>=0) timers.splice(p,1);
+    fn();
+  }, ms);
+  timers.push(id);
+  return id;
+}
+function clearTimers(){ for(var i=0;i<timers.length;i++) clearTimeout(timers[i]); timers=[]; }
+
+/* ======================================================================
+   Board DOM
+   ====================================================================== */
+var boardEl=$("board"), statusEl=$("status");
+
+function buildBoard(){
+  boardEl.textContent="";
+  cells=[];
+  for(var i=0;i<64;i++){
+    var b=document.createElement("button");
+    b.type="button";
+    b.className="cell";
+    b.setAttribute("role","gridcell");
+    b.dataset.i=String(i);
+    b.tabIndex=(i===cursor)?0:-1;
+    var d=document.createElement("span");
+    d.className="disc empty";
+    b.appendChild(d);
+    boardEl.appendChild(b);
+    cells.push(b);
+  }
+  layout();
+}
+
+function layout(){
+  var wrap=$("boardWrap");
+  var w=wrap.clientWidth, h=wrap.clientHeight;
+  if(!w||!h) return;
+  var s=Math.max(160, Math.floor(Math.min(w,h))-4);
+  boardEl.style.width=s+"px";
+  boardEl.style.height=s+"px";
+}
+
+/* set one cell's disc to match board[i] and strip transient classes */
+function paintCell(i){
+  var d=cells[i].firstChild;
+  d.className="disc";
+  if(board[i]===BLACK) d.classList.add("b");
+  else if(board[i]===WHITE) d.classList.add("w");
+  else d.classList.add("empty");
+}
+/* swap ONLY the colour classes, leaving an in-flight animation (e.g. the
+   flip) intact: paintCell would reset className and cut it short. */
+function setDiscColor(i){
+  var d=cells[i].firstChild;
+  d.classList.remove("b","w","empty");
+  if(board[i]===BLACK) d.classList.add("b");
+  else if(board[i]===WHITE) d.classList.add("w");
+  else d.classList.add("empty");
+}
+function renderBoard(){
+  for(var i=0;i<64;i++){
+    paintCell(i);
+    cells[i].classList.remove("legal","last","play");
+  }
+  if(lastMove>=0) cells[lastMove].classList.add("last");
+}
+
+function say(msg,hi,thinking){
+  statusEl.classList.toggle("hi",!!hi);
+  if(thinking){
+    statusEl.textContent=msg;
+    var s=document.createElement("span"); s.className="think"; s.textContent="...";
+    statusEl.appendChild(s);
+  }else{
+    statusEl.textContent=msg;
+  }
+}
+function colorName(p){ return p===BLACK?"Black":"White"; }
+function coord(i){ return String.fromCharCode(65+(i&7))+((i>>3)+1); }
+
+/* ======================================================================
+   Counts + turn indicator
+   ====================================================================== */
+function counts(){
+  var b=0,w=0,i,v;
+  for(i=0;i<64;i++){ v=board[i]; if(v===BLACK)b++; else if(v===WHITE)w++; }
+  return {b:b, w:w, empty:64-b-w};
+}
+function updateCounts(){
+  var c=counts();
+  var you = humanColor===BLACK ? c.b : c.w;
+  var cpu = cpuColor===BLACK ? c.b : c.w;
+  $("sYou").textContent=String(you);
+  $("sCpu").textContent=String(cpu);
+  var turnEl=$("sTurn");
+  if(over){ turnEl.textContent="-"; }
+  else turnEl.textContent = (current===humanColor) ? "YOU" : "CPU";
+}
+
+/* reflect the chosen colours on the pip glyphs */
+function refreshPips(){
+  var yb = humanColor===BLACK;
+  $("pipYou").className="pip "+(yb?"b":"w");
+  $("pipCpu").className="pip "+(yb?"w":"b");
+  $("pipYou2").className="pip "+(yb?"b":"w");
+  $("pipCpu2").className="pip "+(yb?"w":"b");
+}
+
+/* ======================================================================
+   Hints + hover preview
+   ====================================================================== */
+function clearHints(){ for(var i=0;i<64;i++) cells[i].classList.remove("legal","play"); }
+function showHints(moves){
+  clearHints();
+  for(var k=0;k<moves.length;k++){
+    cells[moves[k]].classList.add("play");
+    if(hintsOn) cells[moves[k]].classList.add("legal");
+  }
+}
+function clearHover(){
+  for(var i=0;i<64;i++){
+    var d=cells[i].firstChild;
+    d.classList.remove("ghost","gb","gw","willflip");
+    if(board[i]===EMPTY && !d.classList.contains("b") && !d.classList.contains("w")){
+      /* ensure ghost removal leaves it correctly empty */
+      if(!d.classList.contains("empty")) d.classList.add("empty");
+    }
+  }
+}
+function hoverPreview(i){
+  if(busy||over||current!==humanColor) return;
+  clearHover();
+  if(!legalAt(board,i,humanColor)) return;
+  var d=cells[i].firstChild;
+  d.classList.remove("empty");
+  d.classList.add("ghost", humanColor===BLACK?"gb":"gw");
+  var flips=flipsFor(board,i,humanColor), k;
+  for(k=0;k<flips.length;k++) cells[flips[k]].firstChild.classList.add("willflip");
+}
+
+/* ======================================================================
+   Move animation. The board array is updated BEFORE this runs; the DOM
+   still shows the pre-move state, so we place the new disc, then flip each
+   flanked disc and swap its colour at the edge-on midpoint of the flip.
+   ====================================================================== */
+function animateMove(i,flips,p,done){
+  paintCell(i);
+  if(lastMove>=0) cells[lastMove].classList.remove("last");
+  lastMove=i; cells[i].classList.add("last");
+  var placeDisc=cells[i].firstChild;
+  if(!reducedMotion){ placeDisc.classList.remove("place"); void placeDisc.offsetWidth; placeDisc.classList.add("place"); }
+  sPlace();
+
+  if(reducedMotion || flips.length===0){
+    for(var m=0;m<flips.length;m++) paintCell(flips[m]);
+    T(done, reducedMotion?10:(flips.length?220:150));
+    return;
+  }
+
+  var last=0;
+  for(var k=0;k<flips.length;k++){
+    (function(f,delay){
+      last=Math.max(last, delay+300);
+      var d=cells[f].firstChild;
+      T(function(){ d.classList.add("flipping"); sFlip(); }, delay);
+      T(function(){ setDiscColor(f); }, delay+150);   /* swap colour at edge-on, keep the flip animating */
+      T(function(){ d.classList.remove("flipping"); }, delay+300);
+    })(flips[k], k*42);
+  }
+  T(done, last+40);
+}
+
+/* ======================================================================
+   Turn flow. A single entry point that handles passes, hands the turn to
+   the human or the AI, and detects game over.
+   ====================================================================== */
+function advance(){
+  updateCounts();
+  if(over) return;
+  var p=current, myMoves=movesFor(board,p);
+
+  if(myMoves.length===0){
+    if(countMoves(board,3-p)===0){ endGame(); return; }
+    /* forced pass */
+    busy=true; clearHints();
+    var who = (p===humanColor) ? "You have no legal move: passing." : "Computer has no move: passing to you.";
+    say(who, true);
+    sPass();
+    current=3-p;
+    T(advance, 850);
+    return;
+  }
+
+  if(p===humanColor){
+    busy=false;
+    pushHistory();
+    showHints(myMoves);
+    ensureCursor(myMoves);
+    say("Your move: "+colorName(p)+". "+myMoves.length+" legal square"+(myMoves.length===1?"":"s")+".");
+    updateUndo();
+  }else{
+    busy=true;
+    clearHints();
+    say("Computer is thinking", false, true);
+    updateUndo();
+    T(runAI, 60);   /* let the "thinking" paint before the blocking search */
+  }
+}
+
+function runAI(){
+  if(over) return;
+  var p=current;
+  var move=chooseAIMove(p);
+  if(move===null || move===undefined){ advance(); return; }  /* guarded; passes handled above */
+  var flips=flipsFor(board,move,p);
+  board[move]=p;
+  for(var k=0;k<flips.length;k++) board[flips[k]]=p;
+  say("Computer plays "+coord(move)+", flipping "+flips.length+".");
+  animateMove(move,flips,p,function(){
+    updateCounts();
+    current=3-p;
+    advance();
+  });
+}
+
+function humanPlace(i){
+  if(busy||over) return;
+  if(current!==humanColor) return;
+  if(!legalAt(board,i,humanColor)){
+    blip(140,0.05,"square",0.03);
+    say("Illegal: pick a square with a dot. It must flank the computer's discs.");
+    return;
+  }
+  clearHints(); clearHover();
+  busy=true;
+  var p=humanColor;
+  var flips=flipsFor(board,i,p);
+  board[i]=p;
+  for(var k=0;k<flips.length;k++) board[flips[k]]=p;
+  say("You play "+coord(i)+", flipping "+flips.length+".");
+  animateMove(i,flips,p,function(){
+    updateCounts();
+    current=3-p;
+    advance();
+  });
+}
+
+/* ======================================================================
+   Undo: snapshots taken at each human decision point. Undo drops the
+   current decision and restores the previous one (undoing your last move
+   AND the computer's reply). Disabled mid-animation and after game over.
+   ====================================================================== */
+function snapshot(){ return { board:board.slice(), current:current, last:lastMove }; }
+function pushHistory(){ history.push(snapshot()); }
+function updateUndo(){
+  $("bUndo").disabled = busy || over || history.length<2;
+}
+function undo(){
+  if(busy||over) return;
+  if(history.length<2) return;
+  clearTimers();
+  history.pop();                       /* discard current decision point */
+  var snap=history[history.length-1];  /* restore previous one */
+  board.set(snap.board);
+  current=snap.current;
+  lastMove=snap.last;
+  over=false; busy=false;
+  hide($("endOverlay"));
+  renderBoard();
+  updateCounts();
+  var mv=movesFor(board,current);
+  showHints(mv);
+  ensureCursor(mv);
+  say("Move undone. Your turn: "+colorName(current)+".");
+  sPass();
+  updateUndo();
+}
+
+/* ======================================================================
+   Game lifecycle
+   ====================================================================== */
+function setupStart(){
+  board.fill(EMPTY);
+  board[27]=WHITE; board[28]=BLACK;   /* standard central four */
+  board[35]=BLACK; board[36]=WHITE;   /* Black always moves first */
+}
+
+function newGame(){
+  clearTimers();
+  hide($("endOverlay"));
+  cpuColor=3-humanColor;
+  setupStart();
+  current=BLACK;
+  over=false; busy=false; lastMove=-1;
+  history=[];
+  cursor=(humanColor===BLACK)?26:37;  /* park the keyboard cursor on a legal opener */
+  refreshPips();
+  renderBoard();
+  ensureCursor();
+  updateCounts();
+  say((humanColor===BLACK)
+      ? "New game. You are Black and move first."
+      : "New game. You are White; the computer (Black) moves first.");
+  updateUndo();
+  advance();
+}
+
+function endGame(){
+  over=true; busy=true;
+  clearHints();
+  updateCounts();
+  var c=counts();
+  var you = humanColor===BLACK ? c.b : c.w;
+  var cpu = cpuColor===BLACK ? c.b : c.w;
+  var verdict, note;
+  if(you>cpu){
+    verdict="YOU WIN"; sWin();
+    note="You finished with <b>"+you+"</b> discs to the computer's "+cpu+". "+
+         (you-cpu>=20 ? "A commanding result." : you-cpu<=4 ? "A nail-biter." : "Well played.");
+  }else if(cpu>you){
+    verdict="COMPUTER WINS"; sLose();
+    note="The computer finished with <b>"+cpu+"</b> discs to your "+you+". "+
+         (difficulty==="Hard" ? "Hard solves the endgame exactly; try Medium, and remember corners can never be flipped back."
+          : "Watch the corners, and don't play next to an empty one.");
+  }else{
+    verdict="DRAW"; blip(440,0.2,"sine",0.05);
+    note="Dead even at <b>"+you+"</b> discs each. Remarkably rare.";
+  }
+  say("Game over: "+(you>cpu?"you win":cpu>you?"computer wins":"a draw")+" "+you+"–"+cpu+".", true);
+  $("endVerdict").textContent=verdict;
+  $("eYou").textContent=String(you);
+  $("eCpu").textContent=String(cpu);
+  $("eEmpty").textContent=String(c.empty);
+  $("endNote").innerHTML=note;
+  updateUndo();
+  /* small delay so the final flip animation is visible before the modal */
+  T(function(){ show($("endOverlay")); }, reducedMotion?60:520);
+}
+
+/* ======================================================================
+   Keyboard cursor (roving tabindex over the 64 cells)
+   ====================================================================== */
+function setCursor(i){
+  i=(i+64)%64;
+  if(cursor>=0 && cells[cursor]) cells[cursor].tabIndex=-1;
+  cursor=i;
+  cells[cursor].tabIndex=0;
+  cells[cursor].focus();
+}
+function ensureCursor(moves){
+  /* keep exactly one cell (the cursor) in the tab order: a valid square */
+  if(cursor<0||cursor>63) cursor=27;
+  for(var i=0;i<64;i++) cells[i].tabIndex=(i===cursor)?0:-1;
+}
+
+/* ======================================================================
+   Overlays
+   ====================================================================== */
+function show(el){ el.classList.add("show"); }
+function hide(el){ el.classList.remove("show"); }
+function anyOverlayOpen(){ return $("endOverlay").classList.contains("show")||$("helpOverlay").classList.contains("show"); }
+function closeOverlays(){ hide($("endOverlay")); hide($("helpOverlay")); }
+
+/* ======================================================================
+   Events
+   ====================================================================== */
+boardEl.addEventListener("click", function(e){
+  var t=e.target.closest ? e.target.closest(".cell") : null;
+  if(!t||!boardEl.contains(t)) return;
+  humanPlace(parseInt(t.dataset.i,10));
+});
+
+if(canHover){
+  boardEl.addEventListener("pointerover", function(e){
+    var t=e.target.closest ? e.target.closest(".cell") : null;
+    if(!t) return;
+    hoverPreview(parseInt(t.dataset.i,10));
+  });
+  boardEl.addEventListener("pointerleave", clearHover);
+}
+
+boardEl.addEventListener("keydown", function(e){
+  var idx=cells.indexOf(document.activeElement);
+  if(idx<0) return;
+  var r=idx>>3, c=idx&7, k=e.key;
+  if(k==="ArrowUp"){ e.preventDefault(); setCursor(((r-1+8)%8)*8+c); }
+  else if(k==="ArrowDown"){ e.preventDefault(); setCursor(((r+1)%8)*8+c); }
+  else if(k==="ArrowLeft"){ e.preventDefault(); setCursor(r*8+((c-1+8)%8)); }
+  else if(k==="ArrowRight"){ e.preventDefault(); setCursor(r*8+((c+1)%8)); }
+  else if(k==="Enter"||k===" "){ e.preventDefault(); humanPlace(idx); }
+  else if(k==="Home"){ e.preventDefault(); setCursor(r*8); }
+  else if(k==="End"){ e.preventDefault(); setCursor(r*8+7); }
+});
+
+/* board hover preview also on keyboard focus */
+boardEl.addEventListener("focusin", function(e){
+  var t=e.target.closest ? e.target.closest(".cell") : null;
+  if(!t) return;
+  hoverPreview(parseInt(t.dataset.i,10));
+});
+boardEl.addEventListener("focusout", function(){ clearHover(); });
+
+$("bNew").addEventListener("click", newGame);
+$("bUndo").addEventListener("click", undo);
+$("bHints").addEventListener("click", function(){
+  hintsOn=!hintsOn;
+  stSet("rv.hints", hintsOn?"1":"0");
+  this.classList.toggle("on",hintsOn);
+  this.setAttribute("aria-pressed",hintsOn?"true":"false");
+  if(!busy && !over && current===humanColor) showHints(movesFor(board,humanColor));
+  say(hintsOn?"Legal-move hints on.":"Legal-move hints off.");
+});
+$("bHelp").addEventListener("click", function(){ show($("helpOverlay")); });
+$("hClose").addEventListener("click", function(){ hide($("helpOverlay")); });
+$("eAgain").addEventListener("click", newGame);
+$("eClose").addEventListener("click", function(){ hide($("endOverlay")); });
+
+$("endOverlay").addEventListener("click", function(e){ if(e.target===this) hide(this); });
+$("helpOverlay").addEventListener("click", function(e){ if(e.target===this) hide(this); });
+
+$("bSound").addEventListener("click", function(){
+  sound=!sound;
+  stSet("rv.sound", sound?"1":"0");
+  this.setAttribute("aria-pressed",sound?"true":"false");
+  this.setAttribute("aria-label",sound?"Sound on":"Sound off");
+  this.style.opacity=sound?"1":".45";
+  if(sound) blip(660,0.06,"sine",0.05);
+});
+
+/* difficulty segmented control */
+var diffBtns=document.querySelectorAll('.seg [data-diff]');
+for(var di=0; di<diffBtns.length; di++){
+  diffBtns[di].addEventListener("click", function(){
+    var d=this.dataset.diff;
+    if(d===difficulty) return;
+    difficulty=d;
+    stSet("rv.diff",d);
+    for(var j=0;j<diffBtns.length;j++) diffBtns[j].setAttribute("aria-pressed", diffBtns[j].dataset.diff===d?"true":"false");
+    say("Difficulty: "+d+". Starting a new game.");
+    newGame();
+  });
+}
+/* colour segmented control */
+var humanBtns=document.querySelectorAll('.seg [data-human]');
+for(var hi2=0; hi2<humanBtns.length; hi2++){
+  humanBtns[hi2].addEventListener("click", function(){
+    var h=parseInt(this.dataset.human,10);
+    if(h===humanColor) return;
+    humanColor=h;
+    stSet("rv.human",String(h));
+    for(var j=0;j<humanBtns.length;j++) humanBtns[j].setAttribute("aria-pressed", parseInt(humanBtns[j].dataset.human,10)===h?"true":"false");
+    newGame();
+  });
+}
+
+window.addEventListener("keydown", function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  var k=(e.key||"").toLowerCase();
+  if(k==="escape"){ if(anyOverlayOpen()){ e.preventDefault(); closeOverlays(); } return; }
+  if(anyOverlayOpen()) return;
+  /* let the board's own handler drive arrows/enter when a cell is focused */
+  if(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains("cell")) {
+    if(k==="arrowup"||k==="arrowdown"||k==="arrowleft"||k==="arrowright"||k==="enter"||k===" ") return;
+  }
+  if(k==="n"){ e.preventDefault(); newGame(); }
+  else if(k==="u"){ e.preventDefault(); if(!$("bUndo").disabled) undo(); }
+  else if(k==="h"){ e.preventDefault(); $("bHints").click(); }
+});
+
+boardEl.addEventListener("animationend", function(e){
+  if(e.animationName==="place"||e.animationName==="flip") e.target.classList.remove("place","flipping");
+});
+
+window.addEventListener("resize", layout);
+try{ if(window.ResizeObserver) new ResizeObserver(layout).observe($("boardWrap")); }catch(e){}
+
+/* ======================================================================
+   Boot
+   ====================================================================== */
+(function boot(){
+  for(var j=0;j<diffBtns.length;j++) diffBtns[j].setAttribute("aria-pressed", diffBtns[j].dataset.diff===difficulty?"true":"false");
+  for(var m=0;m<humanBtns.length;m++) humanBtns[m].setAttribute("aria-pressed", parseInt(humanBtns[m].dataset.human,10)===humanColor?"true":"false");
+  var hb=$("bHints");
+  hb.classList.toggle("on",hintsOn);
+  hb.setAttribute("aria-pressed",hintsOn?"true":"false");
+  var sb=$("bSound");
+  sb.setAttribute("aria-pressed",sound?"true":"false");
+  sb.setAttribute("aria-label",sound?"Sound on":"Sound off");
+  sb.style.opacity=sound?"1":".45";
+  buildBoard();
+  newGame();
+  requestAnimationFrame(layout);
+})();
+
+})();
+</script>
+<style id="hit-target-shim">
+/* Batchly mobile pass (2026-09-04): 44px tap targets; gated so the desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  .btn,.seg button{min-height:44px;touch-action:manipulation}
+  .seg button{min-width:44px;padding:6px 11px}
+  .btn.icon{min-width:44px}
+}
+</style>
+</body>
+</html>

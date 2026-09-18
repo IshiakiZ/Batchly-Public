@@ -1,0 +1,20 @@
+{
+  "folder": "admin/word-ladder",
+  "title": "Word Ladder",
+  "description": "Turn one word into another by changing a single letter at a time; every rung must be a real word. Find the shortest path.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/word-ladder",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 41569,
+      "sha256": "c1c32bf60a8de6b2acb04854dd9a28f619d4a24a9d23abb1a7271dc669266932",
+      "source": "published catalog HTML"
+    }
+  ]
+}

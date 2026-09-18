@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Memory Match: flip cards two at a time and find every matching pair. Distinct hand-drawn symbols, 4x4 and 6x6 boards.">
+<title>Memory Match</title>
+<!--
+================================================================================
+MEMORY MATCH: Batchly
+================================================================================
+Concentration / pairs. A grid of face-down cards; flip two, keep them if their
+symbols match, otherwise they flip back. Clear the whole board. Sizes 4x4 (8
+pairs) and 6x6 (18 pairs). Counters for matches found, turns (moves) and time.
+
+--------------------------------------------------------------------------------
+CARD FACES: every symbol is generated, nothing is loaded
+--------------------------------------------------------------------------------
+There are no external images. Each face is an inline SVG built in code from a
+pool of 20 symbols. Every symbol has BOTH a unique SHAPE and a unique COLOUR, so
+players who cannot distinguish two similar hues can still tell the pair apart by
+shape alone (colour is never the sole differentiator). Faces sit on a bone card
+so the saturated shapes read at maximum contrast; the geometric shapes (star,
+polygons, gear, flower, sun, spiral) are generated procedurally from a single
+point/arc builder rather than hand-typed coordinates, which removes a whole
+class of "one wrong number and the path is garbage" bugs.
+
+A deal picks the needed number of symbols from the shuffled pool (8 for 4x4,
+18 for 6x6), lays two of each, and Fisher-Yates shuffles the positions. A board
+of matched pairs is therefore always fully solvable by construction: there is
+no generated puzzle that cannot be cleared.
+
+--------------------------------------------------------------------------------
+NO LEADERBOARD, BY DESIGN
+--------------------------------------------------------------------------------
+This game is scored by FEWEST turns and FASTEST time: both lower-is-better. The
+host keeps each player's HIGHEST score and refuses to replace a higher score
+with a lower one, so posting turns/time would rank exactly backwards and a good
+run would look worse than a bad one. Nothing is ever posted to the parent frame:
+there is no window.parent.postMessage call anywhere in this file, and that
+absence is deliberate. Personal bests (fewest turns / fastest time per size) are
+kept LOCALLY only, for the player's own flair.
+
+--------------------------------------------------------------------------------
+CONTRACT
+--------------------------------------------------------------------------------
+One self-contained file. No network of any kind: no CDN, no webfonts, no
+fetch/XHR/WebSocket, no external images. Every visual is CSS + generated SVG on
+system monospace; every sound is synthesised with WebAudio on demand. Runs in a
+sandboxed, possibly opaque-origin iframe, so localStorage is feature-detected
+and falls back to memory rather than throwing. Mouse, touch and keyboard all
+work; focus is never trapped.
+================================================================================
+-->
+<style>
+:root{
+  --bg:#10100e;
+  --panel:#18181d;
+  --panel-2:#20202a;
+  --well:#0b0b09;
+  --line:#33333d;
+  --line2:#4a4a55;
+  --bone:#f5f2e8;
+  --face:#f4efe2;
+  --muted:#9a978c;
+  --red:#ef3a3a;
+  --red-hi:#ff7a5e;
+  --green:#4ec86a;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:var(--mono);
+  font-size:14px;
+  line-height:1.3;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  touch-action:manipulation;
+}
+#app{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px clamp(8px,2vw,16px) 8px;
+  max-width:760px;
+  margin:0 auto;
+}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:0 0 auto;}
+h1{
+  margin:0;
+  font-size:clamp(15px,4.4vw,22px);
+  font-weight:800;
+  letter-spacing:.12em;
+  line-height:1;
+  white-space:nowrap;
+}
+h1 .o{color:var(--red);}
+.spacer{flex:1 1 auto;min-width:0;}
+.stats{display:flex;gap:6px;flex:0 0 auto;}
+.stat{
+  border:2px solid var(--line);
+  background:var(--panel);
+  padding:3px 8px;
+  min-width:56px;
+  text-align:center;
+}
+.stat .k{
+  display:block;
+  font-size:10px;
+  letter-spacing:.1em;
+  color:var(--muted);
+  font-weight:700;
+}
+.stat .v{
+  display:block;
+  font-size:15px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  line-height:1.2;
+}
+.stat.hot{border-color:var(--red);}
+.stat.hot .v{color:var(--red-hi);}
+.stat.good{border-color:var(--green);}
+.stat.good .v{color:var(--green);}
+
+/* ---------- controls ---------- */
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.btn{
+  appearance:none;
+  border:2px solid var(--bone);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  cursor:pointer;
+  border-radius:0;
+  box-shadow:3px 3px 0 0 var(--bone);
+  transition:transform .06s ease,box-shadow .06s ease,background-color .12s ease;
+}
+.btn:hover:not(:disabled){background:var(--panel-2);}
+.btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 0 var(--bone);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn.on{background:var(--red);border-color:var(--red);color:#fff;box-shadow:3px 3px 0 0 var(--red);}
+.btn.on:hover:not(:disabled){background:var(--red-hi);border-color:var(--red-hi);}
+.btn:focus-visible{outline:2px solid var(--red-hi);outline-offset:3px;}
+.btn.icon{padding:6px 9px;font-size:13px;line-height:1;}
+
+.seg{display:flex;border:2px solid var(--bone);box-shadow:3px 3px 0 0 var(--bone);flex:0 0 auto;}
+.seg button{
+  appearance:none;
+  border:0;
+  border-left:2px solid var(--line);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  padding:6px 10px;
+  cursor:pointer;
+  transition:background-color .12s ease;
+}
+.seg button:first-child{border-left:0;}
+.seg button:hover{background:var(--panel-2);}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff;}
+.seg button:focus-visible{outline:2px solid var(--red-hi);outline-offset:-3px;}
+
+/* ---------- status ---------- */
+#status{
+  flex:0 0 auto;
+  font-size:11px;
+  color:var(--muted);
+  border-left:3px solid var(--line);
+  padding:2px 0 2px 8px;
+  min-height:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#status.hi{color:var(--bone);border-left-color:var(--red);}
+#status.win{color:var(--green);border-left-color:var(--green);}
+
+/* ---------- board ---------- */
+#boardWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;}
+#board{
+  display:grid;
+  gap:var(--gap,8px);
+  padding:var(--gap,8px);
+  background:var(--well);
+  border:2px solid var(--bone);
+  box-shadow:5px 5px 0 0 var(--bone);
+}
+
+.card{
+  position:relative;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  margin:0;
+  border:0;
+  background:none;
+  cursor:pointer;
+  border-radius:0;
+  perspective:800px;
+  -webkit-tap-highlight-color:transparent;
+}
+.card .ci{
+  position:absolute;
+  inset:0;
+  transform-style:preserve-3d;
+  -webkit-transform-style:preserve-3d;
+  transition:transform .42s cubic-bezier(.2,.75,.3,1);
+  will-change:transform;
+}
+.card.up .ci,.card.matched .ci{transform:rotateY(180deg);}
+.card .back,.card .face{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  border:2px solid;
+  overflow:hidden;
+}
+.card .back{background:var(--panel);border-color:var(--line2);}
+.card .face{background:var(--face);border-color:#141210;transform:rotateY(180deg);}
+.card .back svg,.card .face svg{width:100%;height:100%;display:block;}
+.card .face svg{padding:11%;}
+.card.matched .face{border-color:var(--red);box-shadow:inset 0 0 0 3px rgba(239,58,58,.22);}
+.card.matched{cursor:default;}
+.card:focus-visible{outline:3px solid var(--red-hi);outline-offset:2px;z-index:3;}
+.card:focus-visible .back{border-color:var(--red-hi);}
+@media (hover:hover) and (pointer:fine){
+  .card:not(.matched):not(.up):hover .back{border-color:var(--bone);background:var(--panel-2);}
+}
+/* deal-in */
+#board.reveal .card{animation:dealin .42s ease both;animation-delay:calc(var(--d,0) * 24ms);}
+@keyframes dealin{
+  0%{opacity:0;transform:scale(.55) translateY(6px);}
+  100%{opacity:1;transform:scale(1) translateY(0);}
+}
+/* mismatch nudge */
+.card.miss .ci{animation:shake .34s ease;}
+@keyframes shake{
+  0%,100%{transform:rotateY(180deg) translateX(0);}
+  25%{transform:rotateY(180deg) translateX(-4px);}
+  75%{transform:rotateY(180deg) translateX(4px);}
+}
+/* match pop */
+.card.pop .ci{animation:pop .3s ease;}
+@keyframes pop{
+  0%{transform:rotateY(180deg) scale(1);}
+  45%{transform:rotateY(180deg) scale(1.09);}
+  100%{transform:rotateY(180deg) scale(1);}
+}
+/* win wave */
+#board.won .card .face{animation:wave .6s ease-out both;animation-delay:calc(var(--d,0) * 55ms);}
+@keyframes wave{
+  0%{border-color:var(--red);}
+  40%{border-color:var(--green);box-shadow:inset 0 0 0 4px rgba(78,200,106,.35);}
+  100%{border-color:var(--red);}
+}
+
+/* ---------- footer ---------- */
+footer{
+  flex:0 0 auto;
+  font-size:10px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  white-space:nowrap;
+  overflow:hidden;
+}
+footer .keys{overflow:hidden;text-overflow:ellipsis;}
+
+/* ---------- overlays ---------- */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(8,8,7,.88);
+  display:none;
+  place-items:center;
+  padding:14px;
+  z-index:30;
+}
+.overlay.show{display:grid;}
+.modal{
+  background:var(--panel);
+  border:2px solid var(--bone);
+  box-shadow:8px 8px 0 0 var(--red);
+  padding:16px;
+  width:min(440px,94vw);
+  max-height:88vh;
+  overflow:auto;
+}
+.modal h2{margin:0 0 4px;font-size:17px;letter-spacing:.08em;font-weight:800;}
+.modal .verdict{
+  font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--red-hi);margin-bottom:10px;
+}
+.modal p{margin:0 0 8px;font-size:12px;color:var(--muted);line-height:1.55;}
+.modal p b{color:var(--bone);font-weight:700;}
+.modal ul{margin:0 0 10px;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.6;}
+.modal ul b{color:var(--bone);}
+.modal hr{border:0;border-top:2px solid var(--line);margin:12px 0;}
+.tally{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.tally .stat{flex:1 1 0;min-width:60px;}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:6px 0 4px;}
+.legend .li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);}
+.legend .li .chip{width:26px;height:26px;background:var(--face);border:2px solid #141210;flex:0 0 auto;display:grid;place-items:center;}
+.legend .li .chip svg{width:100%;height:100%;padding:12%;}
+kbd{
+  display:inline-block;border:1px solid var(--line);background:var(--well);color:var(--bone);
+  padding:0 4px;font:inherit;font-size:10px;font-weight:700;
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::after,*::before{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+@media (max-width:440px){
+  .stat{min-width:46px;padding:3px 5px;}
+  .stat .v{font-size:13px;}
+  footer .keys{display:none;}
+}
+@media (max-height:440px){
+  h1{font-size:14px;}
+  footer{display:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>MEMORY<span class="o">/</span>MATCH</h1>
+    <div class="spacer"></div>
+    <div class="stats">
+      <div class="stat" id="stMatches" title="Pairs found"><span class="k">MATCHES</span><span class="v" id="sMatch">0/8</span></div>
+      <div class="stat" title="Turns taken (each two-card flip is one turn)"><span class="k">TURNS</span><span class="v" id="sMoves">0</span></div>
+      <div class="stat" title="Time since your first flip"><span class="k">TIME</span><span class="v" id="sTime">0:00</span></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Board size">
+      <button type="button" data-size="4" aria-pressed="true">4&times;4</button>
+      <button type="button" data-size="6" aria-pressed="false">6&times;6</button>
+    </div>
+    <button type="button" class="btn" id="bNew">New</button>
+    <div class="spacer"></div>
+    <button type="button" class="btn icon" id="bSound" aria-pressed="true" aria-label="Sound on" title="Sound">&#9835;</button>
+    <button type="button" class="btn icon" id="bHelp" aria-label="How to play" title="How to play">?</button>
+  </div>
+
+  <div id="status" aria-live="polite">Flip two cards to find a matching pair.</div>
+
+  <div id="boardWrap">
+    <div id="board" role="group" aria-label="Memory Match board"></div>
+  </div>
+
+  <footer>
+    <span>Flip two &rarr; matches stay, misses flip back.</span>
+    <span class="keys"><kbd>&larr;&uarr;&darr;&rarr;</kbd> move <kbd>Enter</kbd> flip <kbd>N</kbd> new <kbd>?</kbd> help</span>
+  </footer>
+</div>
+
+<!-- win -->
+<div class="overlay" id="winOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="modal">
+    <h2 id="winTitle">BOARD CLEARED</h2>
+    <div class="verdict" id="winVerdict"></div>
+    <div class="tally">
+      <div class="stat"><span class="k">TURNS</span><span class="v" id="wMoves">0</span></div>
+      <div class="stat"><span class="k">TIME</span><span class="v" id="wTime">0:00</span></div>
+      <div class="stat"><span class="k">PAIRS</span><span class="v" id="wPairs">8</span></div>
+    </div>
+    <p id="winNote"></p>
+    <p style="font-size:11px" id="winBest"></p>
+    <div class="row">
+      <button type="button" class="btn on" id="wNew">New board</button>
+      <button type="button" class="btn" id="wClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- help -->
+<div class="overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modal">
+    <h2 id="helpTitle">HOW TO PLAY</h2>
+    <div class="verdict">FIND EVERY MATCHING PAIR</div>
+    <p>The board starts face down. Flip <b>two</b> cards per turn:</p>
+    <ul>
+      <li>If the two symbols <b>match</b>, they stay face up.</li>
+      <li>If they <b>don't</b>, both flip back; remember where they were.</li>
+      <li>Clear the whole board to win. <b>4&times;4</b> is 8 pairs, <b>6&times;6</b> is 18.</li>
+      <li>Every symbol has its own <b>shape</b> and <b>colour</b>, so a pair is always tellable apart even if two colours look alike.</li>
+    </ul>
+    <div class="legend" id="legend" aria-hidden="true"></div>
+    <hr>
+    <p><b>Controls:</b> tap / click a card to flip it. <kbd>&larr;&uarr;&darr;&rarr;</kbd> move focus &middot; <kbd>Enter</kbd>/<kbd>Space</kbd> flip &middot; <kbd>N</kbd> new board &middot; <kbd>Esc</kbd> close.</p>
+    <p style="font-size:11px">There is no leaderboard here: a good game means <i>fewer</i> turns and <i>less</i> time, which is lower-is-better and would rank backwards on a highest-score board. Your fastest and fewest-turn runs are kept on this device only.</p>
+    <div class="row"><button type="button" class="btn on" id="hClose">Got it</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   Storage: an opaque-origin iframe throws on localStorage. Detect once,
+   fall back to memory so preferences/bests still work for the session.
+   ====================================================================== */
+var mem = Object.create(null), lsOK = false;
+try{
+  var probe="__mm_probe";
+  window.localStorage.setItem(probe,"1");
+  window.localStorage.removeItem(probe);
+  lsOK=true;
+}catch(e){ lsOK=false; }
+function stGet(k){
+  try{ return lsOK ? window.localStorage.getItem(k) : (k in mem ? mem[k] : null); }
+  catch(e){ return (k in mem) ? mem[k] : null; }
+}
+function stSet(k,v){
+  try{ if(lsOK) window.localStorage.setItem(k,v); else mem[k]=v; }
+  catch(e){ mem[k]=v; }
+}
+
+/* ======================================================================
+   Symbol pool: 20 generated SVG faces. Each has a unique SHAPE and a
+   unique COLOUR; shape alone is enough to tell any two apart (colour is
+   never the sole differentiator). Geometry is built from small point/arc
+   helpers rather than hand-typed coordinates.
+   ====================================================================== */
+var STROKE="#1a1712", SW=3.2;
+
+function polyPoints(cx,cy,r,sides,rotDeg){
+  var out=[],i,a;
+  for(i=0;i<sides;i++){ a=(rotDeg+i*360/sides)*Math.PI/180; out.push((cx+r*Math.cos(a)).toFixed(2)+","+(cy+r*Math.sin(a)).toFixed(2)); }
+  return out.join(" ");
+}
+function starPoints(cx,cy,rO,rI,pts,rotDeg){
+  var out=[],i,a,r;
+  for(i=0;i<pts*2;i++){ a=(rotDeg+i*180/pts)*Math.PI/180; r=(i%2===0)?rO:rI; out.push((cx+r*Math.cos(a)).toFixed(2)+","+(cy+r*Math.sin(a)).toFixed(2)); }
+  return out.join(" ");
+}
+function fillPoly(points,c){ return '<polygon points="'+points+'" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'" stroke-linejoin="round"/>'; }
+function fillPath(d,c){ return '<path d="'+d+'" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'" stroke-linejoin="round" stroke-linecap="round"/>'; }
+
+function gearInner(c){
+  var teeth=8,rO=45,rI=34,i,a,r,p=[];
+  for(i=0;i<teeth*2;i++){ a=(-90+i*180/teeth)*Math.PI/180; r=(i%2===0)?rO:rI; p.push((50+r*Math.cos(a)).toFixed(2)+","+(50+r*Math.sin(a)).toFixed(2)); }
+  return '<polygon points="'+p.join(" ")+'" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'" stroke-linejoin="round"/>'+
+         '<circle cx="50" cy="50" r="14" fill="#18181d" stroke="'+STROKE+'" stroke-width="'+SW+'"/>';
+}
+function flowerInner(c){
+  var n=6,i,a,out='';
+  for(i=0;i<n;i++){ a=(-90+i*360/n)*Math.PI/180; out+='<circle cx="'+(50+22*Math.cos(a)).toFixed(2)+'" cy="'+(50+22*Math.sin(a)).toFixed(2)+'" r="15" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>'; }
+  out+='<circle cx="50" cy="50" r="13" fill="#18181d" stroke="'+STROKE+'" stroke-width="'+SW+'"/>';
+  return out;
+}
+function sunInner(c){
+  var i,a,ir=30,or=45,out='<g stroke="'+c+'" stroke-width="8" stroke-linecap="round">';
+  for(i=0;i<8;i++){ a=(i*45)*Math.PI/180; out+='<line x1="'+(50+ir*Math.cos(a)).toFixed(2)+'" y1="'+(50+ir*Math.sin(a)).toFixed(2)+'" x2="'+(50+or*Math.cos(a)).toFixed(2)+'" y2="'+(50+or*Math.sin(a)).toFixed(2)+'"/>'; }
+  out+='</g><circle cx="50" cy="50" r="20" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>';
+  return out;
+}
+function spiralInner(c){
+  var d='M',i,N=88,a,r,x,y;
+  for(i=0;i<=N;i++){ a=i*0.30; r=2+i*0.52; x=50+r*Math.cos(a); y=50+r*Math.sin(a); d+=(i?' L':'')+x.toFixed(2)+' '+y.toFixed(2); }
+  return '<path d="'+d+'" fill="none" stroke="'+c+'" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>';
+}
+function keyInner(c){
+  return '<circle cx="27" cy="50" r="16" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>'+
+         '<circle cx="27" cy="50" r="6" fill="#18181d"/>'+
+         '<rect x="41" y="45" width="45" height="10" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>'+
+         '<rect x="74" y="55" width="8" height="15" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>'+
+         '<rect x="60" y="55" width="7" height="12" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>';
+}
+function anchorInner(c){
+  return '<g fill="none" stroke="'+c+'" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">'+
+         '<circle cx="50" cy="18" r="8"/>'+
+         '<line x1="50" y1="26" x2="50" y2="82"/>'+
+         '<line x1="30" y1="40" x2="70" y2="40"/>'+
+         '<path d="M20 58 C20 82 40 88 50 82"/>'+
+         '<path d="M80 58 C80 82 60 88 50 82"/>'+
+         '</g>';
+}
+function ringInner(c){ return '<circle cx="50" cy="50" r="30" fill="none" stroke="'+c+'" stroke-width="15"/>'; }
+function leafInner(c){
+  return fillPath("M50 8 C24 24 24 64 50 92 C76 64 76 24 50 8 Z",c)+
+         '<path d="M50 16 L50 84" fill="none" stroke="'+STROKE+'" stroke-width="3" stroke-linecap="round"/>';
+}
+function squareInner(c){ return '<rect x="18" y="18" width="64" height="64" rx="7" fill="'+c+'" stroke="'+STROKE+'" stroke-width="'+SW+'"/>'; }
+
+/* Each entry: shape name, colour, and inner SVG markup (colour baked in). */
+var SYMBOLS=[
+  { name:"Star",     color:"#ffca3a", inner:fillPoly(starPoints(50,52,46,20,5,-90),"#ffca3a") },
+  { name:"Heart",    color:"#ef3a3a", inner:fillPath("M50 84 C50 84 12 58 12 34 C12 20 24 12 36 16 C44 19 50 28 50 28 C50 28 56 19 64 16 C76 12 88 20 88 34 C88 58 50 84 50 84 Z","#ef3a3a") },
+  { name:"Diamond",  color:"#4cc9f0", inner:fillPoly(polyPoints(50,50,44,4,-90),"#4cc9f0") },
+  { name:"Ring",     color:"#52d67a", inner:ringInner("#52d67a") },
+  { name:"Triangle", color:"#ff924c", inner:fillPoly(polyPoints(50,54,46,3,-90),"#ff924c") },
+  { name:"Square",   color:"#b57bff", inner:squareInner("#b57bff") },
+  { name:"Hexagon",  color:"#ff6fb5", inner:fillPoly(polyPoints(50,50,44,6,-90),"#ff6fb5") },
+  { name:"Pentagon", color:"#2ec4b6", inner:fillPoly(polyPoints(50,53,44,5,-90),"#2ec4b6") },
+  { name:"Cross",    color:"#e8e2d0", inner:fillPath("M40 12 H60 V40 H88 V60 H60 V88 H40 V60 H12 V40 H40 Z","#e8e2d0") },
+  { name:"Bolt",     color:"#ffe14d", inner:fillPath("M56 8 L28 52 H46 L42 92 L74 46 H54 Z","#ffe14d") },
+  { name:"Droplet",  color:"#5a7bff", inner:fillPath("M50 10 C50 10 78 44 78 62 A28 28 0 1 1 22 62 C22 44 50 10 50 10 Z","#5a7bff") },
+  { name:"Moon",     color:"#c9b6ff", inner:fillPath("M60 12 A40 40 0 1 0 60 88 A30 30 0 1 1 60 12 Z","#c9b6ff") },
+  { name:"Sun",      color:"#ff9f1c", inner:sunInner("#ff9f1c") },
+  { name:"Leaf",     color:"#77dd77", inner:leafInner("#77dd77") },
+  { name:"Spiral",   color:"#d65bff", inner:spiralInner("#d65bff") },
+  { name:"Arrow",    color:"#37e0d0", inner:fillPath("M50 10 L86 46 L64 46 L64 90 L36 90 L36 46 L14 46 Z","#37e0d0") },
+  { name:"Gear",     color:"#9fb3c8", inner:gearInner("#9fb3c8") },
+  { name:"Flower",   color:"#ff7a8a", inner:flowerInner("#ff7a8a") },
+  { name:"Anchor",   color:"#6aa6ff", inner:anchorInner("#6aa6ff") },
+  { name:"Key",      color:"#d9a441", inner:keyInner("#d9a441") }
+];
+function symSVG(id){ return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+SYMBOLS[id].inner+'</svg>'; }
+var BACK_SVG='<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'+
+  '<rect x="16" y="16" width="68" height="68" fill="none" stroke="#3a3a44" stroke-width="3"/>'+
+  '<path d="M50 33 L67 50 L50 67 L33 50 Z" fill="#ef3a3a"/>'+
+  '<g stroke="#4a4a55" stroke-width="4" stroke-linecap="round">'+
+  '<path d="M22 22 h8 M22 22 v8"/><path d="M78 22 h-8 M78 22 v8"/>'+
+  '<path d="M22 78 h8 M22 78 v-8"/><path d="M78 78 h-8 M78 78 v-8"/></g>'+
+  '</svg>';
+
+/* ======================================================================
+   Audio: synthesised, no assets. Context created lazily on first gesture.
+   ====================================================================== */
+var actx=null, sound = stGet("mm.sound") !== "0";
+function ac(){
+  if(!sound) return null;
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return null;
+    if(!actx) actx=new C();
+    if(actx.state==="suspended" && actx.resume) actx.resume();
+    return actx;
+  }catch(e){ return null; }
+}
+function blip(freq,dur,type,vol,delay){
+  var a=ac(); if(!a) return;
+  try{
+    var o=a.createOscillator(), g=a.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    o.connect(g); g.connect(a.destination);
+    var t=a.currentTime+(delay||0);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.05,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }catch(e){}
+}
+
+/* ======================================================================
+   State
+   ====================================================================== */
+var n=4;                 /* grid dimension: 4 or 6 */
+var deck=[];             /* symbol id per position */
+var matched=[];          /* bool per position */
+var flipped=[];          /* indices currently face-up and unmatched (0..2) */
+var moves=0, matchesFound=0, totalPairs=8;
+var won=false, busy=false, busyTimer=null;
+var cards=[];
+var HOLD=850;            /* ms a mismatched pair stays visible */
+/* The win modal is deferred ~560ms so the victory wave can play. Starting a
+   new board in that gap MUST cancel it, or the pending timer pops the previous
+   result over the fresh board. */
+var winShowTimer=null;
+
+/* timer (pausable, so tabbing away doesn't inflate the clock) */
+var tStart=0, tAccum=0, tRunning=false, tFrozenShown=false;
+
+/* personal bests, kept locally only (never posted) */
+var bests={};
+try{ var raw=stGet("mm.best"); if(raw) bests=JSON.parse(raw)||{}; }catch(e){ bests={}; }
+if(!bests||typeof bests!=="object") bests={};
+
+var savedSize=parseInt(stGet("mm.size"),10);
+if(savedSize===4||savedSize===6) n=savedSize;
+
+var $=function(id){ return document.getElementById(id); };
+var board=$("board"), statusEl=$("status");
+
+/* ======================================================================
+   Timer helpers
+   ====================================================================== */
+function nowMs(){ return (window.performance&&performance.now)?performance.now():Date.now(); }
+function timerStart(){ if(tRunning) return; tStart=nowMs(); tRunning=true; }
+function timerPause(){ if(tRunning){ tAccum+=nowMs()-tStart; tRunning=false; } }
+function timerResume(){ if(!won && (tStart||tAccum) && !tRunning){ tStart=nowMs(); tRunning=true; } }
+function timerReset(){ tStart=0; tAccum=0; tRunning=false; }
+function elapsedMs(){ return tRunning ? tAccum+(nowMs()-tStart) : tAccum; }
+function started(){ return tRunning || tAccum>0; }
+function fmt(ms){
+  var s=Math.floor(ms/1000), m=Math.floor(s/60);
+  s=s%60;
+  return m+":"+(s<10?"0":"")+s;
+}
+
+/* ======================================================================
+   Board construction + layout
+   ====================================================================== */
+function buildBoard(){
+  board.textContent="";
+  cards=[];
+  board.style.gridTemplateColumns="repeat("+n+",1fr)";
+  board.style.gridTemplateRows="repeat("+n+",1fr)";
+  for(var r=0;r<n;r++){
+    for(var c=0;c<n;c++){
+      var i=r*n+c;
+      var b=document.createElement("button");
+      b.type="button";
+      b.className="card";
+      b.style.setProperty("--d", String(r+c));
+      b.dataset.i=String(i);
+      var ci=document.createElement("span"); ci.className="ci";
+      var back=document.createElement("span"); back.className="back"; back.innerHTML=BACK_SVG;
+      var face=document.createElement("span"); face.className="face";
+      ci.appendChild(back); ci.appendChild(face);
+      b.appendChild(ci);
+      board.appendChild(b);
+      cards.push(b);
+    }
+  }
+  layout();
+}
+
+function layout(){
+  var wrap=$("boardWrap");
+  var w=wrap.clientWidth, h=wrap.clientHeight;
+  if(!w||!h) return;
+  var s=Math.max(140, Math.floor(Math.min(w,h)) - 4);
+  board.style.width=s+"px";
+  board.style.height=s+"px";
+  var gap=Math.max(4, Math.round(s*(n===4?0.02:0.014)));
+  board.style.setProperty("--gap", gap+"px");
+}
+/* Some hosts (and the file-preview pane) report the wrap as 0×0 for the first
+   few frames, then grow it without a reliable ResizeObserver delivery. Sizing
+   is essential (the cards collapse without it), so run layout now and again
+   over the next ~600ms so it always latches once the frame has real size. */
+function scheduleLayout(){
+  layout();
+  requestAnimationFrame(layout);
+  var t=[30,120,300,600], i;
+  for(i=0;i<t.length;i++) setTimeout(layout, t[i]);
+}
+
+/* ======================================================================
+   Rendering / labels
+   ====================================================================== */
+function ariaFor(i){
+  var r=(i/n|0)+1, c=(i%n)+1, where="Row "+r+", column "+c+", ";
+  if(matched[i]) return where+"matched "+SYMBOLS[deck[i]].name;
+  if(flipped.indexOf(i)>=0) return where+"showing "+SYMBOLS[deck[i]].name;
+  return where+"face down";
+}
+function updateAria(i){ cards[i].setAttribute("aria-label", ariaFor(i)); }
+
+function renderStats(){
+  $("sMatch").textContent=matchesFound+"/"+totalPairs;
+  $("sMoves").textContent=String(moves);
+  $("sTime").textContent=fmt(elapsedMs());
+  $("stMatches").classList.toggle("good", matchesFound===totalPairs && totalPairs>0);
+}
+
+function say(msg,cls){
+  statusEl.textContent=msg;
+  statusEl.className="";
+  if(cls) statusEl.classList.add(cls);
+}
+
+/* ======================================================================
+   Deal
+   ====================================================================== */
+function shuffle(a){
+  for(var i=a.length-1;i>0;i--){
+    var j=(Math.random()*(i+1))|0, t=a[i]; a[i]=a[j]; a[j]=t;
+  }
+  return a;
+}
+
+function deal(){
+  closeWin();
+  totalPairs=n*n/2;
+  /* pick `totalPairs` distinct symbols from the shuffled pool */
+  var pool=shuffle(SYMBOLS.map(function(_,i){ return i; })).slice(0,totalPairs);
+  var seq=[];
+  for(var p=0;p<pool.length;p++){ seq.push(pool[p]); seq.push(pool[p]); }
+  shuffle(seq);
+  deck=seq;
+  matched=[]; for(var m=0;m<deck.length;m++) matched[m]=false;
+  flipped=[]; moves=0; matchesFound=0; won=false; busy=false; tFrozenShown=false;
+  if(busyTimer){ clearTimeout(busyTimer); busyTimer=null; }
+  timerReset();
+  board.classList.remove("won");
+
+  for(var i=0;i<cards.length;i++){
+    var card=cards[i];
+    card.classList.remove("up","matched","miss","pop");
+    card.removeAttribute("aria-disabled");
+    card.querySelector(".face").innerHTML=symSVG(deck[i]);
+    updateAria(i);
+  }
+  renderStats();
+  say("New "+n+"×"+n+" board: find all "+totalPairs+" pairs.");
+
+  /* deal-in animation restart */
+  board.classList.remove("reveal");
+  void board.offsetWidth;
+  board.classList.add("reveal");
+}
+
+/* ======================================================================
+   Card interaction
+   ====================================================================== */
+function setUp(i,on){
+  cards[i].classList.toggle("up",on);
+  updateAria(i);
+}
+
+function resolveMismatchNow(){
+  if(busyTimer){ clearTimeout(busyTimer); busyTimer=null; }
+  if(flipped.length===2){
+    setUp(flipped[0],false);
+    setUp(flipped[1],false);
+    cards[flipped[0]].classList.remove("miss");
+    cards[flipped[1]].classList.remove("miss");
+  }
+  flipped=[]; busy=false;
+}
+
+function activate(i){
+  if(won) return;
+  if(matched[i]) return;
+  if(flipped.indexOf(i)>=0) return;      /* already showing */
+
+  /* if a mismatched pair is still on show, snap it back and continue */
+  if(busy || flipped.length>=2) resolveMismatchNow();
+
+  timerStart();
+
+  setUp(i,true);
+  flipped.push(i);
+  blip(520+((i*37)%120),0.05,"square",0.04);
+
+  if(flipped.length===2){
+    moves++;
+    var a=flipped[0], b=flipped[1];
+    if(deck[a]===deck[b]){
+      /* match */
+      matched[a]=true; matched[b]=true;
+      cards[a].classList.add("matched","pop");
+      cards[b].classList.add("matched","pop");
+      cards[a].setAttribute("aria-disabled","true");
+      cards[b].setAttribute("aria-disabled","true");
+      updateAria(a); updateAria(b);
+      flipped=[];
+      matchesFound++;
+      blip(660,0.08,"sine",0.05,0);
+      blip(990,0.10,"sine",0.05,0.07);
+      renderStats();
+      if(matchesFound===totalPairs){ win(); }
+      else{ say("Matched "+SYMBOLS[deck[a]].name+"! "+(totalPairs-matchesFound)+" pair"+(totalPairs-matchesFound===1?"":"s")+" to go."); }
+    }else{
+      /* mismatch: hold, then flip both back */
+      busy=true;
+      cards[a].classList.add("miss");
+      cards[b].classList.add("miss");
+      blip(200,0.09,"triangle",0.045,0);
+      say(SYMBOLS[deck[a]].name+" and "+SYMBOLS[deck[b]].name+", no match.");
+      renderStats();
+      busyTimer=setTimeout(function(){
+        busyTimer=null;
+        setUp(a,false); setUp(b,false);
+        cards[a].classList.remove("miss");
+        cards[b].classList.remove("miss");
+        flipped=[]; busy=false;
+      }, HOLD);
+    }
+  }else{
+    renderStats();
+  }
+}
+
+/* ======================================================================
+   Win
+   ====================================================================== */
+function win(){
+  won=true;
+  timerPause();
+  var finalMs=elapsedMs(), finalMoves=moves;
+  board.classList.add("won");
+  renderStats();
+
+  blip(523.25,0.10,"square",0.05,0.00);
+  blip(659.25,0.10,"square",0.05,0.09);
+  blip(783.99,0.10,"square",0.05,0.18);
+  blip(1046.5,0.24,"square",0.055,0.27);
+
+  /* personal bests (local only, never posted) */
+  var key=String(n), prev=bests[key]||{}, newMoves=false, newTime=false;
+  if(prev.m==null || finalMoves<prev.m){ newMoves=true; }
+  if(prev.t==null || finalMs<prev.t){ newTime=true; }
+  bests[key]={
+    m: (prev.m==null)?finalMoves:Math.min(prev.m,finalMoves),
+    t: (prev.t==null)?finalMs:Math.min(prev.t,finalMs)
+  };
+  try{ stSet("mm.best", JSON.stringify(bests)); }catch(e){}
+
+  var perfect=(finalMoves===totalPairs);
+  var verdict, note;
+  if(perfect){
+    verdict="PERFECT RECALL: "+totalPairs+" TURNS";
+    note="You cleared every pair in the fewest turns possible: one flip per pair, no misses. Flawless.";
+  }else if(finalMoves<=totalPairs*1.5){
+    verdict="SHARP MEMORY";
+    note="Cleared in <b>"+finalMoves+"</b> turns. The theoretical minimum is "+totalPairs+"; you were close.";
+  }else{
+    verdict="CLEARED";
+    note="Cleared in <b>"+finalMoves+"</b> turns and <b>"+fmt(finalMs)+"</b>. Fewer turns means less guessing; try to beat it.";
+  }
+
+  var bnote="";
+  if(newMoves && newTime) bnote="<b>New personal best for "+n+"×"+n+"</b>: fewest turns and fastest time.";
+  else if(newMoves) bnote="<b>New personal best</b>: fewest turns for "+n+"×"+n+".";
+  else if(newTime) bnote="<b>New personal best</b>: fastest time for "+n+"×"+n+".";
+  else bnote="Your "+n+"×"+n+" best: "+bests[key].m+" turns · "+fmt(bests[key].t)+".";
+
+  $("winVerdict").textContent=verdict;
+  $("wMoves").textContent=String(finalMoves);
+  $("wTime").textContent=fmt(finalMs);
+  $("wPairs").textContent=String(totalPairs);
+  $("winNote").innerHTML=note;
+  $("winBest").innerHTML=bnote;
+  say("Board cleared in "+finalMoves+" turns and "+fmt(finalMs)+".", "win");
+
+  if(winShowTimer!==null) clearTimeout(winShowTimer);
+  winShowTimer=setTimeout(function(){ winShowTimer=null; show($("winOverlay")); focusFirst($("winOverlay")); }, 560);
+}
+
+/* ======================================================================
+   Overlays
+   ====================================================================== */
+function show(el){ el.classList.add("show"); }
+function hide(el){ el.classList.remove("show"); }
+function closeWin(){ if(winShowTimer!==null){ clearTimeout(winShowTimer); winShowTimer=null; } hide($("winOverlay")); }
+function anyOverlayOpen(){ return $("winOverlay").classList.contains("show") || $("helpOverlay").classList.contains("show"); }
+function closeOverlays(){ closeWin(); hide($("helpOverlay")); }
+function focusFirst(el){
+  var b=el.querySelector("button");
+  if(b){ try{ b.focus(); }catch(e){} }
+}
+
+/* build the help legend once (a sample of the symbol pool) */
+(function buildLegend(){
+  var wrap=$("legend"), sample=[0,1,2,4,6,9,12,17];
+  var html="";
+  for(var k=0;k<sample.length;k++){
+    var s=SYMBOLS[sample[k]];
+    html+='<span class="li"><span class="chip">'+symSVG(sample[k])+'</span>'+s.name+'</span>';
+  }
+  wrap.innerHTML=html;
+})();
+
+/* ======================================================================
+   Controls
+   ====================================================================== */
+function newGame(){ deal(); }
+
+function setSize(s){
+  if(s===n){ deal(); return; }
+  n=s;
+  stSet("mm.size", String(n));
+  var segs=document.querySelectorAll(".seg button");
+  for(var i=0;i<segs.length;i++){
+    segs[i].setAttribute("aria-pressed", parseInt(segs[i].dataset.size,10)===n ? "true":"false");
+  }
+  buildBoard();
+  deal();
+}
+
+/* ======================================================================
+   Events
+   ====================================================================== */
+board.addEventListener("click", function(e){
+  var t=e.target.closest ? e.target.closest(".card") : null;
+  if(!t || !board.contains(t)) return;
+  activate(parseInt(t.dataset.i,10));
+});
+
+/* arrow-key navigation between cards (activation is native button click) */
+board.addEventListener("keydown", function(e){
+  var idx=cards.indexOf(document.activeElement);
+  if(idx<0) return;
+  var r=(idx/n)|0, c=idx%n, k=e.key;
+  if(k==="ArrowUp") r--;
+  else if(k==="ArrowDown") r++;
+  else if(k==="ArrowLeft") c--;
+  else if(k==="ArrowRight") c++;
+  else return;
+  e.preventDefault();
+  r=(r+n)%n; c=(c+n)%n;
+  cards[r*n+c].focus();
+});
+
+$("bNew").addEventListener("click", newGame);
+$("wNew").addEventListener("click", newGame);
+$("wClose").addEventListener("click", closeWin);
+$("bHelp").addEventListener("click", function(){ show($("helpOverlay")); focusFirst($("helpOverlay")); });
+$("hClose").addEventListener("click", function(){ hide($("helpOverlay")); });
+
+$("winOverlay").addEventListener("click", function(e){ if(e.target===this) closeWin(); });
+$("helpOverlay").addEventListener("click", function(e){ if(e.target===this) hide(this); });
+
+$("bSound").addEventListener("click", function(){
+  sound=!sound;
+  stSet("mm.sound", sound?"1":"0");
+  this.setAttribute("aria-pressed", sound?"true":"false");
+  this.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  this.style.opacity = sound ? "1" : ".45";
+  if(sound) blip(660,0.06,"sine",0.05);
+});
+
+var segButtons=document.querySelectorAll(".seg button");
+for(var si=0;si<segButtons.length;si++){
+  segButtons[si].addEventListener("click", function(){ setSize(parseInt(this.dataset.size,10)); });
+}
+
+window.addEventListener("keydown", function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  var k=(e.key||"").toLowerCase();
+  if(k==="escape"){ if(anyOverlayOpen()){ e.preventDefault(); closeOverlays(); } return; }
+  if(anyOverlayOpen()) return;
+  if(k==="n"){ e.preventDefault(); newGame(); }
+  else if(k==="?"){ e.preventDefault(); show($("helpOverlay")); focusFirst($("helpOverlay")); }
+});
+
+/* pause the clock when the tab is hidden so it stays honest */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden) timerPause();
+  else timerResume();
+});
+
+window.addEventListener("resize", layout);
+window.addEventListener("load", scheduleLayout);
+try{ if(window.ResizeObserver) new ResizeObserver(layout).observe($("boardWrap")); }catch(e){}
+
+/* single lightweight timer tick: only touches the DOM while running */
+setInterval(function(){
+  if(won){
+    if(!tFrozenShown){ renderStats(); tFrozenShown=true; }
+    return;
+  }
+  if(tRunning) $("sTime").textContent=fmt(elapsedMs());
+}, 250);
+
+/* ======================================================================
+   Boot
+   ====================================================================== */
+(function boot(){
+  var segs=document.querySelectorAll(".seg button");
+  for(var i=0;i<segs.length;i++){
+    segs[i].setAttribute("aria-pressed", parseInt(segs[i].dataset.size,10)===n ? "true":"false");
+  }
+  var sb=$("bSound");
+  sb.setAttribute("aria-pressed", sound?"true":"false");
+  sb.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  sb.style.opacity = sound ? "1" : ".45";
+  buildBoard();
+  deal();
+  scheduleLayout();
+})();
+
+})();
+</script>
+<style id="hit-target-shim">
+/* Batchly mobile pass (2026-09-04): 44px tap targets; gated so the desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  .btn,.seg button{min-height:44px;touch-action:manipulation}
+  .seg button{min-width:44px;padding:6px 12px}
+  .btn.icon{min-width:44px}
+}
+</style>
+</body>
+</html>

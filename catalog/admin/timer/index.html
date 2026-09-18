@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Timer: Stopwatch / Countdown / Pomodoro</title>
+<style>
+:root{
+  --bg:#10100e;
+  --fg:#eee;
+  --muted:#888;
+  --accent:#ff3b30;
+  --panel:#171715;
+  --line:#eee;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:ui-monospace,Menlo,Monaco,"Cascadia Mono","Roboto Mono","Courier New",monospace;
+  font-size:14px;
+  line-height:1.5;
+  overflow-x:hidden;
+}
+[hidden]{display:none !important}
+
+.wrap{max-width:640px;margin:0 auto;padding:20px 20px 44px}
+
+/* ---------- type ---------- */
+h1{
+  margin:0;font-size:20px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+}
+.tag{
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+}
+.lbl{
+  display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 8px;
+}
+.sr{
+  position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+}
+
+/* ---------- header ---------- */
+header{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  margin:0 0 6px;flex-wrap:wrap;
+}
+.hgroup{min-width:0}
+.hgroup .tag{display:block;margin-top:4px}
+.audiobar{display:flex;gap:8px;flex-shrink:0}
+
+/* ---------- buttons ---------- */
+button{font:inherit;color:inherit}
+.btn,.btn2,.ghost{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:44px;padding:10px 16px;
+  font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  border:2px solid transparent;border-radius:0;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  text-align:center;
+}
+.btn{background:var(--accent);color:#10100e;border-color:var(--accent)}
+.btn2{background:transparent;color:var(--accent);border-color:var(--accent)}
+.ghost{background:transparent;color:var(--fg);border-color:#6a6a64}
+/* still visually compact, but never below the 44px touch minimum */
+.small{min-height:44px;padding:8px 12px;font-size:11px}
+button:disabled{opacity:.34;cursor:not-allowed}
+@media (hover:hover){
+  .btn:hover:not(:disabled){background:#ff5a51;border-color:#ff5a51}
+  .btn2:hover:not(:disabled),.ghost:hover:not(:disabled){background:rgba(255,255,255,.07)}
+}
+button:active:not(:disabled){transform:translateY(1px)}
+:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+
+/* ---------- mode tabs ---------- */
+.seg{display:flex;border:2px solid var(--line);margin:14px 0 12px}
+.seg button{
+  flex:1 1 0;min-width:0;min-height:46px;
+  background:transparent;border:0;border-left:2px solid var(--line);
+  font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  cursor:pointer;padding:6px 4px;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;gap:5px;overflow:hidden;
+}
+.seg button:first-child{border-left:0}
+.seg button[aria-selected="true"]{background:var(--accent);color:#10100e}
+.seg .dot{
+  width:7px;height:7px;background:var(--accent);border-radius:50%;flex:0 0 auto;
+}
+.seg button[aria-selected="true"] .dot{background:#10100e}
+
+/* ---------- panels ---------- */
+.panel{border:2px solid var(--line);padding:16px;margin:0 0 14px;background:transparent}
+.panel + .panel{margin-top:14px}
+
+/* ---------- readout ---------- */
+.readout{
+  border:2px solid var(--line);padding:18px 10px 14px;text-align:center;margin:0 0 14px;
+  overflow:hidden;   /* backstop: a readout can never widen the page */
+}
+.readout.ringing{border-color:var(--accent);animation:ring .62s steps(1,end) infinite}
+@keyframes ring{0%,100%{background:transparent}50%{background:rgba(255,59,48,.2)}}
+@media (prefers-reduced-motion:reduce){
+  .readout.ringing{animation:none;background:rgba(255,59,48,.18)}
+  button:active:not(:disabled){transform:none}
+}
+.time{
+  display:block;font-size:clamp(30px,11.6vw,60px);font-weight:700;line-height:1.04;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap;
+}
+.time .frac{font-size:.52em;color:var(--muted);font-weight:700}
+.time.idle{color:var(--muted)}
+.time.over{color:var(--accent)}
+.readsub{
+  display:block;margin-top:8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  min-height:16px;word-break:break-word;
+}
+.readsub b{color:var(--fg);font-weight:700}
+.readsub.hot{color:var(--accent)}
+
+/* ---------- progress ---------- */
+.bar{height:8px;border:2px solid #6a6a64;margin:12px 0 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);transform-origin:left center;transform:scaleX(0)}
+
+/* ---------- rows / grids ---------- */
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > *{flex:1 1 130px}
+.row.tight > *{flex:0 0 auto}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips .ghost{flex:1 1 auto;min-width:72px}
+
+/* ---------- keypad ---------- */
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{
+  min-height:52px;font-size:19px;font-weight:700;letter-spacing:.04em;
+  background:var(--panel);border:2px solid #6a6a64;color:var(--fg);cursor:pointer;
+}
+.pad button.util{font-size:11px;letter-spacing:.1em;color:var(--muted)}
+@media (hover:hover){.pad button:hover{border-color:var(--fg)}}
+
+/* ---------- laps ---------- */
+.laps{margin:14px 0 0;border:2px solid #6a6a64;max-height:264px;overflow-y:auto;overflow-x:hidden}
+.lap{
+  display:grid;grid-template-columns:3.1em 1fr auto;gap:8px;align-items:baseline;
+  padding:9px 10px;border-bottom:1px solid #33332f;font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.lap:last-child{border-bottom:0}
+.lap .n{color:var(--muted);font-size:11px;letter-spacing:.06em}
+.lap .sp{font-weight:700;display:flex;align-items:baseline;gap:6px;min-width:0}
+.lap .tt{color:var(--muted);font-size:12px;white-space:nowrap}
+.lap.best{background:rgba(255,255,255,.05)}
+.lap.worst{background:rgba(255,59,48,.11)}
+.mark{
+  font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  border:1px solid currentColor;padding:0 3px;flex:0 0 auto;
+}
+.lap.best .mark{color:var(--fg)}
+.lap.worst .mark{color:var(--accent)}
+.lap.live{color:var(--muted)}
+.empty{padding:14px 10px;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+
+/* ---------- pomodoro ---------- */
+.phase{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:0 0 12px;
+}
+.phasename{font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.phasename.work{color:var(--accent)}
+.phasename.rest{color:var(--fg)}
+.dots{display:flex;gap:6px;align-items:center}
+.dots i{
+  width:12px;height:12px;border:2px solid #6a6a64;display:block;flex:0 0 auto;
+}
+.dots i.done{background:var(--accent);border-color:var(--accent)}
+.dots i.now{border-color:var(--fg);box-shadow:inset 0 0 0 2px var(--bg),inset 0 0 0 5px var(--fg)}
+.cfg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.cfg label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cfg input[type=number]{
+  width:100%;min-height:44px;margin-top:5px;padding:8px 10px;
+  background:var(--panel);border:2px solid #6a6a64;color:var(--fg);
+  font:inherit;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;border-radius:0;
+}
+.cfg input[type=number]:focus{border-color:var(--fg)}
+.check{
+  display:flex;align-items:center;gap:10px;min-height:44px;margin-top:10px;cursor:pointer;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg);
+}
+.check input{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto;margin:0}
+
+/* ---------- notices ---------- */
+.notice{
+  border:2px solid #6a6a64;padding:10px 12px;margin:0 0 10px;
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+  display:flex;gap:10px;align-items:flex-start;justify-content:space-between;
+}
+.notice.warn{border-color:var(--accent);color:var(--accent)}
+.notice p{margin:0;flex:1 1 auto;min-width:0}
+.notice button{
+  flex:0 0 auto;background:transparent;border:2px solid currentColor;color:inherit;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;cursor:pointer;
+  min-height:44px;
+}
+
+/* ---------- footer ---------- */
+footer{margin-top:22px;border-top:2px solid #33332f;padding-top:14px}
+footer p{margin:0 0 6px;font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+footer kbd{
+  border:1px solid #6a6a64;padding:0 4px;font:inherit;font-size:10px;color:var(--fg);
+}
+.keys{display:none}
+@media (hover:hover) and (pointer:fine){.keys{display:block}}
+#copyout{
+  width:100%;margin-top:10px;min-height:110px;background:var(--panel);color:var(--fg);
+  border:2px solid var(--accent);font:inherit;font-size:12px;padding:8px;border-radius:0;
+}
+
+@media (max-width:400px){
+  .wrap{padding:16px 12px 40px}
+  .panel,.readout{padding:12px}
+  .readout{padding:16px 6px 12px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="hgroup">
+      <h1>Timer</h1>
+      <span class="tag">Stopwatch · Countdown · Pomodoro</span>
+    </div>
+    <div class="audiobar">
+      <button type="button" id="soundBtn" class="btn2 small" aria-pressed="true">Sound On</button>
+      <button type="button" id="testBtn" class="ghost small">Test</button>
+    </div>
+  </header>
+
+  <div class="seg" role="tablist" aria-label="Timer mode">
+    <button type="button" role="tab" id="tab-sw"  aria-selected="true"  aria-controls="panel-sw"  data-mode="sw">Stopwatch<span class="dot" data-run="sw" hidden></span></button>
+    <button type="button" role="tab" id="tab-cd"  aria-selected="false" aria-controls="panel-cd"  data-mode="cd" tabindex="-1">Timer<span class="dot" data-run="cd" hidden></span></button>
+    <button type="button" role="tab" id="tab-pom" aria-selected="false" aria-controls="panel-pom" data-mode="pom" tabindex="-1">Pomodoro<span class="dot" data-run="pom" hidden></span></button>
+  </div>
+
+  <div id="notices"></div>
+
+  <!-- ============ STOPWATCH ============ -->
+  <section id="panel-sw" role="tabpanel" aria-labelledby="tab-sw" tabindex="-1">
+    <div class="readout">
+      <span class="time idle" id="swTime" role="timer" aria-label="Stopwatch elapsed time">0:00<span class="frac">.00</span></span>
+      <span class="readsub" id="swSub">Ready</span>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="swGo">Start</button>
+      <button type="button" class="btn2" id="swLap" disabled>Lap</button>
+      <button type="button" class="ghost" id="swReset" disabled>Reset</button>
+    </div>
+    <div class="laps" id="swLaps" role="group" aria-label="Lap times">
+      <p class="empty">No laps yet. Press Lap while running</p>
+    </div>
+    <div class="row tight" style="margin-top:12px">
+      <button type="button" class="ghost small" id="swCopy" disabled>Copy Laps</button>
+    </div>
+    <textarea id="copyout" hidden readonly aria-label="Lap times, select and copy manually"></textarea>
+  </section>
+
+  <!-- ============ COUNTDOWN ============ -->
+  <section id="panel-cd" role="tabpanel" aria-labelledby="tab-cd" tabindex="-1" hidden>
+    <div class="readout" id="cdRead">
+      <span class="time idle" id="cdTime" role="timer" aria-label="Countdown remaining">0:00</span>
+      <span class="readsub" id="cdSub">Set a duration below</span>
+      <div class="bar" id="cdBarWrap" hidden><i id="cdBar"></i></div>
+    </div>
+
+    <!-- idle: keypad -->
+    <div id="cdSet">
+      <span class="lbl">Set: digits fill from the right</span>
+      <div class="pad" id="cdPad">
+        <button type="button" data-d="1">1</button>
+        <button type="button" data-d="2">2</button>
+        <button type="button" data-d="3">3</button>
+        <button type="button" data-d="4">4</button>
+        <button type="button" data-d="5">5</button>
+        <button type="button" data-d="6">6</button>
+        <button type="button" data-d="7">7</button>
+        <button type="button" data-d="8">8</button>
+        <button type="button" data-d="9">9</button>
+        <button type="button" class="util" data-act="back" aria-label="Delete last digit">Del</button>
+        <button type="button" data-d="0">0</button>
+        <button type="button" class="util" data-act="clear" aria-label="Clear the entry">Clr</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" class="btn" id="cdStart" disabled>Start</button>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <span class="lbl">Quick start: sets and runs immediately</span>
+        <div class="chips" id="cdPresets"></div>
+      </div>
+    </div>
+
+    <!-- running / paused -->
+    <div id="cdRun" hidden>
+      <div class="row">
+        <button type="button" class="btn" id="cdPause">Pause</button>
+        <button type="button" class="btn2" id="cdPlus">+1 Min</button>
+        <button type="button" class="ghost" id="cdCancel">Cancel</button>
+      </div>
+    </div>
+
+    <!-- finished -->
+    <div id="cdDone" hidden>
+      <div class="row">
+        <button type="button" class="btn" id="cdDismiss">Dismiss</button>
+        <button type="button" class="btn2" id="cdAgain">Repeat</button>
+        <button type="button" class="ghost" id="cdNew">New</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ POMODORO ============ -->
+  <section id="panel-pom" role="tabpanel" aria-labelledby="tab-pom" tabindex="-1" hidden>
+    <div class="phase">
+      <span class="phasename work" id="pomPhase">Work</span>
+      <span class="dots" id="pomDots" aria-hidden="true"></span>
+    </div>
+    <div class="readout" id="pomRead">
+      <span class="time idle" id="pomTime" role="timer" aria-label="Pomodoro phase remaining">25:00</span>
+      <span class="readsub" id="pomSub">Ready. Press Start</span>
+      <div class="bar"><i id="pomBar"></i></div>
+    </div>
+    <div class="row">
+      <button type="button" class="btn" id="pomGo">Start</button>
+      <button type="button" class="btn2" id="pomSkip">Skip</button>
+      <button type="button" class="ghost" id="pomReset">Reset</button>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <span class="lbl">Lengths (minutes)</span>
+      <div class="cfg">
+        <label>Work<input type="number" id="cfgWork" min="1" max="180" step="1" inputmode="numeric" value="25"></label>
+        <label>Short break<input type="number" id="cfgShort" min="1" max="180" step="1" inputmode="numeric" value="5"></label>
+        <label>Long break<input type="number" id="cfgLong" min="1" max="180" step="1" inputmode="numeric" value="15"></label>
+        <label>Rounds per cycle<input type="number" id="cfgRounds" min="1" max="12" step="1" inputmode="numeric" value="4"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="cfgAuto" checked>Auto-start the next phase</label>
+      <p class="tag" style="margin:6px 0 0">Edits apply to the phase running now. <span id="pomStats"></span></p>
+    </div>
+  </section>
+
+  <footer>
+    <p class="keys">
+      <kbd>Space</kbd> start/stop · <kbd>L</kbd> lap · <kbd>R</kbd> reset · <kbd>1</kbd>–<kbd>3</kbd> switch mode
+    </p>
+    <p id="storeNote">Timers keep running while this tab is hidden and survive a refresh.</p>
+  </footer>
+
+  <p class="sr" id="live" role="status" aria-live="polite"></p>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================================
+   WHY THIS FILE NEVER COUNTS WITH setInterval INCREMENTS
+   -------------------------------------------------------------------------
+   A naive timer does `elapsed += 1000` on an interval. That is wrong twice:
+   setInterval fires late (drift compounds), and background tabs throttle it
+   to >=1s or freeze it entirely, so a hidden tab silently loses minutes.
+
+   Instead every engine stores an ANCHOR and derives the reading:
+       elapsed = base + (perf() - t0)          // base = ms banked before now
+   perf() is performance.now(): monotonic, immune to the user changing the
+   system clock. rAF and a background poller only ever *ask* for that value;
+   never add to it, so a frame that never fired costs nothing.
+
+   For surviving a reload we also store w0 = Date.now() at segment start.
+   On restore we re-anchor:  t0 = perf() - (Date.now() - w0).
+   ========================================================================= */
+
+var $ = function(s){ return document.querySelector(s); };
+var perf = function(){
+  // performance.now() should always exist, but never assume in a sandbox.
+  try { if (window.performance && performance.now) return performance.now(); } catch(e){}
+  return Date.now();
+};
+
+var GRACE = 120000;   // ring a missed boundary only if it is younger than this
+var MAX_LAPS = 200;
+
+/* ---------------- storage (every access guarded) ---------------- */
+var KEY = 'batchly.timer.v1';
+var storageOK = true;
+function loadRaw(){
+  try {
+    var raw = window.localStorage.getItem(KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){
+    // Sandboxed iframes without allow-same-origin THROW on the property access
+    // itself, so this catch also covers `window.localStorage` being unreachable.
+    storageOK = false;
+    return null;
+  }
+}
+function saveRaw(obj){
+  try { window.localStorage.setItem(KEY, JSON.stringify(obj)); return true; }
+  catch(e){ storageOK = false; return false; }
+}
+
+/* ---------------- live region ---------------- */
+var liveEl = $('#live'), liveFlip = false;
+function say(msg){
+  if (!liveEl) return;
+  liveFlip = !liveFlip;
+  liveEl.textContent = msg + (liveFlip ? '' : ' ');
+}
+
+/* ---------------- notices ---------------- */
+var noticeState = {};   // id -> {text, warn, dismissable}
+var noticesEl = $('#notices');
+function notice(id, text, opts){
+  opts = opts || {};
+  if (!text) { delete noticeState[id]; } else { noticeState[id] = {text:text, warn:!!opts.warn, x:!!opts.dismissable}; }
+  renderNotices();
+}
+function renderNotices(){
+  noticesEl.textContent = '';
+  Object.keys(noticeState).forEach(function(id){
+    var n = noticeState[id];
+    var d = document.createElement('div');
+    d.className = 'notice' + (n.warn ? ' warn' : '');
+    var p = document.createElement('p');
+    p.textContent = n.text;
+    d.appendChild(p);
+    if (n.x){
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = 'OK';
+      b.setAttribute('aria-label', 'Dismiss: ' + n.text);
+      b.addEventListener('click', function(){ notice(id, null); });
+      d.appendChild(b);
+    }
+    noticesEl.appendChild(d);
+  });
+}
+
+/* ---------------- formatting ---------------- */
+function p2(n){ return n < 10 ? '0' + n : '' + n; }
+
+// Stopwatch: floor to centiseconds. Hours only appear once they exist.
+function fmtSW(ms){
+  if (ms < 0) ms = 0;
+  var cs = Math.floor(ms / 10);
+  var s  = Math.floor(cs / 100); cs %= 100;
+  var m  = Math.floor(s / 60);   s  %= 60;
+  var h  = Math.floor(m / 60);   m  %= 60;
+  var head = h > 0 ? (h + ':' + p2(m) + ':' + p2(s)) : (m + ':' + p2(s));
+  return { head: head, frac: '.' + p2(cs) };
+}
+// Countdown: CEIL, so "0:00" appears exactly at expiry and the last whole
+// second is displayed as 1, not 0. Flooring would show 0:00 for a full second
+// before the alarm, the classic off-by-one in countdown UIs.
+function fmtCD(ms){
+  if (ms < 0) ms = 0;
+  var s = Math.ceil(ms / 1000);
+  var m = Math.floor(s / 60); s %= 60;
+  var h = Math.floor(m / 60); m %= 60;
+  return h > 0 ? (h + ':' + p2(m) + ':' + p2(s)) : (m + ':' + p2(s));
+}
+function fmtUp(ms){   // overtime / elapsed, floored
+  if (ms < 0) ms = 0;
+  var s = Math.floor(ms / 1000);
+  var m = Math.floor(s / 60); s %= 60;
+  var h = Math.floor(m / 60); m %= 60;
+  return h > 0 ? (h + ':' + p2(m) + ':' + p2(s)) : (m + ':' + p2(s));
+}
+function fmtAgo(ms){
+  var s = Math.round(ms / 1000);
+  if (s < 60) return s + ' sec';
+  var m = Math.round(s / 60);
+  if (m < 60) return m + ' min';
+  var h = Math.floor(m / 60); m %= 60;
+  return h + ' hr' + (m ? ' ' + m + ' min' : '');
+}
+function fmtWords(ms){
+  var s = Math.round(ms / 1000);
+  var h = Math.floor(s / 3600); s %= 3600;
+  var m = Math.floor(s / 60);   s %= 60;
+  var out = [];
+  if (h) out.push(h + ' hr');
+  if (m) out.push(m + ' min');
+  if (s || !out.length) out.push(s + ' sec');
+  return out.join(' ');
+}
+
+/* =========================================================================
+   AUDIO: generated, no files. Created lazily on the first user gesture
+   because browsers refuse to start an AudioContext without one.
+   ========================================================================= */
+var actx = null, master = null, audioDead = false, gestureSeen = false;
+var soundOn = true;
+
+function audioNotice(){
+  if (!soundOn) { notice('audio', null); return; }
+  if (audioDead) { notice('audio', 'No Web Audio in this browser, so alerts will be visual only.', {warn:true}); return; }
+  if (!actx || actx.state === 'suspended') {
+    notice('audio', 'Tap anywhere once to let this page play the alarm.');
+  } else {
+    notice('audio', null);
+  }
+}
+function ensureAudio(){
+  if (audioDead) return null;
+  if (!actx){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC){ audioDead = true; audioNotice(); return null; }
+    try {
+      actx = new AC();
+      master = actx.createGain();
+      master.gain.value = 0.0001;
+      master.connect(actx.destination);
+    } catch(e){ actx = null; audioDead = true; audioNotice(); return null; }
+  }
+  if (actx.state === 'suspended'){
+    // resume() is async: re-check when it settles, or the "tap to allow audio"
+    // notice sticks around long after audio actually started working.
+    try {
+      var pr = actx.resume();
+      if (pr && pr.then) pr.then(function(){ audioNotice(); }, function(){ audioNotice(); });
+    } catch(e){}
+  }
+  audioNotice();
+  return actx;
+}
+function beep(at, freq, dur, vol){
+  if (!actx) return;
+  try {
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, at);
+    // exponentialRampToValueAtTime can never target 0, so ramp to a tiny value
+    // instead. A linear cut to 0 would click audibly.
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, vol), at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(master);
+    o.start(at); o.stop(at + dur + 0.04);
+  } catch(e){}
+}
+var PATTERNS = {
+  done:  [[784,.14],[988,.14],[1319,.30]],   // countdown finished, rising
+  work:  [[523,.13],[659,.13],[784,.24]],    // a work block begins
+  rest:  [[880,.15],[659,.28]],              // a break begins, falling
+  test:  [[880,.12],[1175,.20]]
+};
+function playPattern(name){
+  if (!soundOn) return;
+  var ctx = ensureAudio();
+  if (!ctx || ctx.state !== 'running') return;   // stay silent rather than half-play
+  try { master.gain.setValueAtTime(0.9, ctx.currentTime); } catch(e){ try{ master.gain.value = 0.9; }catch(e2){} }
+  var seq = PATTERNS[name] || PATTERNS.done;
+  var t = ctx.currentTime + 0.03;
+  for (var i = 0; i < seq.length; i++){
+    beep(t, seq[i][0], seq[i][1], 0.26);
+    t += seq[i][1] + 0.07;
+  }
+}
+function buzz(ms){ try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e){} }
+
+// Repeating alarm for a finished countdown: bursts every 3s, capped at 60s so
+// a forgotten tab does not beep forever.
+var alarmTimer = null, alarmLeft = 0;
+// Is there actually a channel for a repeating alert? If not, arming the timer
+// would only mislabel Dismiss as "Stop Alarm", a button whose first press
+// stops nothing the user can perceive and costs them a second click.
+function canVibrate(){
+  try {
+    if (!navigator.vibrate) return false;
+    // Desktop Chrome exposes vibrate() and silently does nothing with it, so
+    // its mere presence proves nothing. Require actual touch hardware.
+    return (navigator.maxTouchPoints || 0) > 0;
+  } catch(e){ return false; }
+}
+function alarmAudible(){
+  if (soundOn && !audioDead && actx && actx.state === 'running') return true;
+  return canVibrate();
+}
+function startAlarm(kind, repeats){
+  stopAlarm();
+  playPattern(kind);          // also lazily opens the AudioContext
+  buzz([120, 90, 120]);
+  if (!alarmAudible()) return;   // the flashing readout is the alert
+  alarmLeft = repeats || 0;
+  if (alarmLeft > 0){
+    alarmTimer = window.setInterval(function(){
+      if (alarmLeft-- <= 0) { stopAlarm(); return; }
+      playPattern(kind); buzz([120, 90, 120]);
+    }, 3000);
+  }
+}
+function stopAlarm(){
+  if (alarmTimer){ window.clearInterval(alarmTimer); alarmTimer = null; }
+  alarmLeft = 0;
+}
+
+/* ---------------- wake lock (bonus; silently unavailable in most iframes) ---------------- */
+var wake = null;
+function wakeOn(){
+  try {
+    if (!navigator.wakeLock || wake) return;
+    var pr = navigator.wakeLock.request('screen');
+    if (pr && pr.then) pr.then(function(l){
+      wake = l;
+      try { l.addEventListener('release', function(){ wake = null; }); } catch(e){}
+    }, function(){});
+  } catch(e){}
+}
+function wakeOff(){
+  try { if (wake && wake.release) wake.release(); } catch(e){}
+  wake = null;
+}
+
+/* =========================================================================
+   ENGINES
+   ========================================================================= */
+// laps[] holds CUMULATIVE times. Once it hits MAX_LAPS the oldest rows are
+// evicted, so we also remember how many were dropped (for numbering) and the
+// cumulative time of the last dropped one (so the oldest surviving split is
+// still measured from its real predecessor, not from zero).
+var sw  = { running:false, base:0, t0:0, w0:0, laps:[], dropped:0, dropBase:0 };
+var cd  = { state:'idle', dur:0, base:0, t0:0, w0:0, entry:'', endWall:0 };
+var pom = {
+  cfg:{ work:25, short:5, long:15, rounds:4, auto:true },
+  state:'idle', phase:'work', round:1, base:0, t0:0, w0:0, completed:0
+};
+var mode = 'sw';
+
+function elapsedOf(e, running){
+  return running ? e.base + (perf() - e.t0) : e.base;
+}
+function swElapsed(){ return elapsedOf(sw, sw.running); }
+function cdElapsed(){ return elapsedOf(cd, cd.state === 'running'); }
+function pomElapsed(){ return elapsedOf(pom, pom.state === 'running'); }
+function phaseMs(){
+  var k = pom.phase === 'work' ? pom.cfg.work : (pom.phase === 'long' ? pom.cfg.long : pom.cfg.short);
+  return Math.max(1, k) * 60000;
+}
+function beginSegment(e){ e.t0 = perf(); e.w0 = Date.now(); }
+
+/* ---------------- persistence ---------------- */
+function save(){
+  var ok = saveRaw({
+    v:1, mode:mode, sound:soundOn,
+    sw:{ running:sw.running, base:sw.base, w0:sw.w0, laps:sw.laps.slice(-MAX_LAPS),
+         dropped:sw.dropped, dropBase:sw.dropBase },
+    cd:{ state:cd.state, dur:cd.dur, base:cd.base, w0:cd.w0, entry:cd.entry, endWall:cd.endWall },
+    pom:{ cfg:pom.cfg, state:pom.state, phase:pom.phase, round:pom.round,
+          base:pom.base, w0:pom.w0, completed:pom.completed }
+  });
+  storeNote();
+  return ok;
+}
+function storeNote(){
+  $('#storeNote').textContent = storageOK
+    ? 'Timers keep running while this tab is hidden and survive a refresh.'
+    : 'Storage is blocked here: timers still run, but a refresh will clear them.';
+}
+function reanchor(e, running){
+  if (!running) return;
+  // Rebuild the monotonic anchor from the wall-clock anchor. If the system
+  // clock moved backwards we clamp at 0 rather than inventing negative time.
+  var gone = Date.now() - (e.w0 || Date.now());
+  if (!(gone >= 0) || gone > 1000 * 60 * 60 * 24 * 30) gone = 0;
+  e.t0 = perf() - gone;
+}
+function restore(){
+  var d = loadRaw();
+  storeNote();
+  if (!d || typeof d !== 'object') return;
+
+  if (typeof d.sound === 'boolean') soundOn = d.sound;
+  if (d.mode === 'sw' || d.mode === 'cd' || d.mode === 'pom') mode = d.mode;
+
+  if (d.sw){
+    sw.running = !!d.sw.running;
+    sw.base = num(d.sw.base, 0, 0, 1e12);
+    sw.w0 = num(d.sw.w0, 0, 0, 1e15);
+    sw.laps = Object.prototype.toString.call(d.sw.laps) === '[object Array]'
+      ? d.sw.laps.filter(function(x){ return typeof x === 'number' && isFinite(x) && x >= 0; }).slice(-MAX_LAPS)
+      : [];
+    sw.dropped = num(d.sw.dropped, 0, 0, 1e9);
+    sw.dropBase = num(d.sw.dropBase, 0, 0, 1e12);
+    // a dropBase above the oldest surviving lap would invent a negative split
+    if (!sw.laps.length || sw.dropBase > sw.laps[0]) sw.dropBase = 0;
+    reanchor(sw, sw.running);
+    if (sw.running) wakeOn();
+  }
+  if (d.cd){
+    var st = d.cd.state;
+    cd.state = (st === 'running' || st === 'paused' || st === 'done') ? st : 'idle';
+    cd.dur = num(d.cd.dur, 0, 0, 1e10);
+    cd.base = num(d.cd.base, 0, 0, 1e12);
+    cd.w0 = num(d.cd.w0, 0, 0, 1e15);
+    cd.endWall = num(d.cd.endWall, 0, 0, 1e15);
+    cd.entry = (typeof d.cd.entry === 'string' && /^[0-9]{0,6}$/.test(d.cd.entry)) ? d.cd.entry : '';
+    if (cd.dur <= 0 && cd.state !== 'idle') cd.state = 'idle';
+    reanchor(cd, cd.state === 'running');
+  }
+  if (d.pom){
+    var c = d.pom.cfg || {};
+    pom.cfg.work   = num(c.work, 25, 1, 180);
+    pom.cfg.short  = num(c.short, 5, 1, 180);
+    pom.cfg.long   = num(c.long, 15, 1, 180);
+    pom.cfg.rounds = num(c.rounds, 4, 1, 12);
+    pom.cfg.auto   = c.auto !== false;
+    var ps = d.pom.state;
+    pom.state = (ps === 'running' || ps === 'paused' || ps === 'await') ? ps : 'idle';
+    pom.phase = (d.pom.phase === 'short' || d.pom.phase === 'long') ? d.pom.phase : 'work';
+    pom.round = num(d.pom.round, 1, 1, pom.cfg.rounds);
+    pom.base = num(d.pom.base, 0, 0, 1e12);
+    pom.w0 = num(d.pom.w0, 0, 0, 1e15);
+    pom.completed = num(d.pom.completed, 0, 0, 100000);
+    reanchor(pom, pom.state === 'running');
+    if (pom.state === 'running') wakeOn();
+  }
+}
+function num(v, dflt, lo, hi){
+  var n = typeof v === 'number' ? v : parseFloat(v);
+  if (!isFinite(n)) return dflt;
+  n = Math.round(n);
+  if (n < lo) n = lo;
+  if (n > hi) n = hi;
+  return n;
+}
+
+/* =========================================================================
+   TICK: idempotent. Recomputes from anchors, resolves boundaries, renders.
+   Safe to call from rAF, from the poller, from visibilitychange, or twice
+   in a row: nothing in here increments a counter.
+   ========================================================================= */
+function tick(){
+  resolveCountdown();
+  resolvePomodoro();
+  render();
+  pumpLoop();
+}
+
+function resolveCountdown(){
+  if (cd.state !== 'running') return;
+  var left = cd.dur - cdElapsed();
+  if (left > 0) return;
+  // Boundary. endWall is the true wall-clock instant it expired, which may be
+  // well in the past if the tab was frozen or the page was closed.
+  var boundary = cd.endWall || Date.now();
+  var late = Date.now() - boundary;
+  cd.state = 'done';
+  wakeOff();
+  if (late > GRACE){
+    notice('cdlate', 'Countdown finished ' + fmtAgo(late) + ' ago while this tab was away.', {dismissable:true});
+    say('Countdown finished ' + fmtAgo(late) + ' ago.');
+  } else {
+    notice('cdlate', null);
+    startAlarm('done', 19);
+    say("Time's up.");
+  }
+  save();
+}
+
+function resolvePomodoro(){
+  if (pom.state !== 'running') return;
+  var advanced = 0, lastBoundary = 0, guard = 0;
+  while (pom.state === 'running' && guard++ < 400){
+    var dur = phaseMs();
+    var el = pomElapsed();
+    if (el < dur) break;
+    var leftover = el - dur;
+    lastBoundary = Date.now() - leftover;
+    advanced++;
+    advancePhase(true);
+    if (pom.cfg.auto){
+      // Carry the overshoot into the new phase so a cycle never loses time.
+      pom.base = 0;
+      pom.t0 = perf() - leftover;
+      pom.w0 = Date.now() - leftover;
+    } else {
+      pom.state = 'await';
+      pom.base = 0;
+      pom.w0 = Date.now();
+    }
+  }
+  if (!advanced) return;
+
+  var late = Date.now() - lastBoundary;
+  if (advanced > 1){
+    notice('pomjump', 'Pomodoro advanced ' + advanced + ' phases while this tab was away.', {dismissable:true});
+  } else {
+    notice('pomjump', null);
+  }
+  var label = phaseLabel();
+  if (late <= GRACE){
+    startAlarm(pom.phase === 'work' ? 'work' : 'rest', pom.cfg.auto ? 0 : 9);
+  }
+  say(pom.cfg.auto ? (label + ' started.') : (label + ' ready. Press start.'));
+  if (pom.state !== 'running') wakeOff();
+  save();
+}
+
+// The single place the phase order lives, so a manual Skip can never disagree
+// with a phase that ran out on its own. `credit` is false for Skip: a work
+// block you cut short is not a completed one, and the counter says "completed".
+function advancePhase(credit){
+  if (pom.phase === 'work'){
+    if (credit) pom.completed++;
+    pom.phase = (pom.round >= pom.cfg.rounds) ? 'long' : 'short';
+  } else if (pom.phase === 'short'){
+    pom.round = Math.min(pom.cfg.rounds, pom.round + 1);
+    pom.phase = 'work';
+  } else {                        // a long break closes the cycle
+    pom.round = 1;
+    pom.phase = 'work';
+  }
+}
+function phaseLabel(){
+  return pom.phase === 'work' ? 'Work' : (pom.phase === 'long' ? 'Long break' : 'Short break');
+}
+
+/* =========================================================================
+   LOOP: rAF for smooth hundredths, plus a 200ms poller that keeps working when
+   rAF is paused in a background tab, plus a one-shot timeout aimed at the
+   exact next deadline. All three call the same idempotent tick().
+   ========================================================================= */
+var rafId = 0, pollId = 0, wakeId = 0;
+function anyRunning(){
+  return sw.running || cd.state === 'running' || pom.state === 'running';
+}
+// Only the stopwatch shows hundredths, so it is the only thing that earns a
+// 60fps loop. Countdown and pomodoro readouts change once a second, so the
+// cheap poller is enough for them, and it is also what keeps the "time's up"
+// overtime counter moving after the countdown itself has stopped.
+function needFrames(){ return sw.running; }
+function needPoll(){ return anyRunning() || cd.state === 'done'; }
+function pumpLoop(){
+  if (needFrames()){
+    if (!rafId && window.requestAnimationFrame) rafId = window.requestAnimationFrame(frame);
+  } else if (rafId){
+    if (window.cancelAnimationFrame) window.cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  if (needPoll()){
+    if (!pollId) pollId = window.setInterval(tick, 200);
+  } else if (pollId){
+    window.clearInterval(pollId); pollId = 0;
+  }
+  scheduleDeadline();
+}
+function frame(){
+  rafId = 0;
+  resolveCountdown();
+  resolvePomodoro();
+  render();
+  if (needFrames() && window.requestAnimationFrame) rafId = window.requestAnimationFrame(frame);
+}
+function scheduleDeadline(){
+  if (wakeId){ window.clearTimeout(wakeId); wakeId = 0; }
+  var next = Infinity;
+  if (cd.state === 'running') next = Math.min(next, cd.dur - cdElapsed());
+  if (pom.state === 'running') next = Math.min(next, phaseMs() - pomElapsed());
+  if (!isFinite(next)) return;
+  // Background tabs clamp timeouts to >=1s; that is fine, it only makes the
+  // alarm a fraction late, and tick() still reads the true elapsed time.
+  wakeId = window.setTimeout(tick, Math.max(0, Math.min(next + 30, 2147483000)));
+}
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+var lastText = {}, lastLen = {};
+// Drop every "already painted" memo so the next render rewrites (and re-fits)
+// everything. Needed after a mode switch, a reset, or a resize.
+function repaint(){ lastText = {}; lastLen = {}; dotsSig = ''; }
+function setText(node, key, val){
+  if (lastText[key] === val) return;
+  lastText[key] = val;
+  node.textContent = val;
+}
+// Same memo for className. The stopwatch re-renders at 60fps, and replacing a
+// text node / rewriting an attribute every frame is real work for a string that
+// changes about once a minute.
+function setClass(node, key, val){
+  if (lastText[key] === val) return;
+  lastText[key] = val;
+  node.className = val;
+}
+// The readout is nowrap, so a font whose digits are wider than the CSS clamp
+// assumed would spill out of the panel. Rather than trust font metrics, shrink
+// until it actually fits. Only runs when the number of characters changes
+// (crossing a minute/hour boundary), so it costs nothing per frame.
+function fitTime(node){
+  if (!node.clientWidth) return;             // panel is hidden, nothing to measure
+  node.style.fontSize = '';
+  var guard = 0;
+  while (node.scrollWidth > node.clientWidth && guard++ < 24){
+    var fs = parseFloat(window.getComputedStyle(node).fontSize) || 30;
+    node.style.fontSize = (fs * 0.92) + 'px';
+  }
+}
+function setHTMLTime(node, key, head, frac){
+  var v = head + '|' + frac;
+  if (lastText[key] === v) return;
+  lastText[key] = v;
+  node.textContent = head;
+  if (frac){
+    var s = document.createElement('span');
+    s.className = 'frac';
+    s.textContent = frac;
+    node.appendChild(s);
+  }
+  var len = (head + frac).length;
+  if (lastLen[key] !== len){ lastLen[key] = len; fitTime(node); }
+}
+
+function render(){
+  // Attention dots on the tabs. A FINISHED countdown must flag its tab too:
+  // if you are on another tab when it expires (and audio is muted or blocked),
+  // the dot is the only thing telling you it went off.
+  toggle($('[data-run="sw"]'), !sw.running);
+  toggle($('[data-run="cd"]'), cd.state !== 'running' && cd.state !== 'done');
+  toggle($('[data-run="pom"]'), pom.state !== 'running' && pom.state !== 'await');
+
+  if (mode === 'sw') renderSW();
+  else if (mode === 'cd') renderCD();
+  else renderPom();
+}
+function toggle(node, hide){ if (node) node.hidden = !!hide; }
+
+/* ---- stopwatch ---- */
+function renderSW(){
+  var e = swElapsed();
+  var f = fmtSW(e);
+  var t = $('#swTime');
+  setHTMLTime(t, 'sw', f.head, f.frac);
+  setClass(t, 'swcls', 'time' + (e === 0 ? ' idle' : ''));
+  setText($('#swSub'), 'swsub',
+    sw.running ? 'Running' : (e > 0 ? 'Stopped' : 'Ready'));
+  setText($('#swGo'), 'swgo', sw.running ? 'Stop' : (e > 0 ? 'Resume' : 'Start'));
+  $('#swLap').disabled = !sw.running;
+  $('#swReset').disabled = !(e > 0 || sw.laps.length);
+  $('#swCopy').disabled = sw.laps.length === 0;
+  if (sw.running) renderLiveLap(e);
+}
+var liveLapEl = null;
+function renderLiveLap(e){
+  if (!liveLapEl) return;
+  var prev = sw.laps.length ? sw.laps[sw.laps.length - 1] : 0;
+  var f = fmtSW(e - prev);
+  setText(liveLapEl, 'livelap', f.head + f.frac);
+}
+function renderLaps(){
+  var box = $('#swLaps');
+  box.textContent = '';
+  liveLapEl = null;
+  if (!sw.laps.length){
+    var p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = 'No laps yet. Press Lap while running';
+    box.appendChild(p);
+    return;
+  }
+  // splits[i] = time of lap i minus time of lap i-1 (dropBase for the oldest
+  // survivor, which is 0 until eviction has actually happened)
+  var splits = [], i;
+  for (i = 0; i < sw.laps.length; i++) splits.push(sw.laps[i] - (i ? sw.laps[i-1] : sw.dropBase));
+  // Rank on the value the user can actually SEE (hundredths), and tag EVERY row
+  // holding an extreme. Ranking on raw milliseconds, or keeping only the first
+  // winner, would put FAST on one of two rows that both read 0:00.00 and leave
+  // the other bare, which just looks broken. All splits equal: nobody wins.
+  var shown = [], bv = Infinity, wv = -Infinity;
+  for (i = 0; i < splits.length; i++){
+    shown.push(Math.floor(splits[i] / 10));
+    if (shown[i] < bv) bv = shown[i];
+    if (shown[i] > wv) wv = shown[i];
+  }
+  var ranked = splits.length >= 2 && bv !== wv;
+
+  // in-progress lap on top
+  var live = document.createElement('div');
+  live.className = 'lap live';
+  var ln = document.createElement('span'); ln.className = 'n'; ln.textContent = (sw.laps.length + sw.dropped + 1);
+  var ls = document.createElement('span'); ls.className = 'sp';
+  var lspan = document.createElement('span'); lspan.textContent = '0:00.00';
+  ls.appendChild(lspan);
+  var lt = document.createElement('span'); lt.className = 'tt'; lt.textContent = 'running';
+  live.appendChild(ln); live.appendChild(ls); live.appendChild(lt);
+  box.appendChild(live);
+  liveLapEl = lspan;
+  lastText.livelap = null;
+
+  for (i = sw.laps.length - 1; i >= 0; i--){
+    var isBest = ranked && shown[i] === bv, isWorst = ranked && shown[i] === wv;
+    var row = document.createElement('div');
+    row.className = 'lap' + (isBest ? ' best' : (isWorst ? ' worst' : ''));
+    var n = document.createElement('span'); n.className = 'n'; n.textContent = (i + sw.dropped + 1);
+    var sp = document.createElement('span'); sp.className = 'sp';
+    var sf = fmtSW(splits[i]);
+    var sv = document.createElement('span'); sv.textContent = sf.head + sf.frac;
+    sp.appendChild(sv);
+    if (isBest || isWorst){
+      var mk = document.createElement('span');
+      mk.className = 'mark';
+      mk.textContent = isBest ? 'Fast' : 'Slow';
+      sp.appendChild(mk);
+    }
+    var tt = document.createElement('span'); tt.className = 'tt';
+    var tf = fmtSW(sw.laps[i]);
+    tt.textContent = tf.head + tf.frac;
+    row.appendChild(n); row.appendChild(sp); row.appendChild(tt);
+    box.appendChild(row);
+  }
+  if (!sw.running) { live.remove(); liveLapEl = null; }
+}
+
+/* ---- countdown ---- */
+function entryMs(){
+  var s = ('000000' + cd.entry).slice(-6);
+  var h = parseInt(s.slice(0,2), 10);
+  var m = parseInt(s.slice(2,4), 10);
+  var sec = parseInt(s.slice(4,6), 10);
+  // Deliberately allows 90 seconds -> 1:30. Summing normalises for free.
+  return (h * 3600 + m * 60 + sec) * 1000;
+}
+// Turn a duration into keypad digits. NOT the same as "total seconds": the
+// entry is positional HHMMSS, so 25 minutes is "2500", not "1500".
+function digitsForMs(ms){
+  var s = Math.round(ms / 1000);
+  var h = Math.floor(s / 3600); s %= 3600;
+  var m = Math.floor(s / 60);   s %= 60;
+  if (h > 99) h = 99;
+  return (p2(h) + p2(m) + p2(s)).replace(/^0+/, '');
+}
+function entryDisplay(){
+  var s = ('000000' + cd.entry).slice(-6);
+  var h = s.slice(0,2), m = s.slice(2,4), sec = s.slice(4,6);
+  return (h !== '00' ? (parseInt(h,10) + ':' + m + ':' + sec) : (parseInt(m,10) + ':' + sec));
+}
+function renderCD(){
+  var t = $('#cdTime'), sub = $('#cdSub');
+  var setBox = $('#cdSet'), runBox = $('#cdRun'), doneBox = $('#cdDone');
+  var read = $('#cdRead');
+
+  if (cd.state === 'idle'){
+    setBox.hidden = false; runBox.hidden = true; doneBox.hidden = true;
+    $('#cdBarWrap').hidden = true;
+    read.classList.remove('ringing');
+    var ms = entryMs();
+    setHTMLTime(t, 'cd', entryDisplay(), '');
+    t.className = 'time' + (ms === 0 ? ' idle' : '');
+    setText(sub, 'cdsub', ms === 0 ? 'Set a duration below' : ('Total ' + fmtWords(ms)));
+    sub.className = 'readsub';
+    $('#cdStart').disabled = ms === 0;
+    return;
+  }
+
+  setBox.hidden = true;
+  $('#cdBarWrap').hidden = false;
+
+  if (cd.state === 'done'){
+    runBox.hidden = true; doneBox.hidden = false;
+    read.classList.add('ringing');
+    var over = cdOvertime();
+    setHTMLTime(t, 'cd', '0:00', '');
+    t.className = 'time over';
+    setText(sub, 'cdsub', "Time's up: " + fmtUp(over) + ' ago');
+    sub.className = 'readsub hot';
+    $('#cdBar').style.transform = 'scaleX(1)';
+    $('#cdDismiss').textContent = alarmTimer ? 'Stop Alarm' : 'Dismiss';
+    return;
+  }
+
+  runBox.hidden = false; doneBox.hidden = true;
+  read.classList.remove('ringing');
+  var left = cd.dur - cdElapsed();
+  setHTMLTime(t, 'cd', fmtCD(left), '');
+  t.className = 'time';
+  setText(sub, 'cdsub', cd.state === 'paused'
+    ? ('Paused · ' + fmtWords(cd.dur) + ' total')
+    : ('Ends ' + endClock() + ' · ' + fmtWords(cd.dur) + ' total'));
+  sub.className = 'readsub';
+  var frac = cd.dur > 0 ? (1 - left / cd.dur) : 0;
+  $('#cdBar').style.transform = 'scaleX(' + clamp01(frac).toFixed(4) + ')';
+  $('#cdPause').textContent = cd.state === 'paused' ? 'Resume' : 'Pause';
+}
+function cdOvertime(){
+  // How long ago it expired, measured from the real expiry instant.
+  return Math.max(0, Date.now() - (cd.endWall || Date.now()));
+}
+function endClock(){
+  var d = new Date(Date.now() + Math.max(0, cd.dur - cdElapsed()));
+  var h = d.getHours(), m = d.getMinutes();
+  return h + ':' + p2(m);
+}
+function clamp01(x){ return x < 0 ? 0 : (x > 1 ? 1 : x); }
+
+/* ---- pomodoro ---- */
+function renderPom(){
+  var dur = phaseMs();
+  var el = pomElapsed();
+  var left = dur - el;
+  var t = $('#pomTime'), sub = $('#pomSub');
+
+  var nameEl = $('#pomPhase');
+  nameEl.textContent = phaseLabel();
+  nameEl.className = 'phasename ' + (pom.phase === 'work' ? 'work' : 'rest');
+
+  setHTMLTime(t, 'pom', fmtCD(Math.max(0, left)), '');
+  t.className = 'time' + (pom.state === 'idle' ? ' idle' : '');
+
+  var msg;
+  if (pom.state === 'running') msg = 'Round ' + pom.round + ' of ' + pom.cfg.rounds + ' · ends ' + pomEndClock(left);
+  else if (pom.state === 'paused') msg = 'Paused · round ' + pom.round + ' of ' + pom.cfg.rounds;
+  else if (pom.state === 'await') msg = phaseLabel() + ' is ready. Press start';
+  else msg = 'Ready. Press Start';
+  setText(sub, 'pomsub', msg);
+  sub.className = 'readsub' + (pom.state === 'await' ? ' hot' : '');
+
+  $('#pomRead').classList.toggle('ringing', pom.state === 'await');
+  $('#pomBar').style.transform = 'scaleX(' + clamp01(dur ? el / dur : 0).toFixed(4) + ')';
+  $('#pomGo').textContent = pom.state === 'running' ? 'Pause'
+    : (pom.state === 'await' ? ('Start ' + phaseLabel()) : (pom.state === 'paused' ? 'Resume' : 'Start'));
+  $('#pomReset').disabled = pom.state === 'idle' && pom.completed === 0 && el === 0;
+  setText($('#pomStats'), 'pomstats',
+    pom.completed ? ('Completed: ' + pom.completed + (pom.completed === 1 ? ' work block.' : ' work blocks.')) : '');
+  renderDots();
+}
+function pomEndClock(left){
+  var d = new Date(Date.now() + Math.max(0, left));
+  return d.getHours() + ':' + p2(d.getMinutes());
+}
+var dotsSig = '';
+function renderDots(){
+  var sig = pom.cfg.rounds + '|' + pom.round + '|' + pom.phase + '|' + pom.state;
+  if (sig === dotsSig) return;
+  dotsSig = sig;
+  var box = $('#pomDots');
+  box.textContent = '';
+  for (var i = 1; i <= pom.cfg.rounds; i++){
+    var d = document.createElement('i');
+    // A round counts as done once its work block is finished, i.e. we are past
+    // it, or we are in the break that follows it.
+    var done = (i < pom.round) || (i === pom.round && pom.phase !== 'work');
+    if (done) d.className = 'done';
+    else if (i === pom.round && pom.phase === 'work') d.className = 'now';
+    box.appendChild(d);
+  }
+}
+
+/* =========================================================================
+   ACTIONS
+   ========================================================================= */
+/* ---- stopwatch ---- */
+function swToggle(){
+  if (sw.running){
+    sw.base = swElapsed();
+    sw.running = false;
+    wakeOff();
+    say('Stopwatch stopped at ' + fmtUp(sw.base) + '.');
+  } else {
+    beginSegment(sw);
+    sw.running = true;
+    wakeOn();
+    say('Stopwatch started.');
+  }
+  renderLaps(); save(); tick();
+}
+function swDoLap(){
+  if (!sw.running) return;
+  var e = swElapsed();
+  var prev = sw.laps.length ? sw.laps[sw.laps.length - 1] : 0;
+  sw.laps.push(e);
+  while (sw.laps.length > MAX_LAPS){ sw.dropBase = sw.laps.shift(); sw.dropped++; }
+  say('Lap ' + (sw.laps.length + sw.dropped) + ', ' + fmtUp(e - prev) + '.');
+  renderLaps(); save(); tick();
+}
+function swDoReset(){
+  sw.running = false; sw.base = 0; sw.t0 = 0; sw.w0 = 0;
+  sw.laps = []; sw.dropped = 0; sw.dropBase = 0;
+  wakeOff();
+  // the manual-copy box would otherwise keep showing laps that no longer exist
+  var out = $('#copyout');
+  if (out){ out.hidden = true; out.value = ''; }
+  notice('clip', null);
+  repaint();
+  say('Stopwatch reset.');
+  renderLaps(); save(); tick();
+}
+
+/* ---- countdown ---- */
+function cdBegin(ms){
+  if (!(ms > 0)) return;
+  stopAlarm();
+  notice('cdlate', null);
+  cd.dur = ms; cd.base = 0; cd.state = 'running';
+  beginSegment(cd);
+  cd.endWall = Date.now() + ms;
+  wakeOn();
+  say('Countdown started for ' + fmtWords(ms) + '.');
+  save(); tick();
+}
+function cdTogglePause(){
+  if (cd.state === 'running'){
+    cd.base = cdElapsed(); cd.state = 'paused'; wakeOff();
+    say('Countdown paused, ' + fmtUp(cd.dur - cd.base) + ' left.');
+  } else if (cd.state === 'paused'){
+    beginSegment(cd); cd.state = 'running';
+    cd.endWall = Date.now() + (cd.dur - cd.base);
+    wakeOn();
+    say('Countdown resumed.');
+  }
+  save(); tick();
+}
+function cdAdd(ms){
+  if (cd.state !== 'running' && cd.state !== 'paused') return;
+  cd.dur += ms;
+  if (cd.state === 'running') cd.endWall = Date.now() + (cd.dur - cdElapsed());
+  say('Added one minute, ' + fmtUp(cd.dur - cdElapsed()) + ' left.');
+  save(); tick();
+}
+function cdStop(){
+  stopAlarm();
+  cd.state = 'idle'; cd.base = 0; cd.endWall = 0;
+  wakeOff();
+  notice('cdlate', null);
+  repaint();
+  save(); tick();
+}
+
+/* ---- pomodoro ---- */
+function pomToggle(){
+  if (pom.state === 'running'){
+    pom.base = pomElapsed(); pom.state = 'paused'; wakeOff();
+    say('Pomodoro paused.');
+  } else {
+    stopAlarm();
+    if (pom.state === 'idle'){ pom.base = 0; pom.phase = 'work'; pom.round = 1; }
+    if (pom.state === 'await'){ pom.base = 0; }
+    beginSegment(pom); pom.state = 'running'; wakeOn();
+    say(phaseLabel() + ' started.');
+  }
+  dotsSig = ''; save(); tick();
+}
+function pomSkip(){
+  stopAlarm();
+  var wasRunning = pom.state === 'running';
+  advancePhase(false);
+  pom.base = 0;
+  if (wasRunning && pom.cfg.auto){
+    beginSegment(pom);
+    pom.state = 'running';
+  } else {
+    // Not running, or the user wants to start each phase by hand: park the new
+    // phase at its full length and wait to be told to go.
+    pom.state = 'await';
+    pom.w0 = Date.now();
+    wakeOff();
+  }
+  dotsSig = ''; save(); tick();
+  say('Skipped to ' + phaseLabel() + '.');
+}
+function pomResetAll(){
+  stopAlarm();
+  pom.state = 'idle'; pom.phase = 'work'; pom.round = 1;
+  pom.base = 0; pom.t0 = 0; pom.w0 = 0; pom.completed = 0;
+  wakeOff();
+  notice('pomjump', null);
+  repaint(); dotsSig = '';
+  say('Pomodoro reset.');
+  save(); tick();
+}
+
+/* =========================================================================
+   WIRING
+   ========================================================================= */
+function on(sel, ev, fn){ var n = $(sel); if (n) n.addEventListener(ev, fn); }
+
+/* mode tabs */
+var TABS = ['sw','cd','pom'];
+function setMode(m, focusPanel){
+  if (TABS.indexOf(m) < 0) return;
+  mode = m;
+  TABS.forEach(function(k){
+    var tab = $('#tab-' + k), panel = $('#panel-' + k);
+    var sel = k === m;
+    tab.setAttribute('aria-selected', sel ? 'true' : 'false');
+    tab.tabIndex = sel ? 0 : -1;
+    panel.hidden = !sel;
+  });
+  repaint(); dotsSig = '';
+  if (m === 'sw') renderLaps();
+  if (focusPanel) $('#tab-' + m).focus();
+  save(); tick();
+}
+TABS.forEach(function(k){
+  $('#tab-' + k).addEventListener('click', function(){ setMode(k, false); });
+});
+$('.seg').addEventListener('keydown', function(ev){
+  var i = TABS.indexOf(mode);
+  if (ev.key === 'ArrowRight'){ ev.preventDefault(); setMode(TABS[(i+1) % 3], true); }
+  else if (ev.key === 'ArrowLeft'){ ev.preventDefault(); setMode(TABS[(i+2) % 3], true); }
+  else if (ev.key === 'Home'){ ev.preventDefault(); setMode(TABS[0], true); }
+  else if (ev.key === 'End'){ ev.preventDefault(); setMode(TABS[2], true); }
+});
+
+/* sound */
+function paintSound(){
+  var b = $('#soundBtn');
+  b.textContent = soundOn ? 'Sound On' : 'Sound Off';
+  b.className = (soundOn ? 'btn2' : 'ghost') + ' small';
+  b.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+  b.setAttribute('aria-label', soundOn ? 'Sound is on, tap to mute' : 'Sound is off, tap to unmute');
+  $('#testBtn').disabled = !soundOn;
+  audioNotice();
+}
+on('#soundBtn', 'click', function(){
+  soundOn = !soundOn;
+  if (!soundOn) stopAlarm(); else ensureAudio();
+  paintSound(); save();
+  say(soundOn ? 'Sound on.' : 'Sound off.');
+});
+on('#testBtn', 'click', function(){
+  var ctx = ensureAudio();
+  if (!ctx || audioDead){
+    notice('audio', 'This browser will not give the page an audio channel, so alerts stay visual.', {warn:true});
+    say('Audio unavailable.');
+    return;
+  }
+  if (ctx.state !== 'running'){
+    notice('audio', 'The browser is still holding audio back. Tap the page, then test again.', {warn:true});
+    say('Audio still blocked.');
+    return;
+  }
+  playPattern('test');
+  buzz(60);
+  say('Test tone played.');
+});
+
+/* stopwatch */
+on('#swGo', 'click', swToggle);
+on('#swLap', 'click', swDoLap);
+on('#swReset', 'click', swDoReset);
+on('#swCopy', 'click', function(){
+  if (!sw.laps.length) return;
+  var lines = ['#\tSPLIT\tTOTAL'];
+  for (var i = 0; i < sw.laps.length; i++){
+    var split = sw.laps[i] - (i ? sw.laps[i-1] : sw.dropBase);
+    var a = fmtSW(split), b = fmtSW(sw.laps[i]);
+    lines.push((i + sw.dropped + 1) + '\t' + a.head + a.frac + '\t' + b.head + b.frac);
+  }
+  var text = lines.join('\n');
+  copyText(text).then(function(ok){
+    var out = $('#copyout');
+    if (ok){
+      out.hidden = true;
+      say('Lap times copied.');
+      flashBtn($('#swCopy'), 'Copied');
+    } else {
+      out.hidden = false;
+      out.value = text;
+      out.focus(); out.select();
+      notice('clip', 'Clipboard is blocked in this frame: the laps are in the box below, select and copy.', {dismissable:true});
+      say('Clipboard blocked. Lap times shown for manual copy.');
+    }
+  });
+});
+function flashBtn(btn, txt){
+  var old = btn.textContent;
+  btn.textContent = txt;
+  window.setTimeout(function(){ btn.textContent = old; }, 1400);
+}
+function copyText(text){
+  return new Promise(function(resolve){
+    var done = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+        navigator.clipboard.writeText(text).then(function(){ resolve(true); }, function(){ resolve(legacyCopy(text)); });
+        done = true;
+      }
+    } catch(e){}
+    if (!done) resolve(legacyCopy(text));
+  });
+}
+function legacyCopy(text){
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, text.length);
+    var ok = document.execCommand && document.execCommand('copy');
+    ta.parentNode.removeChild(ta);
+    return !!ok;
+  } catch(e){ return false; }
+}
+
+/* countdown keypad */
+function padPress(d){
+  if (cd.entry.length >= 6) return;
+  if (cd.entry === '' && d === '0') return;     // no leading zeros
+  cd.entry += d;
+  save(); tick();
+}
+$('#cdPad').addEventListener('click', function(ev){
+  var b = ev.target.closest ? ev.target.closest('button') : null;
+  if (!b) return;
+  if (b.dataset.d) padPress(b.dataset.d);
+  else if (b.dataset.act === 'back'){ cd.entry = cd.entry.slice(0, -1); save(); tick(); }
+  else if (b.dataset.act === 'clear'){ cd.entry = ''; save(); tick(); }
+});
+on('#cdStart', 'click', function(){ cdBegin(entryMs()); });
+on('#cdPause', 'click', cdTogglePause);
+on('#cdPlus', 'click', function(){ cdAdd(60000); });
+on('#cdCancel', 'click', cdStop);
+on('#cdDismiss', 'click', function(){
+  if (alarmTimer){ stopAlarm(); repaint(); tick(); }
+  else cdStop();
+});
+on('#cdAgain', 'click', function(){ cdBegin(cd.dur); });
+on('#cdNew', 'click', cdStop);
+
+/* presets */
+var PRESETS = [1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60];
+(function(){
+  var box = $('#cdPresets');
+  PRESETS.forEach(function(m){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ghost small';
+    b.textContent = m + ' min';
+    b.addEventListener('click', function(){
+      cd.entry = digitsForMs(m * 60000);   // 25 -> "2500", 60 -> "10000"
+      cdBegin(entryMs());
+    });
+    box.appendChild(b);
+  });
+})();
+
+/* pomodoro */
+on('#pomGo', 'click', pomToggle);
+on('#pomSkip', 'click', pomSkip);
+on('#pomReset', 'click', pomResetAll);
+
+// Would setting `key` to `mins` immediately finish the phase that is on the
+// clock right now? Typing the "1" of "15" into Work with 10 minutes elapsed
+// would otherwise END the work block and bank it as completed: a keystroke
+// silently destroying a session. Live keystrokes skip such values; a value the
+// user has actually committed (change/blur) still applies.
+function wouldEndPhaseNow(key, mins){
+  if (pom.state !== 'running' && pom.state !== 'paused') return false;
+  var drives = (key === 'work'  && pom.phase === 'work')
+            || (key === 'short' && pom.phase === 'short')
+            || (key === 'long'  && pom.phase === 'long');
+  return drives && (mins * 60000 <= pomElapsed());
+}
+function bindCfg(sel, key, lo, hi){
+  var input = $(sel);
+  input.value = pom.cfg[key];
+  function commit(hard){
+    var raw = input.value;
+    if (raw === '' && !hard) return;             // let the field be empty mid-typing
+    var v = num(raw, pom.cfg[key], lo, hi);
+    if (v === pom.cfg[key]){ if (hard) input.value = v; return; }
+    var endsNow = wouldEndPhaseNow(key, v);
+    if (!hard && endsNow) return;                // a prefix of what is being typed
+    pom.cfg[key] = v;
+    if (hard) input.value = v;
+    if (endsNow){
+      // Hand over exactly at the new length. Without this the overshoot (the
+      // minutes already served beyond it) would be carried forward by the
+      // boundary resolver and burn straight through the following phases.
+      pom.base = v * 60000;
+      if (pom.state === 'running') beginSegment(pom);
+    }
+    if (key === 'rounds' && pom.round > v) pom.round = v;
+    dotsSig = ''; save(); tick();
+  }
+  input.addEventListener('input', function(){ commit(false); });
+  input.addEventListener('change', function(){ commit(true); });
+  input.addEventListener('blur', function(){ commit(true); });
+}
+bindCfg('#cfgWork', 'work', 1, 180);
+bindCfg('#cfgShort', 'short', 1, 180);
+bindCfg('#cfgLong', 'long', 1, 180);
+bindCfg('#cfgRounds', 'rounds', 1, 12);
+on('#cfgAuto', 'change', function(){
+  pom.cfg.auto = $('#cfgAuto').checked;
+  save(); tick();
+  say(pom.cfg.auto ? 'Auto-advance on.' : 'Auto-advance off.');
+});
+
+/* keyboard shortcuts, never while typing in a field or on a control */
+document.addEventListener('keydown', function(ev){
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  var t = ev.target, tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+  var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable);
+  var onControl = tag === 'button';
+  // Clicking a keypad key leaves it focused. Typing a digit next must still
+  // reach the keypad, not jump tabs; the focus ring is on the pad, so that is
+  // plainly where the digit is going.
+  var inPad = !!(t && t.closest && t.closest('#cdPad'));
+  var padTyping = mode === 'cd' && cd.state === 'idle' && (!onControl || inPad);
+  var k = ev.key;
+
+  if (typing) return;
+
+  if (k === '1' || k === '2' || k === '3'){
+    if (padTyping){ /* digits belong to the keypad */ }
+    else { ev.preventDefault(); setMode(TABS[parseInt(k,10) - 1], false); return; }
+  }
+
+  if (mode === 'cd' && cd.state === 'idle'){
+    if (k >= '0' && k <= '9' && padTyping){ ev.preventDefault(); padPress(k); return; }
+    if (k === 'Backspace'){ ev.preventDefault(); cd.entry = cd.entry.slice(0,-1); save(); tick(); return; }
+    if ((k === 'Escape' || k === 'Delete') && cd.entry){ ev.preventDefault(); cd.entry = ''; save(); tick(); return; }
+    if (k === 'Enter' && !onControl && entryMs() > 0){ ev.preventDefault(); cdBegin(entryMs()); return; }
+  }
+
+  if (onControl) return;   // Space/Enter must keep activating the focused button
+
+  if (k === ' ' || k === 'Spacebar'){
+    ev.preventDefault();
+    if (mode === 'sw') swToggle();
+    else if (mode === 'cd'){
+      if (cd.state === 'running' || cd.state === 'paused') cdTogglePause();
+      else if (cd.state === 'done'){ if (alarmTimer) { stopAlarm(); repaint(); tick(); } else cdStop(); }
+      else if (entryMs() > 0) cdBegin(entryMs());
+    }
+    else pomToggle();
+  } else if (k === 'l' || k === 'L'){
+    if (mode === 'sw' && sw.running){ ev.preventDefault(); swDoLap(); }
+  } else if (k === 'r' || k === 'R'){
+    ev.preventDefault();
+    if (mode === 'sw') swDoReset();
+    else if (mode === 'cd') cdStop();
+    else pomResetAll();
+  }
+});
+
+/* first gesture unlocks audio */
+function firstGesture(){
+  if (gestureSeen) return;
+  gestureSeen = true;
+  if (soundOn) ensureAudio();
+  audioNotice();
+}
+document.addEventListener('pointerdown', firstGesture, true);
+document.addEventListener('keydown', firstGesture, true);
+document.addEventListener('touchstart', firstGesture, {passive:true, capture:true});
+
+/* visibility: recompute immediately on return; persist on the way out */
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden){ save(); }
+  else { if (anyRunning()) wakeOn(); repaint(); dotsSig = ''; tick(); }
+});
+window.addEventListener('pagehide', save);
+window.addEventListener('blur', save);
+
+/* a rotated phone or a resized frame changes how much room the readout has */
+var resizeId = 0;
+window.addEventListener('resize', function(){
+  if (resizeId) window.clearTimeout(resizeId);
+  resizeId = window.setTimeout(function(){ resizeId = 0; repaint(); tick(); }, 120);
+});
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+restore();
+paintSound();
+setMode(mode, false);
+renderLaps();
+tick();
+if (!storageOK){
+  notice('store', 'Storage is blocked in this frame: everything works, but a refresh clears it.');
+}
+})();
+</script>
+</body>
+</html>

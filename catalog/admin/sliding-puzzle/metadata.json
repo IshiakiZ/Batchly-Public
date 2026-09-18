@@ -1,0 +1,20 @@
+{
+  "folder": "admin/sliding-puzzle",
+  "title": "Sliding Puzzle",
+  "description": "Slide the tiles back into order. The classic 15-puzzle plus 3×3 and 5×5, in numbers or a gradient-image mode. Always solvable.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/sliding-puzzle",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 37034,
+      "sha256": "9d94ffeb6d8829a30a27bb0aae24c67e535bf92988c4e4ae11e6ea84991c98a5",
+      "source": "published catalog HTML"
+    }
+  ]
+}

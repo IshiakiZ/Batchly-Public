@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Simon: a growing four-colour memory sequence. Watch, then repeat. Each round adds a step." />
+<title>SIMON</title>
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --inset:#0c0c0f;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --red:#ef3a3a;
+    --green:#4ec86a;
+    /* Four pad colours. Distinct in hue AND lightness, and each pad also carries
+       its own glyph, so the game is playable without relying on colour alone. */
+    --p0:#43db80;  /* top-left  · green  · ▲ */
+    --p1:#ef3a3a;  /* top-right · red    · ● */
+    --p2:#f5b73a;  /* bot-left  · amber  · ■ */
+    --p3:#4aa3ff;  /* bot-right · blue   · ◆ */
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+    --bs:320px;    /* board size in px, set by fit() */
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  #app{
+    height:100%;
+    display:flex; flex-direction:column; gap:8px;
+    padding:8px;
+  }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px;
+  }
+  #brand{
+    display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:700; letter-spacing:.22em;
+    padding:0 4px 0 2px; white-space:nowrap;
+  }
+  #brand i{ width:11px; height:11px; background:var(--red); display:block; }
+  .group{ display:flex; align-items:center; gap:6px; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+
+  button{
+    font-family:var(--mono);
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    background:#22222a; color:var(--bone);
+    border:2px solid var(--bone); border-radius:0;
+    padding:6px 9px; margin:0; cursor:pointer;
+    box-shadow:3px 3px 0 0 #000;
+    transition:transform .06s ease, box-shadow .06s ease, background .1s ease;
+    white-space:nowrap;
+  }
+  button:hover{ background:#2f2f3a; }
+  button:active{ transform:translate(3px,3px); box-shadow:0 0 0 0 #000; }
+  button[aria-pressed="true"]{ background:var(--red); color:#10100e; }
+  button[aria-pressed="true"]:hover{ background:#ff4a4a; }
+  button:focus-visible{ outline:2px solid var(--red); outline-offset:3px; }
+  #start{ background:var(--red); color:#10100e; }
+  #start:hover{ background:#ff4a4a; }
+
+  .count{
+    display:flex; align-items:center; gap:7px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:4px 9px;
+  }
+  .count span{ font-size:9px; letter-spacing:.14em; color:var(--mute); }
+  .count b{
+    font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--red);
+    font-variant-numeric:tabular-nums; min-width:1.2em; text-align:right;
+  }
+
+  /* ---------- stage / board ---------- */
+  #stage{
+    flex:1 1 auto; min-height:0;
+    display:grid; place-items:center;
+    background:var(--panel); border:2px solid var(--line);
+    padding:8px; overflow:hidden;
+  }
+
+  #board{
+    position:relative;
+    width:var(--bs); height:var(--bs);
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:max(6px, calc(var(--bs) * .03));
+    background:var(--inset);
+    border:2px solid var(--line2);
+    padding:max(6px, calc(var(--bs) * .03));
+    touch-action:manipulation;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+  }
+  #board.locked{ cursor:default; }
+  #board.locked .pad{ cursor:default; }
+
+  .pad{
+    position:relative;
+    border:2px solid #000; border-radius:0;
+    background:var(--c);
+    /* "off" state: the pad's colour, heavily dimmed. .lit restores full colour. */
+    filter:brightness(.34) saturate(.92);
+    cursor:pointer;
+    outline:none;
+    transition:filter .09s ease, box-shadow .09s ease, transform .07s ease;
+    -webkit-tap-highlight-color:transparent;
+    overflow:hidden;
+    min-width:0; min-height:0;
+  }
+  .pad.p0{ --c:var(--p0); }
+  .pad.p1{ --c:var(--p1); }
+  .pad.p2{ --c:var(--p2); }
+  .pad.p3{ --c:var(--p3); }
+
+  /* Only bump brightness on hover where a real pointer exists, and only when the
+     board is accepting input (the :not(.locked) guard lives on #board). */
+  @media (hover:hover) and (pointer:fine){
+    #board:not(.locked) .pad:hover{ filter:brightness(.52) saturate(.95); }
+  }
+
+  .pad.lit{
+    filter:brightness(1.16) saturate(1.05);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.55), 0 0 30px 3px var(--c);
+    z-index:3;
+  }
+  .pad:focus-visible{ box-shadow:inset 0 0 0 3px var(--bone); z-index:4; }
+
+  .pad .glyph{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:max(20px, calc(var(--bs) * .14));
+    line-height:1;
+    color:rgba(255,255,255,.6);
+    text-shadow:0 1px 3px rgba(0,0,0,.6);
+    pointer-events:none;
+  }
+  .pad .keys{
+    position:absolute;
+    bottom:max(4px, calc(var(--bs) * .022));
+    right:max(5px, calc(var(--bs) * .026));
+    font-size:max(9px, calc(var(--bs) * .036));
+    font-weight:700; letter-spacing:.08em;
+    color:rgba(255,255,255,.62);
+    text-shadow:0 1px 2px rgba(0,0,0,.6);
+    pointer-events:none;
+  }
+
+  .pad.wrong{ animation:shake .38s ease both; }
+  @keyframes shake{
+    0%,100%{ transform:translate(0,0); }
+    20%{ transform:translate(-4px,2px); }
+    40%{ transform:translate(4px,-2px); }
+    60%{ transform:translate(-3px,-1px); }
+    80%{ transform:translate(3px,1px); }
+  }
+
+  /* ---------- centre hub ---------- */
+  #hub{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:max(88px, calc(var(--bs) * .35));
+    height:max(88px, calc(var(--bs) * .35));
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:4px 4px 0 0 #000;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2px; z-index:5;
+    pointer-events:none;   /* never intercept a pad tap near the centre */
+    text-align:center; padding:4px;
+  }
+  #hubNum{
+    font-size:max(26px, calc(var(--bs) * .135));
+    font-weight:700; line-height:1;
+    color:var(--bone);
+    font-variant-numeric:tabular-nums;
+  }
+  #hubLabel{
+    font-size:max(8px, calc(var(--bs) * .033));
+    letter-spacing:.18em; color:var(--mute);
+    text-transform:uppercase;
+  }
+  #hub.watch #hubLabel{ color:var(--red); }
+  #hub.input #hubLabel{ color:var(--green); }
+  #hub.input #hubNum, #hub.watch #hubNum{ color:var(--bone); }
+  #hub.watch{ animation:hubpulse 1s ease-in-out infinite; }
+  @keyframes hubpulse{
+    0%,100%{ box-shadow:4px 4px 0 0 #000, 0 0 0 0 rgba(239,58,58,0); }
+    50%{ box-shadow:4px 4px 0 0 #000, 0 0 22px 2px rgba(239,58,58,.35); }
+  }
+
+  /* ---------- footer ---------- */
+  #foot{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px 8px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  #status{
+    font-size:11px; font-weight:700; letter-spacing:.05em;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:15px;
+  }
+  #status .tag{ color:var(--mute); font-weight:400; letter-spacing:.05em; }
+  #status .ok{ color:var(--green); }
+  #status .bad{ color:var(--red); }
+  #help{
+    font-size:10px; line-height:1.55; color:var(--mute); letter-spacing:.02em;
+  }
+  #help b{ color:var(--bone); font-weight:700; }
+  #help kbd{
+    font-family:var(--mono); font-size:10px; color:var(--bone);
+    background:var(--inset); border:1px solid var(--line2);
+    padding:0 4px; margin:0 1px;
+  }
+  #help .sep{ color:#4d4d5c; padding:0 3px; }
+
+  /* ---------- result overlay ---------- */
+  #over{
+    position:fixed; inset:0; z-index:20;
+    display:none; place-items:center;
+    background:rgba(8,8,10,.82);
+    padding:16px;
+  }
+  #over.show{ display:grid; }
+  #card{
+    width:100%; max-width:400px;
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 #000;
+    padding:18px 16px 16px;
+    text-align:center;
+  }
+  #ovTitle{
+    font-size:26px; font-weight:700; letter-spacing:.16em;
+    margin:0 0 2px; color:var(--red);
+  }
+  #ovSub{ font-size:10px; letter-spacing:.14em; color:var(--mute); margin-bottom:14px; }
+  .rows{ border:2px solid var(--line2); background:var(--inset); margin-bottom:10px; }
+  .row{
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    padding:8px 10px;
+  }
+  .row + .row{ border-top:2px solid var(--line2); }
+  .row .k{ font-size:9px; letter-spacing:.16em; color:var(--mute); }
+  .row .v{ font-size:20px; font-weight:700; letter-spacing:.06em; font-variant-numeric:tabular-nums; }
+  .row .v.big{ color:var(--red); font-size:26px; }
+  #ovMath{
+    font-size:9px; line-height:1.6; color:var(--mute); letter-spacing:.04em;
+    margin-bottom:12px; word-break:break-word;
+  }
+  #ovMath b{ color:var(--bone); font-weight:700; }
+  #ovBtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+
+  @media (max-width:560px){ #brand{ letter-spacing:.14em; } }
+  @media (max-width:430px){
+    #brand span{ display:none; }
+    .count span{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    button, .pad{ transition:none; }
+    .pad.wrong{ animation:none; }
+    #hub.watch{ animation:none; box-shadow:4px 4px 0 0 #000, 0 0 18px 2px rgba(239,58,58,.3); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="bar">
+    <div id="brand"><i></i><span>SIMON</span></div>
+
+    <div class="count" title="Length of the current sequence">
+      <span>ROUND</span><b id="cLevel">0</b>
+    </div>
+    <div class="count" title="Longest sequence you have repeated this session">
+      <span>BEST</span><b id="cBest">0</b>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button id="start" title="Start a new game (Space)">START</button>
+    <button id="sound" aria-pressed="true" title="Mute or unmute the pad tones">SOUND: ON</button>
+  </header>
+
+  <main id="stage">
+    <div id="board" class="locked" role="group" aria-label="Simon pads. Repeat the flashing sequence.">
+      <button type="button" class="pad p0" data-i="0" aria-label="Green pad, glyph triangle, keys Q or 1">
+        <span class="glyph">&#9650;</span><span class="keys">Q&middot;1</span>
+      </button>
+      <button type="button" class="pad p1" data-i="1" aria-label="Red pad, glyph circle, keys W or 2">
+        <span class="glyph">&#9679;</span><span class="keys">W&middot;2</span>
+      </button>
+      <button type="button" class="pad p2" data-i="2" aria-label="Amber pad, glyph square, keys A or 3">
+        <span class="glyph">&#9632;</span><span class="keys">A&middot;3</span>
+      </button>
+      <button type="button" class="pad p3" data-i="3" aria-label="Blue pad, glyph diamond, keys S or 4">
+        <span class="glyph">&#9670;</span><span class="keys">S&middot;4</span>
+      </button>
+      <div id="hub" aria-hidden="true">
+        <div id="hubNum">&#9654;</div>
+        <div id="hubLabel">START</div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="foot">
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="help">
+      <b>WATCH</b> the pads flash, then <b>REPEAT</b> the order: tap / click, or press
+      <kbd>Q</kbd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd> or <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd>.
+      <span class="sep">&middot;</span> <kbd>Space</kbd> start / restart <span class="sep">&middot;</span> it speeds up as it grows.
+      <br>
+      Each round adds one step. One wrong pad ends the run. <b>Score = the longest sequence you correctly repeat</b>; submitted only when you slip up, and higher is better.
+    </div>
+  </footer>
+
+</div>
+
+<div id="over" role="dialog" aria-modal="false" aria-labelledby="ovTitle">
+  <div id="card">
+    <div id="ovTitle">GAME OVER</div>
+    <div id="ovSub">THE SEQUENCE BROKE YOU</div>
+    <div class="rows">
+      <div class="row"><span class="k">YOU REACHED</span><span class="v big" id="ovReached">0</span></div>
+      <div class="row"><span class="k">SESSION BEST</span><span class="v" id="ovBest">0</span></div>
+    </div>
+    <div id="ovMath"></div>
+    <div id="ovBtns">
+      <button id="again">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* =====================================================================
+     SIMON: original memory-sequence game for Batchly.
+
+     THE GAME
+     --------
+     Four colour pads flash in a growing sequence; the player repeats it.
+     Every round appends one new random step, so round N shows an N-long
+     sequence. A single wrong pad ends the run.
+
+     STATE MACHINE
+     -------------
+       'idle'    : nothing running; centre hub invites START.
+       'playing' : the sequence is being played back; the board is locked.
+       'input'   : the player's turn; taps/keys are evaluated in order.
+       'reward'  : the brief beat between clearing a round and the next
+                   playback (board locked so a stray tap can't leak in).
+       'over'    : run finished; score submitted, overlay shown.
+
+     TIMER CANCELLATION (the classic Simon footgun)
+     ----------------------------------------------
+     Playback is a fan of setTimeouts. If the player restarts mid-playback,
+     stale callbacks from the previous run must not paint or advance the new
+     one. Two guards, belt-and-braces:
+       1. every scheduled timeout id is kept in `timers` and cleared wholesale
+          on any reset (clearTimers), and
+       2. each run has a monotonic `gen`; callbacks capture the gen they were
+          born under and bail if it no longer matches.
+
+     LEADERBOARD CONTRACT (host: positive, finite, HIGHER-IS-BETTER)
+     --------------------------------------------------------------
+       score = `reached` = the length of the longest sequence the player has
+       FULLY and correctly repeated this run. Complete the 7-step sequence but
+       miss on the 8-step one → reached = 7.
+     `reached` is a small positive integer and grows with skill, so it is a
+     legal higher-is-better score with no transform needed. It is posted
+       window.parent.postMessage({ type:'batchly-score', score: reached }, '*')
+     exactly ONCE, at game over, and ONLY when reached > 0 (a miss on the very
+     first pad reaches nothing and submits nothing). Never posted on load.
+     ===================================================================== */
+
+  // Pad tones: a C-major set (C4 E4 G4 C5). Any sequence lands on notes from
+  // one chord, so even random patterns sound musical rather than harsh.
+  var FREQ = [261.63, 329.63, 392.00, 523.25];
+
+  // ---- elements ----
+  var stage   = document.getElementById('stage');
+  var board   = document.getElementById('board');
+  var pads    = Array.prototype.slice.call(board.querySelectorAll('.pad'));
+  var hub     = document.getElementById('hub');
+  var hubNum  = document.getElementById('hubNum');
+  var hubLabel= document.getElementById('hubLabel');
+  var elLevel = document.getElementById('cLevel');
+  var elBest  = document.getElementById('cBest');
+  var elStatus= document.getElementById('status');
+  var btnStart= document.getElementById('start');
+  var btnSound= document.getElementById('sound');
+  var over    = document.getElementById('over');
+  var ovReached = document.getElementById('ovReached');
+  var ovBest    = document.getElementById('ovBest');
+  var ovMath    = document.getElementById('ovMath');
+  var btnAgain  = document.getElementById('again');
+
+  // ---- state ----
+  var state    = 'idle';
+  var sequence = [];      // the pattern so far, values 0..3
+  var inputIdx = 0;       // how many correct taps the player has made this round
+  var reached  = 0;       // longest fully-repeated length this run  (the score)
+  var best     = 0;       // best `reached` this session
+  var submitted= false;   // score posted for the current run?
+  var gen      = 0;       // run generation, bumped every startGame()
+  var timers   = [];      // outstanding setTimeout ids
+
+  // =====================================================================
+  // Timer helpers: every timeout goes through here so reset can kill them.
+  // =====================================================================
+  function later(fn, ms){
+    var id = setTimeout(function(){
+      // Drop this id from the list once it fires (kept tidy; not required).
+      var k = timers.indexOf(id);
+      if(k >= 0) timers.splice(k, 1);
+      fn();
+    }, ms);
+    timers.push(id);
+    return id;
+  }
+  function clearTimers(){
+    for(var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+    timers = [];
+  }
+
+  // =====================================================================
+  // Audio: every tone is synthesised; there are no audio assets. Created
+  // lazily on the first user gesture (autoplay policy) and fully mutable.
+  // =====================================================================
+  var AudioCtor = window.AudioContext || window.webkitAudioContext;
+  var actx = null;
+  var soundOn = true;
+
+  function audio(){
+    if(!AudioCtor) return null;
+    if(!actx){
+      try { actx = new AudioCtor(); } catch(e){ return null; }
+    }
+    // Some older WebKit builds return undefined (not a Promise) from resume();
+    // guard the thenable so a best-effort resume can never throw into a gesture.
+    try {
+      if(actx.state === 'suspended' && actx.resume){
+        var p = actx.resume();
+        if(p && typeof p['catch'] === 'function'){ p['catch'](function(){}); }
+      }
+    } catch(e){ /* resume is best-effort */ }
+    return actx;
+  }
+
+  // One voice: oscillator -> gain envelope -> out.
+  function blip(freq, dur, type, vol, glideTo){
+    if(!soundOn) return;
+    var a = audio();
+    if(!a) return;
+    try {
+      var t = a.currentTime;
+      var osc = a.createOscillator();
+      var g = a.createGain();
+      osc.type = type || 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      if(glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.1, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g); g.connect(a.destination);
+      osc.start(t); osc.stop(t + dur + 0.03);
+    } catch(e){ /* audio is a nicety; never let it break a round */ }
+  }
+
+  function tonePad(i, dur){ blip(FREQ[i], Math.max(0.12, dur), 'triangle', 0.11); }
+  function toneWrong(){ blip(150, 0.42, 'sawtooth', 0.09, 66); }
+  function toneRound(){ blip(880, 0.10, 'sine', 0.06, 1174); }
+  function toneTick(){ blip(560, 0.06, 'sine', 0.05); }
+
+  // =====================================================================
+  // Pacing: the sequence speeds up "slightly" as it grows, then floors so
+  // long runs stay physically playable rather than becoming a reflex test.
+  // =====================================================================
+  function stepInterval(len){
+    return Math.max(280, 620 - (len - 1) * 16);   // 620ms @1  ->  280ms @>=22
+  }
+
+  // =====================================================================
+  // Pad flashing
+  // =====================================================================
+  function litOn(i){ pads[i].classList.add('lit'); }
+  function litOff(i){ pads[i].classList.remove('lit'); }
+  function clearLit(){
+    for(var i = 0; i < pads.length; i++){ pads[i].classList.remove('lit', 'wrong'); }
+  }
+
+  // Flash a pad for `dur` ms and, optionally, sound its tone. Used by both
+  // playback and player presses; the un-light is a tracked timer so a reset
+  // cancels it (and resets also clearLit() to be certain nothing stays lit).
+  function flashPad(i, dur, withTone){
+    litOn(i);
+    if(withTone) tonePad(i, dur / 1000);
+    later(function(){ litOff(i); }, dur);
+  }
+
+  // =====================================================================
+  // Rendering (hub + header)
+  // =====================================================================
+  function renderHud(){
+    elLevel.textContent = state === 'idle' ? '0' : String(sequence.length);
+    elBest.textContent  = String(best);
+  }
+
+  function renderHub(){
+    hub.classList.remove('watch', 'input');
+    if(state === 'idle'){
+      hubNum.innerHTML = '&#9654;';
+      hubLabel.textContent = 'START';
+    } else if(state === 'playing'){
+      hub.classList.add('watch');
+      hubNum.textContent = String(sequence.length);
+      hubLabel.textContent = 'WATCH';
+    } else if(state === 'input'){
+      hub.classList.add('input');
+      hubNum.textContent = String(sequence.length);
+      hubLabel.textContent = inputIdx + ' / ' + sequence.length;
+    } else if(state === 'reward'){
+      hub.classList.add('input');
+      hubNum.textContent = String(sequence.length);
+      hubLabel.textContent = 'NICE';
+    } else if(state === 'over'){
+      hubNum.textContent = String(reached);
+      hubLabel.textContent = 'REACHED';
+    }
+  }
+
+  function setStatus(html){ elStatus.innerHTML = html; }
+
+  // =====================================================================
+  // Flow
+  // =====================================================================
+  function setLocked(v){ board.classList.toggle('locked', !!v); }
+
+  function rand4(){ return (Math.random() * 4) | 0; }
+
+  function startGame(){
+    gen++;
+    clearTimers();
+    clearLit();
+    hideOverlay();
+
+    sequence = [];
+    inputIdx = 0;
+    reached  = 0;
+    submitted = false;
+
+    audio();  // this call is inside a user gesture: create/resume here
+
+    sequence.push(rand4());
+    renderHud();
+    playSequence();
+  }
+
+  function playSequence(){
+    state = 'playing';
+    setLocked(true);
+    inputIdx = 0;
+    renderHud(); renderHub();
+
+    var myGen = gen;
+    var len   = sequence.length;
+    var iv    = stepInterval(len);
+    var onDur = Math.round(iv * 0.6);
+    var lead  = 460;   // a beat to register "watch" before the first flash
+
+    setStatus('<span class="tag">WATCH</span> memorise the sequence <span class="tag">&middot; length ' + len + '</span>');
+
+    for(var k = 0; k < len; k++){
+      (function(k){
+        later(function(){
+          if(gen !== myGen) return;
+          flashPad(sequence[k], onDur, true);
+          renderHub();  // hub number is static here, but keeps watch class alive
+        }, lead + k * iv);
+      })(k);
+    }
+
+    later(function(){
+      if(gen !== myGen) return;
+      beginInput();
+    }, lead + len * iv + 40);
+  }
+
+  function beginInput(){
+    state = 'input';
+    inputIdx = 0;
+    setLocked(false);
+    renderHub();
+    setStatus('<span class="ok">YOUR TURN</span> repeat the ' + sequence.length + '-step sequence');
+  }
+
+  // A pad was activated during input (pointer or keyboard).
+  function pressPad(i){
+    if(state !== 'input') return;
+
+    if(i === sequence[inputIdx]){
+      // Correct tap.
+      flashPad(i, 170, true);
+      inputIdx++;
+      renderHub();
+
+      if(inputIdx === sequence.length){
+        // Whole sequence reproduced: this length is now the best reached.
+        reached = sequence.length;
+        if(reached > best){ best = reached; }
+        renderHud();
+
+        state = 'reward';
+        setLocked(true);
+        renderHub();
+        setStatus('<span class="ok">CLEARED</span> round ' + reached + ' <span class="tag">&middot; next one is longer</span>');
+        toneRound();
+
+        var myGen = gen;
+        later(function(){
+          if(gen !== myGen) return;
+          sequence.push(rand4());
+          renderHud();
+          playSequence();
+        }, 620);
+      }
+    } else {
+      // Wrong tap: the run is over.
+      gameOver(i);
+    }
+  }
+
+  function gameOver(wrongPad){
+    if(state === 'over') return;
+    state = 'over';
+    clearTimers();
+    setLocked(true);
+
+    // Show the pad the player got wrong: flash + a red shake, no reward tone.
+    clearLit();
+    if(wrongPad >= 0){
+      litOn(wrongPad);
+      pads[wrongPad].classList.add('wrong');
+      later(function(){ litOff(wrongPad); }, 620);
+    }
+    toneWrong();
+
+    renderHud();
+    renderHub();
+
+    // Submit the score: once, only if the player got at least one full round.
+    var didSubmit = false;
+    if(reached > 0 && !submitted && isFinite(reached) && reached > 0){
+      submitted = true; didSubmit = true;
+      try {
+        window.parent.postMessage({ type: 'batchly-score', score: reached }, '*');
+      } catch(e){ /* posting is best-effort; the overlay still reports the run */ }
+    }
+
+    setStatus('<span class="bad">GAME OVER</span> you reached <b>' + reached + '</b>'
+      + (reached > 0 ? ' <span class="tag">&middot; submitted to the leaderboard</span>'
+                     : ' <span class="tag">&middot; nothing to submit: clear at least one round</span>'));
+    showOverlay(didSubmit);
+  }
+
+  // =====================================================================
+  // Overlay
+  // =====================================================================
+  function showOverlay(didSubmit){
+    ovReached.textContent = String(reached);
+    ovBest.textContent    = String(best);
+    if(reached > 0){
+      ovMath.innerHTML =
+        'You correctly repeated a <b>' + reached + '</b>-step sequence. That is your score. '
+        + (didSubmit
+            ? 'It has been sent to the leaderboard; a longer run beats it.'
+            : 'It was not sent (leaderboard unreachable), but it still counts here.');
+    } else {
+      ovMath.innerHTML =
+        'You missed the very first pad, so there is nothing to rank yet. '
+        + '<b>Clear at least one round</b> to put a score on the board.';
+    }
+    over.classList.add('show');
+    if(document.hasFocus && document.hasFocus()){
+      try { btnAgain.focus(); } catch(e){}
+    }
+  }
+  function hideOverlay(){ over.classList.remove('show'); }
+
+  // =====================================================================
+  // Input wiring
+  // =====================================================================
+  // A pad was touched/clicked/keyed. Before a run (idle/over) any pad acts as
+  // a big START button; during input it is evaluated as a guess.
+  function padAction(i){
+    if(state === 'idle' || state === 'over'){ startGame(); return; }
+    if(state === 'input'){ pressPad(i); }
+    // 'playing' / 'reward': deliberately ignored.
+  }
+
+  for(var q = 0; q < pads.length; q++){
+    (function(pad, i){
+      // pointerdown gives instant press feedback across mouse + touch + pen.
+      // No click handler exists, so there is no double-fire; preventDefault
+      // keeps a touch from also scrolling / synthesising a delayed click.
+      pad.addEventListener('pointerdown', function(e){
+        if(e.button && e.button !== 0) return;  // ignore right / middle
+        e.preventDefault();
+        padAction(i);
+      });
+      // Some engines without Pointer Events fall back to touchstart.
+      if(!('PointerEvent' in window)){
+        pad.addEventListener('touchstart', function(e){
+          e.preventDefault();
+          padAction(i);
+        }, { passive:false });
+        pad.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          padAction(i);
+        });
+      }
+      pad.setAttribute('data-idx', String(i));
+    })(pads[q], q);
+  }
+
+  function padIndexOfKey(k){
+    switch(k){
+      case '1': case 'q': case 'Q': return 0;
+      case '2': case 'w': case 'W': return 1;
+      case '3': case 'a': case 'A': return 2;
+      case '4': case 's': case 'S': return 3;
+    }
+    return -1;
+  }
+  function padIndexOfEl(el){
+    if(!el || !el.classList || !el.classList.contains('pad')) return -1;
+    var v = el.getAttribute('data-idx');
+    return v == null ? -1 : (parseInt(v, 10) | 0);
+  }
+
+  window.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+
+    if(k === 'Escape'){
+      if(over.classList.contains('show')){ hideOverlay(); e.preventDefault(); }
+      return;
+    }
+
+    // Space / Enter: start or restart, unless a pad is focused mid-turn (then
+    // it activates that focused pad, so keyboard-only players can play too).
+    if(k === ' ' || k === 'Enter' || k === 'Spacebar'){
+      var focusIdx = padIndexOfEl(document.activeElement);
+      if(state === 'input' && focusIdx >= 0){
+        padAction(focusIdx); e.preventDefault(); return;
+      }
+      var onButton = document.activeElement && document.activeElement.tagName === 'BUTTON'
+                     && focusIdx < 0;
+      if(onButton) return;  // let a focused header button handle its own Enter
+      startGame(); e.preventDefault(); return;
+    }
+
+    var idx = padIndexOfKey(k);
+    if(idx >= 0){
+      padAction(idx);
+      e.preventDefault();
+      return;
+    }
+  });
+
+  btnStart.addEventListener('click', function(){ startGame(); });
+  btnAgain.addEventListener('click', function(){ startGame(); });
+  over.addEventListener('click', function(e){ if(e.target === over) hideOverlay(); });
+
+  btnSound.addEventListener('click', function(){
+    soundOn = !soundOn;
+    btnSound.textContent = 'SOUND: ' + (soundOn ? 'ON' : 'OFF');
+    btnSound.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    if(soundOn){ audio(); toneTick(); }
+  });
+
+  // =====================================================================
+  // Sizing: keep the board a centred square that always fits the stage.
+  // Observed on #app (the non-scrolling root) to avoid feedback loops.
+  // =====================================================================
+  function fit(){
+    var availW = stage.clientWidth  - 4;   // 2px padding budget on each side
+    var availH = stage.clientHeight - 4;
+    var s = Math.min(availW, availH);
+    if(!isFinite(s) || s < 160) s = 160;
+    s = Math.max(160, Math.floor(s));
+    document.documentElement.style.setProperty('--bs', s + 'px');
+  }
+
+  var relayoutQueued = false;
+  function queueFit(){
+    if(relayoutQueued) return;
+    relayoutQueued = true;
+    requestAnimationFrame(function(){ relayoutQueued = false; fit(); });
+  }
+  window.addEventListener('resize', queueFit);
+  window.addEventListener('orientationchange', queueFit);
+  if(typeof ResizeObserver !== 'undefined'){
+    try { new ResizeObserver(queueFit).observe(document.getElementById('app')); } catch(e){}
+  }
+
+  // =====================================================================
+  // Go
+  // =====================================================================
+  fit();
+  renderHud();
+  renderHub();
+  setStatus('<span class="tag">READY</span> press <b>START</b> or tap a pad, then repeat the flashing sequence');
+  requestAnimationFrame(fit);
+})();
+</script>
+<style id="hit-target-patch">
+/* --- hit targets (phone/coarse only). #app is height:100% + overflow:hidden; a taller bar
+   shrinks the board (fit() re-measures), the document stays at the frame. --- */
+@media (max-width: 900px), (pointer: coarse){
+  #start, #sound, #ovBtns button{ min-height:44px; touch-action:manipulation; }
+}
+</style>
+</body>
+</html>

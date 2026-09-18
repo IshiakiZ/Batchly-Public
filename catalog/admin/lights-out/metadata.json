@@ -1,0 +1,20 @@
+{
+  "folder": "admin/lights-out",
+  "title": "Lights Out",
+  "description": "Toggle every light off: each press flips a tile and its neighbours. Always solvable, with an optimal-solution hint.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/lights-out",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 36563,
+      "sha256": "1740e5ae30edc05dc5ea0ea7ab31e0c3972449ebad93b13b00e742d6f71f60ef",
+      "source": "published catalog HTML"
+    }
+  ]
+}

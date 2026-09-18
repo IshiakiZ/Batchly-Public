@@ -1,0 +1,89 @@
+{
+  "admin/backgrounds": {
+    "index.html": "3661872c4676714fcdb34a9ed77b8cd5fe1c45765eb0fea029fa5f85ff7e72d2"
+  },
+  "admin/checkers": {
+    "index.html": "84dcf5f01816ca0623c1220ef17dcf9cab16b1b724df19b481ee644fd3fffc6c"
+  },
+  "admin/checksum": {
+    "index.html": "88c61529c2ae93cbcfa45aa75b2442aa799a0dcf419131de860bf9630d93605a"
+  },
+  "admin/connect-four": {
+    "index.html": "5ffba8f59a562a971aeee2eac7096a3fc110fa818d38b9c3000a34c33686bb15"
+  },
+  "admin/cryptogram": {
+    "index.html": "884b4fdd5d5ae5a6a37b163bad21ebd1a70df6340905f80f85ee264bffbb138e"
+  },
+  "admin/diff": {
+    "index.html": "c8464ada17d487c3d916506bcdf6f8e0498f7a8cb35addb9def3d7b4caf4d934"
+  },
+  "admin/dots-and-boxes": {
+    "index.html": "779db64f19c654609b7e593ce71075be9083214edcce02ecd0f2baf823429bd6"
+  },
+  "admin/encode": {
+    "index.html": "88759b6194fd4b9a7ab85de58afb7c8f4bd9a0798b33601250e25b4b6e1179de"
+  },
+  "admin/gomoku": {
+    "index.html": "7ad594f8954d4e01578f6f4e53e9810b814a6520656473ed53f3ad660a8b35b8"
+  },
+  "admin/hangman": {
+    "index.html": "adbab3f9684bb0b690c3c717ff6d5e75103fdea13ecff316f1a04803d0badd62"
+  },
+  "admin/lights-out": {
+    "index.html": "1740e5ae30edc05dc5ea0ea7ab31e0c3972449ebad93b13b00e742d6f71f60ef"
+  },
+  "admin/mastermind": {
+    "index.html": "01b28cd84050e8150cd9b661e7e3a7760014dceef5c7f42e94b5eaf39b3efabe"
+  },
+  "admin/memory-match": {
+    "index.html": "c81c616af60115051731847f5992716a68f2b79464241655a471fbb0b2e96772"
+  },
+  "admin/minesweeper": {
+    "index.html": "fd42515c3da0de052cb93e7d35b46f6caf3b2e457a16c59e27bd7ce0282ce1b6"
+  },
+  "admin/nonogram": {
+    "index.html": "9a672dff6069d6881c207263396c96cad8253380ba5ab8db16fc65c4e8699e14"
+  },
+  "admin/passphrase": {
+    "index.html": "056c5a5097a949eecb4fadc2a607346a09b0db76db1a8f77f8b521dcc0fc9412"
+  },
+  "admin/reversi": {
+    "index.html": "2cfec34a5438106293a6a7ff107fcddf32b380ba23a32162aa6a0d5e0385dd16"
+  },
+  "admin/ruler": {
+    "index.html": "2409470d8d5becbcdee7468dcb8488676d1128d47790cbf7e8da52476163acfc"
+  },
+  "admin/simon": {
+    "index.html": "0f0724c8351e4281bc243cdef3559d1fe4eb4577b80b60d75cdd1ce58eeffcbd"
+  },
+  "admin/sliding-puzzle": {
+    "index.html": "9d94ffeb6d8829a30a27bb0aae24c67e535bf92988c4e4ae11e6ea84991c98a5"
+  },
+  "admin/snake": {
+    "index.html": "5413bd055be7d1458a306d9b1c7834860bda18ae74ed099f5a7ab29c37563048"
+  },
+  "admin/sokoban": {
+    "index.html": "20642ed0710aa718030651abf039a49fb2451aa094249af49168f8e91fb3e878"
+  },
+  "admin/sudoku": {
+    "index.html": "88523a1c475619f5acc70a23be27aa312e0e86bf1751f77363d75510ba993adb"
+  },
+  "admin/timer": {
+    "index.html": "49afbc58d4b62ea1dbc056bb2daad7b1c59850c06418844eb1f8a6fc05138173"
+  },
+  "admin/timezone": {
+    "index.html": "95541b222f0f8e4d9ad622ff202d3bdf87abc8938210d355908b9cae339cdd72"
+  },
+  "admin/unit-converter": {
+    "index.html": "e62b914fbe9257a957ae06f84409ad6ae225ad5d0440df16399664b610d39389"
+  },
+  "admin/word-ladder": {
+    "index.html": "c1c32bf60a8de6b2acb04854dd9a28f619d4a24a9d23abb1a7271dc669266932"
+  },
+  "admin/word-search": {
+    "index.html": "0e0c4d715da629ce6c1c519e831b14ae90cfce66c37424151e39c77f5fbe41a3"
+  },
+  "community/afterloop-4s2m": {
+    "index.html": "7aa4a53b58c5b6e21f7c9dce84dcd707deed92834b5f1a263c05d813544cf99b"
+  }
+}

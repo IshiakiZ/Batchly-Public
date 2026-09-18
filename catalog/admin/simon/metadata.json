@@ -1,0 +1,20 @@
+{
+  "folder": "admin/simon",
+  "title": "Simon",
+  "description": "Watch the colour sequence, then repeat it back; each round adds a step. How long a sequence can you remember? Top the board.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/simon",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 31151,
+      "sha256": "0f0724c8351e4281bc243cdef3559d1fe4eb4577b80b60d75cdd1ce58eeffcbd",
+      "source": "published catalog HTML"
+    }
+  ]
+}

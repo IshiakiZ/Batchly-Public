@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Minesweeper: classic logic puzzle. Clear every safe square as fast as you can." />
+<title>MINESWEEPER</title>
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --inset:#0c0c0f;
+    --board:#141418;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --red:#ef3a3a;
+    --green:#4ec86a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  #app{
+    height:100%;
+    display:flex; flex-direction:column; gap:8px;
+    padding:8px;
+  }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px;
+  }
+  #brand{
+    display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:700; letter-spacing:.14em;
+    padding:0 4px 0 2px; white-space:nowrap;
+  }
+  #brand i{ width:11px; height:11px; background:var(--red); display:block; }
+  .group{ display:flex; align-items:center; gap:6px; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+
+  button{
+    font-family:var(--mono);
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    background:#22222a; color:var(--bone);
+    border:2px solid var(--bone); border-radius:0;
+    padding:6px 9px; margin:0; cursor:pointer;
+    box-shadow:3px 3px 0 0 #000;
+    transition:transform .06s ease, box-shadow .06s ease, background .1s ease;
+    white-space:nowrap;
+  }
+  button:hover{ background:#2f2f3a; }
+  button:active{ transform:translate(3px,3px); box-shadow:0 0 0 0 #000; }
+  button[aria-pressed="true"]{ background:var(--red); color:#10100e; }
+  button[aria-pressed="true"]:hover{ background:#ff4a4a; }
+  button:focus-visible{ outline:2px solid var(--red); outline-offset:3px; }
+
+  #face{
+    font-size:15px; letter-spacing:0; line-height:1;
+    padding:5px 10px; min-width:46px;
+    background:#22222a; color:var(--bone);
+  }
+
+  .count{
+    display:flex; align-items:center; gap:7px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:4px 9px;
+  }
+  .count span{ font-size:9px; letter-spacing:.14em; color:var(--mute); }
+  .count b{
+    font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--red);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ---------- board ---------- */
+  #wrap{
+    flex:1 1 auto; min-height:0;
+    display:flex;
+    overflow:auto;
+    scrollbar-gutter:stable;
+    background:var(--board); border:2px solid var(--line);
+    padding:6px;
+  }
+  #wrap::-webkit-scrollbar{ width:9px; height:9px; }
+  #wrap::-webkit-scrollbar-track{ background:#0c0c0f; }
+  #wrap::-webkit-scrollbar-thumb{ background:#3a3a46; border:2px solid #0c0c0f; }
+  #wrap::-webkit-scrollbar-thumb:hover{ background:#4d4d5c; }
+
+  canvas{
+    display:block; margin:auto;
+    /* MUST override the `*` border-box reset. Under border-box, style.width=480px
+       with a 2px border leaves a 476px content box, so the 480px bitmap is squashed
+       to ~0.985 and the painted grid drifts out from under the hit-test. */
+    box-sizing:content-box;
+    background:#0a0a0c;
+    border:2px solid var(--line2);
+    touch-action:pan-x pan-y;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    outline:none;
+  }
+  canvas:focus-visible{ border-color:var(--red); }
+
+  /* ---------- footer ---------- */
+  #foot{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px 8px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  #statusline{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  #status{
+    font-size:11px; font-weight:700; letter-spacing:.07em;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  #status .tag{ color:var(--mute); font-weight:400; letter-spacing:.05em; }
+  #status .ok{ color:var(--green); }
+  #status .bad{ color:var(--red); }
+  #pan{
+    font-size:9px; letter-spacing:.14em; color:#10100e; background:var(--red);
+    padding:2px 6px; font-weight:700;
+  }
+  #help{
+    font-size:10px; line-height:1.55; color:var(--mute); letter-spacing:.02em;
+  }
+  #help b{ color:var(--bone); font-weight:700; }
+  #help kbd{
+    font-family:var(--mono); font-size:10px; color:var(--bone);
+    background:var(--inset); border:1px solid var(--line2);
+    padding:0 4px; margin:0 1px;
+  }
+  #help .sep{ color:#4d4d5c; padding:0 2px; }
+
+  /* ---------- result overlay ---------- */
+  #over{
+    position:fixed; inset:0; z-index:20;
+    display:none; place-items:center;
+    background:rgba(8,8,10,.8);
+    padding:16px;
+  }
+  #over.show{ display:grid; }
+  #card{
+    width:100%; max-width:400px;
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 #000;
+    padding:18px 16px 16px;
+    text-align:center;
+  }
+  #ovTitle{
+    font-size:26px; font-weight:700; letter-spacing:.16em;
+    margin:0 0 2px;
+  }
+  #ovSub{ font-size:10px; letter-spacing:.14em; color:var(--mute); margin-bottom:14px; }
+  .rows{ border:2px solid var(--line2); background:var(--inset); margin-bottom:10px; }
+  .row{
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    padding:8px 10px;
+  }
+  .row + .row{ border-top:2px solid var(--line2); }
+  .row .k{ font-size:9px; letter-spacing:.16em; color:var(--mute); }
+  .row .v{ font-size:20px; font-weight:700; letter-spacing:.06em; font-variant-numeric:tabular-nums; }
+  .row .v.big{ color:var(--red); font-size:24px; }
+  #ovMath{
+    font-size:9px; line-height:1.6; color:var(--mute); letter-spacing:.05em;
+    margin-bottom:12px; word-break:break-word;
+  }
+  #ovMath b{ color:var(--bone); font-weight:700; }
+  #ovBtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+
+  @media (max-width:640px){ #brand{ display:none; } }
+  @media (max-width:400px){
+    .count span{ display:none; }
+    #help{ font-size:10px; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    button{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="bar">
+    <div id="brand"><i></i>MINESWEEPER</div>
+
+    <div class="group" role="group" aria-label="Difficulty">
+      <button id="d-beginner"     data-diff="beginner"     aria-pressed="true"  title="9×9, 10 mines (key 1)">BEGINNER</button>
+      <button id="d-intermediate" data-diff="intermediate" aria-pressed="false" title="16×16, 40 mines (key 2)">INTERMEDIATE</button>
+      <button id="d-expert"       data-diff="expert"       aria-pressed="false" title="30×16, 99 mines (key 3)">EXPERT</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="count" title="Mines remaining minus flags placed">
+      <span>MINES</span><b id="mineCount">010</b>
+    </div>
+    <button id="face" title="New game (key R)" aria-label="New game">:)</button>
+    <div class="count" title="Seconds elapsed">
+      <span>TIME</span><b id="timeCount">000</b>
+    </div>
+    <button id="flagMode" aria-pressed="false" title="When ON, a tap or left-click places a flag instead of revealing">&#9873; FLAG OFF</button>
+  </header>
+
+  <main id="wrap">
+    <canvas id="board" tabindex="0" aria-label="Minesweeper board. Use arrow keys to move, Space to reveal, F to flag."></canvas>
+  </main>
+
+  <footer id="foot">
+    <div id="statusline">
+      <div id="status"></div>
+      <span id="pan" hidden>&#9666; BOARD IS WIDER THAN THE VIEW: DRAG OR SCROLL TO PAN &#9656;</span>
+    </div>
+    <div id="help">
+      <b>REVEAL</b> left-click / tap<span class="sep">·</span>
+      <b>FLAG</b> right-click / long-press / <kbd>F</kbd><span class="sep">·</span>
+      <b>CHORD</b> click a number whose flags all match (or middle-click)<span class="sep">·</span>
+      <kbd>&#8592;&#8593;&#8594;&#8595;</kbd> move <span class="sep">·</span> <kbd>Space</kbd> reveal <span class="sep">·</span> <kbd>R</kbd> new game <span class="sep">·</span> <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> difficulty
+      <br>
+      Your first click is always safe. Clear every square that isn't a mine to win. <b>Score = difficulty &times; 10000 &divide; your time</b>: faster is a higher score, and only wins are submitted.
+    </div>
+  </footer>
+
+</div>
+
+<div id="over" role="dialog" aria-modal="false" aria-labelledby="ovTitle">
+  <div id="card">
+    <div id="ovTitle">CLEARED</div>
+    <div id="ovSub">BEGINNER &middot; 9&times;9 &middot; 10 MINES</div>
+    <div class="rows">
+      <div class="row"><span class="k">YOUR TIME</span><span class="v" id="ovTime">0.0s</span></div>
+      <div class="row" id="ovScoreRow"><span class="k">SCORE</span><span class="v big" id="ovScore">0</span></div>
+    </div>
+    <div id="ovMath"></div>
+    <div id="ovBtns">
+      <button id="again">PLAY AGAIN</button>
+      <button id="view">VIEW BOARD</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* =====================================================================
+     MINESWEEPER: original implementation for Batchly.
+
+     DESIGN NOTES
+     ------------
+     Board model is three flat typed arrays (mine / adj / revealed / flagged)
+     indexed row-major as `r*cols + c`. Flat arrays beat an array-of-objects
+     here: Expert is 480 cells and every redraw walks the whole board, so we
+     want contiguous memory and zero allocation in the draw loop.
+
+     FIRST-CLICK SAFETY is the reason mines are generated lazily. The board
+     starts empty in phase 'ready'; the first reveal calls placeMines(i) with
+     the clicked index, which excludes that cell AND its 8 neighbours from the
+     candidate pool before a Fisher-Yates shuffle. Excluding the neighbours
+     (not just the cell) guarantees the first click is a 0 and flood-fills, so
+     every game opens with a real board to read instead of a coin flip.
+
+     RENDERING is canvas, not DOM. 480 DOM nodes with per-cell listeners is
+     workable but re-layout on resize is expensive and hit-testing is simpler
+     as integer math on one element. We redraw only on state change (never on
+     a rAF loop): the clock is DOM text, so an idle board costs 0 frames.
+
+     THE TIMER is measured with performance.now() and frozen at t1 on
+     win/lose, so the submitted score is independent of the 100ms display tick.
+
+     SCORE CONTRACT (host requires positive, finite, higher-is-better):
+       score = max(1, round(factor * 10000 / max(1, seconds)))
+     The inner max(1, seconds) is not cosmetic: a lucky Beginner board can be
+     cleared by the opening flood-fill in well under a second, and 10000/0 is
+     Infinity, which would violate the contract. Submitted exactly once per
+     win, never on a loss.
+     ===================================================================== */
+
+  var DIFFS = {
+    beginner:     { name:'BEGINNER',     cols:9,  rows:9,  mines:10, factor:1   },
+    intermediate: { name:'INTERMEDIATE', cols:16, rows:16, mines:40, factor:2.5 },
+    expert:       { name:'EXPERT',       cols:30, rows:16, mines:99, factor:5   }
+  };
+  var ORDER = ['beginner','intermediate','expert'];
+
+  var COARSE = false;
+  try { COARSE = window.matchMedia && window.matchMedia('(pointer: coarse)').matches; } catch(e){}
+  var MIN_CELL = COARSE ? 22 : 16;
+  var MAX_CELL = 44;
+
+  // Number colours, all >= 4.5:1 against the revealed cell fill (#15151a).
+  var NUMC = ['', '#5aa9ff', '#4ec86a', '#ef3a3a', '#b98cff', '#ffb340', '#38d6c8', '#f5f2e8', '#a6a6b4'];
+
+  // ---- elements ----
+  var canvas   = document.getElementById('board');
+  var ctx      = canvas.getContext('2d');
+  var wrap     = document.getElementById('wrap');
+  var app      = document.getElementById('app');
+  var elMines  = document.getElementById('mineCount');
+  var elTime   = document.getElementById('timeCount');
+  var elFace   = document.getElementById('face');
+  var elFlagMode = document.getElementById('flagMode');
+  var elStatus = document.getElementById('status');
+  var elPan    = document.getElementById('pan');
+  var over     = document.getElementById('over');
+  var ovTitle  = document.getElementById('ovTitle');
+  var ovSub    = document.getElementById('ovSub');
+  var ovTime   = document.getElementById('ovTime');
+  var ovScore  = document.getElementById('ovScore');
+  var ovScoreRow = document.getElementById('ovScoreRow');
+  var ovMath   = document.getElementById('ovMath');
+  var btnAgain = document.getElementById('again');
+  var btnView  = document.getElementById('view');
+
+  // ---- state ----
+  var diffKey = 'beginner';
+  var cfg     = DIFFS[diffKey];
+  var cols = 0, rows = 0, total = 0, mineTotal = 0;
+  var mine, adj, revealed, flagged;
+  var revCount = 0, flagCount = 0;
+  var phase = 'ready';           // 'ready' | 'playing' | 'won' | 'lost'
+  var exploded = -1;
+  var submitted = false;
+  var t0 = 0, t1 = 0, tick = null;
+  var cs = 24, dpr = 1;
+  var pressIdx = -1, hoverIdx = -1, downIdx = -1;
+  var curC = 0, curR = 0, kbActive = false;
+  var flagMode = false;
+  var lastResult = null;
+
+  // =====================================================================
+  // Board setup
+  // =====================================================================
+  function newGame(){
+    cfg = DIFFS[diffKey];
+    cols = cfg.cols; rows = cfg.rows; total = cols * rows; mineTotal = cfg.mines;
+
+    mine     = new Uint8Array(total);
+    adj      = new Uint8Array(total);
+    revealed = new Uint8Array(total);
+    flagged  = new Uint8Array(total);
+
+    revCount = 0; flagCount = 0;
+    phase = 'ready'; exploded = -1; submitted = false;
+    t0 = 0; t1 = 0; stopTick();
+    pressIdx = -1; hoverIdx = -1;
+    curC = cols >> 1; curR = rows >> 1;
+    lastResult = null;
+
+    hideOverlay();
+    setStatus('<span class="tag">READY</span> ' + cfg.name + ' <span class="tag">' + cols + '&times;' + rows + ' &middot; ' + mineTotal + ' mines &middot; first click is safe</span>');
+    layout();
+    updateHud();
+  }
+
+  function inBounds(c, r){ return c >= 0 && c < cols && r >= 0 && r < rows; }
+
+  function neigh(i){
+    var out = [];
+    var c = i % cols, r = (i / cols) | 0;
+    for(var dr = -1; dr <= 1; dr++){
+      for(var dc = -1; dc <= 1; dc++){
+        if(dc === 0 && dr === 0) continue;
+        var nc = c + dc, nr = r + dr;
+        if(inBounds(nc, nr)) out.push(nr * cols + nc);
+      }
+    }
+    return out;
+  }
+
+  // Mines are placed AFTER the first reveal so it can never be a mine, and so
+  // the opening is a guaranteed zero (its whole 3x3 is excluded).
+  function placeMines(firstIdx){
+    var forbidden = new Uint8Array(total);
+    forbidden[firstIdx] = 1;
+    var safeRing = neigh(firstIdx);
+    var i;
+    // Only carve out the full 3x3 if the board still has room for every mine.
+    if(total - (safeRing.length + 1) >= mineTotal){
+      for(i = 0; i < safeRing.length; i++) forbidden[safeRing[i]] = 1;
+    }
+
+    var pool = [];
+    for(i = 0; i < total; i++) if(!forbidden[i]) pool.push(i);
+
+    // Fisher-Yates over the candidate pool.
+    for(i = pool.length - 1; i > 0; i--){
+      var j = (Math.random() * (i + 1)) | 0;
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    var placed = Math.min(mineTotal, pool.length);
+    for(i = 0; i < placed; i++) mine[pool[i]] = 1;
+
+    // Neighbour counts.
+    for(i = 0; i < total; i++){
+      if(mine[i]) { adj[i] = 0; continue; }
+      var n = 0, nb = neigh(i);
+      for(var k = 0; k < nb.length; k++) if(mine[nb[k]]) n++;
+      adj[i] = n;
+    }
+  }
+
+  // =====================================================================
+  // Rules
+  // =====================================================================
+  function flood(start){
+    if(revealed[start] || flagged[start] || mine[start]) return;
+    var stack = [start];
+    while(stack.length){
+      var c = stack.pop();
+      if(revealed[c] || flagged[c]) continue;
+      revealed[c] = 1; revCount++;
+      if(adj[c] === 0){
+        // adj===0 implies no neighbouring mine, so nothing unsafe is pushed.
+        var nb = neigh(c);
+        for(var k = 0; k < nb.length; k++){
+          var m = nb[k];
+          if(!revealed[m] && !flagged[m]) stack.push(m);
+        }
+      }
+    }
+  }
+
+  function doReveal(i){
+    if(phase === 'won' || phase === 'lost') return;
+    if(revealed[i] || flagged[i]) return;
+    if(phase === 'ready'){
+      placeMines(i);
+      phase = 'playing';
+      t0 = now(); startTick();
+      setStatus('<span class="tag">IN PLAY</span> ' + cfg.name + ' <span class="tag">' + mineTotal + ' mines hidden</span>');
+    }
+    if(mine[i]){ lose(i); return; }
+    flood(i);
+    checkWin();
+    updateHud(); draw();
+  }
+
+  function toggleFlag(i){
+    if(phase === 'won' || phase === 'lost') return;
+    if(revealed[i]) return;
+    if(flagged[i]){ flagged[i] = 0; flagCount--; }
+    else { flagged[i] = 1; flagCount++; }
+    updateHud(); draw();
+  }
+
+  // Chording: on a revealed number whose adjacent flag count equals its value,
+  // reveal every other neighbour. Wrong flags make this explode, as intended.
+  function chord(i){
+    if(phase !== 'playing') return;
+    if(!revealed[i] || adj[i] === 0) return;
+    var nb = neigh(i), k, f = 0;
+    for(k = 0; k < nb.length; k++) if(flagged[nb[k]]) f++;
+    if(f !== adj[i]) return;
+    for(k = 0; k < nb.length; k++){
+      var m = nb[k];
+      if(!flagged[m] && !revealed[m] && mine[m]){ lose(m); return; }
+    }
+    for(k = 0; k < nb.length; k++){
+      var s = nb[k];
+      if(!flagged[s] && !revealed[s]) flood(s);
+    }
+    checkWin();
+    updateHud(); draw();
+  }
+
+  function checkWin(){
+    if(phase !== 'playing') return;
+    if(revCount === total - mineTotal) win();
+  }
+
+  function lose(i){
+    if(phase !== 'playing') return;
+    phase = 'lost';
+    exploded = i;
+    stopTick(); t1 = now();
+    updateHud(); draw();
+
+    setStatus('<span class="bad">BOOM</span> <span class="tag">' + cfg.name + ' &middot; ' + fmt(elapsed()) + ' &middot; no score submitted: wins only</span>');
+    showOverlay(false);
+  }
+
+  function win(){
+    phase = 'won';
+    stopTick(); t1 = now();
+
+    // Courtesy: flag whatever is left so the finished board reads correctly.
+    for(var i = 0; i < total; i++){
+      if(mine[i] && !flagged[i]){ flagged[i] = 1; flagCount++; }
+    }
+
+    var ms    = elapsed();
+    var secs  = Math.max(1, ms / 1000);          // guards 0s wins -> Infinity
+    var score = Math.max(1, Math.round((cfg.factor * 10000) / secs));
+
+    lastResult = { ms: ms, secs: secs, score: score, diff: cfg, sent: false };
+
+    if(!submitted && isFinite(score) && score > 0){
+      submitted = true;
+      lastResult.sent = true;
+      try {
+        window.parent.postMessage({ type: 'batchly-score', score: score }, '*');
+      } catch(e){ lastResult.sent = false; }
+    }
+
+    updateHud(); draw();
+    setStatus('<span class="ok">CLEARED</span> <span class="tag">' + cfg.name + ' &middot; ' + fmt(ms) + ' &middot;</span> SCORE ' + score);
+    showOverlay(true);
+  }
+
+  // =====================================================================
+  // Clock
+  // =====================================================================
+  function now(){
+    return (window.performance && performance.now) ? performance.now() : Date.now();
+  }
+  function elapsed(){
+    if(!t0) return 0;
+    if(phase === 'playing') return now() - t0;
+    return Math.max(0, t1 - t0);
+  }
+  function startTick(){
+    stopTick();
+    tick = setInterval(function(){ elTime.textContent = pad3(Math.floor(elapsed() / 1000)); }, 100);
+  }
+  function stopTick(){
+    if(tick){ clearInterval(tick); tick = null; }
+  }
+
+  function pad3(v){
+    var neg = v < 0;
+    var a = Math.min(999, Math.abs(v));
+    var s = String(a);
+    while(s.length < (neg ? 2 : 3)) s = '0' + s;
+    return neg ? '-' + s : s;
+  }
+  function fmt(ms){
+    var s = ms / 1000;
+    if(s < 60) return (Math.round(s * 10) / 10).toFixed(1) + 's';
+    var m = Math.floor(s / 60);
+    var r = s - m * 60;
+    var rs = (Math.round(r * 10) / 10).toFixed(1);
+    if(r < 10) rs = '0' + rs;
+    return m + ':' + rs;
+  }
+
+  // =====================================================================
+  // HUD / status / overlay
+  // =====================================================================
+  function updateHud(){
+    elMines.textContent = pad3(mineTotal - flagCount);
+    elTime.textContent  = pad3(Math.floor(elapsed() / 1000));
+    elFace.textContent  = phase === 'lost' ? 'X(' :
+                          phase === 'won'  ? 'B)' :
+                          (pressIdx >= 0)  ? ':O' : ':)';
+  }
+  function setStatus(html){ elStatus.innerHTML = html; }
+
+  function showOverlay(won){
+    ovTitle.textContent = won ? 'CLEARED' : 'BOOM';
+    ovTitle.style.color = won ? 'var(--green)' : 'var(--red)';
+    ovSub.innerHTML = cfg.name + ' &middot; ' + cols + '&times;' + rows + ' &middot; ' + mineTotal + ' MINES';
+
+    ovTime.textContent = fmt(elapsed());
+
+    if(won && lastResult){
+      ovScoreRow.style.display = '';
+      ovScore.textContent = String(lastResult.score);
+      var shown = (Math.round(lastResult.secs * 10) / 10).toFixed(1);
+      ovMath.innerHTML =
+        '<b>' + cfg.name + '</b> multiplier <b>&times;' + cfg.factor + '</b> &nbsp;&rarr;&nbsp; ' +
+        'round(' + cfg.factor + ' &times; 10000 &divide; ' + shown + 's) = <b>' + lastResult.score + '</b><br>' +
+        (lastResult.sent
+          ? 'Submitted to the leaderboard. Faster clears score higher; beat your time to beat your score.'
+          : 'Score could not be submitted (leaderboard unreachable).');
+    } else {
+      ovScoreRow.style.display = 'none';
+      ovMath.innerHTML = 'You hit a mine, so nothing was submitted: <b>only wins score</b>. The board below shows every mine; a flag with a red cross was in the wrong place.';
+    }
+
+    over.classList.add('show');
+    if(document.hasFocus && document.hasFocus()){
+      try { btnAgain.focus(); } catch(e){}
+    }
+  }
+  function hideOverlay(){ over.classList.remove('show'); }
+
+  // =====================================================================
+  // Layout
+  // =====================================================================
+  function layout(){
+    // wrap.clientWidth excludes borders but includes its 6px padding;
+    // the canvas adds a 2px border of its own on each side.
+    var availW = wrap.clientWidth  - 12 - 4;
+    var availH = wrap.clientHeight - 12 - 4;
+
+    var fit = Math.floor(Math.min(availW / cols, availH / rows));
+    if(!isFinite(fit)) fit = MIN_CELL;
+    cs = Math.max(MIN_CELL, Math.min(MAX_CELL, fit));
+
+    var w = cols * cs, h = rows * cs;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    var bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+    if(canvas.width !== bw || canvas.height !== bh){ canvas.width = bw; canvas.height = bh; }
+
+    draw();
+
+    var overflows = (w + 4) > (wrap.clientWidth - 12) || (h + 4) > (wrap.clientHeight - 12);
+    elPan.hidden = !overflows;
+  }
+
+  // =====================================================================
+  // Drawing
+  // =====================================================================
+  function draw(){
+    if(!cols) return;
+    var g = ctx;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#0a0a0c';
+    g.fillRect(0, 0, cols * cs, rows * cs);
+
+    var dead = (phase === 'lost');
+    var s = cs - 1;
+
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = '700 ' + Math.round(cs * 0.6) + "px 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+    for(var i = 0; i < total; i++){
+      var c = i % cols, r = (i / cols) | 0;
+      var x = c * cs, y = r * cs;
+
+      if(i === exploded){
+        g.fillStyle = '#ef3a3a';
+        g.fillRect(x, y, s, s);
+        drawMine(g, x, y, s, '#10100e', 'rgba(245,242,232,.6)');
+        continue;
+      }
+
+      var showMine  = dead && mine[i] && !flagged[i];
+      var wrongFlag = dead && flagged[i] && !mine[i];
+
+      if(revealed[i] || showMine || wrongFlag){
+        g.fillStyle = '#15151a';
+        g.fillRect(x, y, s, s);
+        if(showMine){
+          drawMine(g, x, y, s, '#c9c6bd', 'rgba(16,16,14,.6)');
+        } else if(wrongFlag){
+          drawMine(g, x, y, s, '#5c5c68', 'rgba(16,16,14,.5)');
+          drawX(g, x, y, s, '#ef3a3a');
+        } else if(adj[i] > 0){
+          g.fillStyle = NUMC[adj[i]];
+          g.fillText(String(adj[i]), x + s / 2, y + s / 2 + s * 0.04);
+        }
+      } else {
+        drawHidden(g, x, y, s, i === pressIdx, i === hoverIdx && phase !== 'won' && phase !== 'lost');
+        if(flagged[i]) drawFlag(g, x, y, s);
+      }
+    }
+
+    if(kbActive){
+      g.strokeStyle = '#f5f2e8';
+      g.lineWidth = 2;
+      g.strokeRect(curC * cs + 1, curR * cs + 1, cs - 3, cs - 3);
+      g.strokeStyle = '#10100e';
+      g.lineWidth = 1;
+      g.strokeRect(curC * cs + 2.5, curR * cs + 2.5, cs - 6, cs - 6);
+    }
+  }
+
+  function drawHidden(g, x, y, s, pressed, hover){
+    if(pressed){
+      g.fillStyle = '#1b1b21';
+      g.fillRect(x, y, s, s);
+      return;
+    }
+    g.fillStyle = hover ? '#353542' : '#2b2b34';
+    g.fillRect(x, y, s, s);
+    var b = 2;
+    g.fillStyle = hover ? '#4b4b5b' : '#41414f';
+    g.fillRect(x, y, s, b);
+    g.fillRect(x, y, b, s);
+    g.fillStyle = '#17171c';
+    g.fillRect(x, y + s - b, s, b);
+    g.fillRect(x + s - b, y, b, s);
+  }
+
+  function drawFlag(g, x, y, s){
+    var poleX = x + s * 0.47, poleW = Math.max(2, s * 0.08);
+    g.fillStyle = '#f5f2e8';
+    g.fillRect(poleX, y + s * 0.20, poleW, s * 0.53);
+    g.fillRect(x + s * 0.26, y + s * 0.73, s * 0.48, Math.max(2, s * 0.09));
+    g.fillStyle = '#ef3a3a';
+    g.beginPath();
+    g.moveTo(poleX, y + s * 0.20);
+    g.lineTo(x + s * 0.15, y + s * 0.34);
+    g.lineTo(poleX, y + s * 0.48);
+    g.closePath();
+    g.fill();
+  }
+
+  function drawMine(g, x, y, s, col, glint){
+    var cx = x + s / 2, cy = y + s / 2;
+    var L = s * 0.35, r = s * 0.21;
+    g.strokeStyle = col;
+    g.lineWidth = Math.max(1.5, s * 0.07);
+    g.beginPath();
+    g.moveTo(cx - L, cy); g.lineTo(cx + L, cy);
+    g.moveTo(cx, cy - L); g.lineTo(cx, cy + L);
+    var d = L * 0.7;
+    g.moveTo(cx - d, cy - d); g.lineTo(cx + d, cy + d);
+    g.moveTo(cx + d, cy - d); g.lineTo(cx - d, cy + d);
+    g.stroke();
+    g.fillStyle = col;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = glint;
+    g.beginPath(); g.arc(cx - r * 0.3, cy - r * 0.3, Math.max(0.8, r * 0.27), 0, Math.PI * 2); g.fill();
+  }
+
+  function drawX(g, x, y, s, col){
+    g.strokeStyle = col;
+    g.lineWidth = Math.max(2, s * 0.1);
+    var m = s * 0.2;
+    g.beginPath();
+    g.moveTo(x + m, y + m);       g.lineTo(x + s - m, y + s - m);
+    g.moveTo(x + s - m, y + m);   g.lineTo(x + m, y + s - m);
+    g.stroke();
+  }
+
+  // =====================================================================
+  // Hit testing
+  // =====================================================================
+  // getBoundingClientRect() gives the BORDER box, so r.left is 2px left of where
+  // the grid actually starts; clientLeft/clientTop are those border widths. We also
+  // rescale through the content box rather than assuming 1 grid px == 1 CSS px, so
+  // the hit-test stays glued to the paint even if the box ever gets scaled.
+  function idxFromPoint(clientX, clientY){
+    var r  = canvas.getBoundingClientRect();
+    var cw = canvas.clientWidth, ch = canvas.clientHeight;
+    if(!cw || !ch || !cols || !rows) return -1;
+    var px = clientX - r.left - canvas.clientLeft;
+    var py = clientY - r.top  - canvas.clientTop;
+    if(px < 0 || py < 0 || px >= cw || py >= ch) return -1;
+    var c  = Math.floor(px * cols / cw);
+    var rr = Math.floor(py * rows / ch);
+    if(!inBounds(c, rr)) return -1;
+    return rr * cols + c;
+  }
+
+  // Shared "a cell was activated" path for click and tap.
+  function activate(i){
+    if(i < 0) return;
+    if(revealed[i]) chord(i);
+    else if(flagMode) toggleFlag(i);
+    else doReveal(i);
+  }
+
+  // =====================================================================
+  // Mouse
+  // =====================================================================
+  canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  canvas.addEventListener('mousedown', function(e){
+    kbActive = false;
+    var i = idxFromPoint(e.clientX, e.clientY);
+    if(i < 0) return;
+    if(e.button === 2){ e.preventDefault(); toggleFlag(i); return; }
+    if(e.button === 1){ e.preventDefault(); chord(i); return; }
+    if(e.button !== 0) return;
+    if(phase === 'won' || phase === 'lost') return;
+    // downIdx is the logical press (any cell, incl. revealed ones for chording);
+    // pressIdx is purely the "pushed in" visual, which only hidden cells get.
+    downIdx = i;
+    if(!revealed[i] && !flagged[i]){ pressIdx = i; updateHud(); draw(); }
+  });
+
+  canvas.addEventListener('mouseup', function(e){
+    if(e.button !== 0) return;
+    var d = downIdx;
+    downIdx = -1; pressIdx = -1;
+    var i = idxFromPoint(e.clientX, e.clientY);
+    if(phase === 'won' || phase === 'lost'){ updateHud(); draw(); return; }
+    // Releasing anywhere other than where the press began does nothing:
+    // the classic "drag off to cancel" escape hatch.
+    if(i >= 0 && d === i) activate(i);
+    updateHud(); draw();
+  });
+
+  canvas.addEventListener('mousemove', function(e){
+    var i = idxFromPoint(e.clientX, e.clientY);
+    if(i !== hoverIdx){
+      hoverIdx = i;
+      if(pressIdx >= 0 && pressIdx !== i) pressIdx = -1;
+      updateHud(); draw();
+    }
+  });
+
+  canvas.addEventListener('mouseleave', function(){
+    if(hoverIdx !== -1 || pressIdx !== -1 || downIdx !== -1){
+      hoverIdx = -1; pressIdx = -1; downIdx = -1;
+      updateHud(); draw();
+    }
+  });
+
+  // =====================================================================
+  // Touch: tap reveals, long-press flags, drag pans (native scroll).
+  // touchstart/touchmove stay passive so the browser can still scroll an
+  // oversized board; a real scroll fires touchcancel, which kills the press.
+  // =====================================================================
+  // tActive tracks "this gesture began on the board" independently of tIdx, which
+  // cancelTouch() clears. touchend needs it: a cancelled drag must STILL swallow the
+  // synthesised mouse events, or the browser replays the release as mousedown+mouseup
+  // and reveals the very cell the drag was meant to back out of.
+  var tIdx = -1, tTimer = null, tX = 0, tY = 0, tMoved = false, tLong = false, tActive = false;
+
+  function cancelTouch(){
+    if(tTimer){ clearTimeout(tTimer); tTimer = null; }
+    tIdx = -1;
+    if(pressIdx !== -1){ pressIdx = -1; updateHud(); draw(); }
+  }
+
+  function buzz(){
+    try { if(navigator.vibrate) navigator.vibrate(12); } catch(e){}
+  }
+
+  canvas.addEventListener('touchstart', function(e){
+    if(e.touches.length !== 1){ cancelTouch(); return; }
+    var t = e.touches[0];
+    var i = idxFromPoint(t.clientX, t.clientY);
+    if(i < 0) return;
+    kbActive = false; hoverIdx = -1;
+    tIdx = i; tX = t.clientX; tY = t.clientY; tMoved = false; tLong = false; tActive = true;
+
+    if(phase !== 'won' && phase !== 'lost' && !revealed[i] && !flagged[i]){
+      pressIdx = i; updateHud(); draw();
+    }
+    if(tTimer) clearTimeout(tTimer);
+    tTimer = setTimeout(function(){
+      tTimer = null; tLong = true;
+      pressIdx = -1;
+      if(tIdx >= 0 && !revealed[tIdx] && phase !== 'won' && phase !== 'lost'){
+        toggleFlag(tIdx);
+        buzz();
+      }
+      updateHud(); draw();
+    }, 420);
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', function(e){
+    if(tIdx < 0 || !e.touches.length) return;
+    var t = e.touches[0];
+    if(Math.abs(t.clientX - tX) > 12 || Math.abs(t.clientY - tY) > 12){
+      tMoved = true;
+      cancelTouch();
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', function(e){
+    if(tTimer){ clearTimeout(tTimer); tTimer = null; }
+    var i = tIdx, moved = tMoved, wasLong = tLong, active = tActive;
+    tIdx = -1; tActive = false;
+    if(pressIdx !== -1){ pressIdx = -1; }
+    if(!active){ updateHud(); draw(); return; }
+
+    // Stop the synthesised mouse events so a tap can't fire twice, and so a
+    // cancelled drag isn't replayed as a click on the release cell. This must run
+    // for EVERY gesture that started on the board, cancelled ones included.
+    if(e.cancelable) e.preventDefault();
+    try { canvas.focus({ preventScroll: true }); } catch(err){}
+
+    if(i >= 0 && !moved && !wasLong && phase !== 'won' && phase !== 'lost') activate(i);
+    updateHud(); draw();
+  }, { passive: false });
+
+  // A real scroll fires touchcancel; the browser emits no compat mouse events for a
+  // gesture it turned into a scroll, so dropping tActive here is safe.
+  canvas.addEventListener('touchcancel', function(){ tMoved = true; tActive = false; cancelTouch(); }, { passive: true });
+
+  // =====================================================================
+  // Keyboard
+  // =====================================================================
+  window.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+    var onButton = document.activeElement && document.activeElement.tagName === 'BUTTON';
+
+    if(k === 'Escape'){
+      if(over.classList.contains('show')){ hideOverlay(); e.preventDefault(); }
+      return;
+    }
+    if(k === 'r' || k === 'R'){ newGame(); e.preventDefault(); return; }
+    if(k === '1' || k === '2' || k === '3'){ setDiff(ORDER[+k - 1]); e.preventDefault(); return; }
+
+    var moved = false;
+    if(k === 'ArrowLeft'  || k === 'a' || k === 'A'){ curC = Math.max(0, curC - 1); moved = true; }
+    else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ curC = Math.min(cols - 1, curC + 1); moved = true; }
+    else if(k === 'ArrowUp'    || k === 'w' || k === 'W'){ curR = Math.max(0, curR - 1); moved = true; }
+    else if(k === 'ArrowDown'  || k === 's' || k === 'S'){ curR = Math.min(rows - 1, curR + 1); moved = true; }
+    if(moved){
+      kbActive = true; hoverIdx = -1;
+      hideOverlay();
+      e.preventDefault(); draw();
+      return;
+    }
+
+    if(k === 'f' || k === 'F'){
+      kbActive = true; hideOverlay();
+      toggleFlag(curR * cols + curC);
+      e.preventDefault();
+      return;
+    }
+    if(k === ' ' || k === 'Enter'){
+      // Let the browser's own activation handle a focused button.
+      if(onButton) return;
+      kbActive = true; hideOverlay();
+      activate(curR * cols + curC);
+      e.preventDefault();
+      return;
+    }
+  });
+
+  // =====================================================================
+  // Controls
+  // =====================================================================
+  function setDiff(key){
+    if(!DIFFS[key]) return;
+    diffKey = key;
+    for(var k = 0; k < ORDER.length; k++){
+      document.getElementById('d-' + ORDER[k]).setAttribute('aria-pressed', String(ORDER[k] === key));
+    }
+    newGame();
+  }
+
+  for(var q = 0; q < ORDER.length; q++){
+    (function(key){
+      document.getElementById('d-' + key).addEventListener('click', function(){ setDiff(key); });
+    })(ORDER[q]);
+  }
+
+  elFace.addEventListener('click', function(){ newGame(); });
+  btnAgain.addEventListener('click', function(){ newGame(); });
+  btnView.addEventListener('click', function(){ hideOverlay(); });
+  over.addEventListener('click', function(e){ if(e.target === over) hideOverlay(); });
+
+  elFlagMode.addEventListener('click', function(){
+    flagMode = !flagMode;
+    elFlagMode.setAttribute('aria-pressed', String(flagMode));
+    elFlagMode.innerHTML = '⚑ FLAG ' + (flagMode ? 'ON' : 'OFF');
+  });
+
+  // =====================================================================
+  // Resize: observed on #app (the non-scrolling root), never on #wrap, so a
+  // scrollbar appearing inside #wrap can't feed back and oscillate the layout.
+  // =====================================================================
+  var relayoutQueued = false;
+  function queueLayout(){
+    if(relayoutQueued) return;
+    relayoutQueued = true;
+    requestAnimationFrame(function(){ relayoutQueued = false; layout(); });
+  }
+  window.addEventListener('resize', queueLayout);
+  window.addEventListener('orientationchange', queueLayout);
+  if(typeof ResizeObserver !== 'undefined'){
+    try { new ResizeObserver(queueLayout).observe(app); } catch(e){}
+  }
+
+  // =====================================================================
+  // Go
+  // =====================================================================
+  newGame();
+  requestAnimationFrame(layout);
+})();
+</script>
+<style>
+/* Touch: 44px tap targets. Every button here is chrome (the board is a canvas), so the taller bar
+   rows come out of #wrap, which already scrolls. Gated: the desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  button{min-height:44px;touch-action:manipulation}
+}
+</style>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "folder": "admin/cryptogram",
+  "title": "Cryptogram",
+  "description": "Crack the cipher: every letter stands for another. Use frequency and common words to decode the hidden quote.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/cryptogram",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 35244,
+      "sha256": "884b4fdd5d5ae5a6a37b163bad21ebd1a70df6340905f80f85ee264bffbb138e",
+      "source": "published catalog HTML"
+    }
+  ]
+}

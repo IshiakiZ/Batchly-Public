@@ -1,0 +1,20 @@
+{
+  "folder": "admin/connect-four",
+  "title": "Connect Four",
+  "description": "Drop discs and line up four in a row before the computer does. Simple to pick up, tricky to beat on hard.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/connect-four",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 48200,
+      "sha256": "5ffba8f59a562a971aeee2eac7096a3fc110fa818d38b9c3000a34c33686bb15",
+      "source": "published catalog HTML"
+    }
+  ]
+}

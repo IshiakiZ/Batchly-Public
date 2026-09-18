@@ -1,0 +1,20 @@
+{
+  "folder": "community/afterloop-4s2m",
+  "title": "Afterloop",
+  "description": "Circle a glowing ring while every lap you fly comes back as a ghost racing the other way. Hold to dive, release to drift. Outfly your past.",
+  "author": "Ishiaki",
+  "play": "https://batch-ly.com/c/afterloop-4s2m",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": null,
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 43922,
+      "sha256": "7aa4a53b58c5b6e21f7c9dce84dcd707deed92834b5f1a263c05d813544cf99b",
+      "source": "published catalog HTML"
+    }
+  ]
+}

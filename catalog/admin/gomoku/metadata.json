@@ -1,0 +1,20 @@
+{
+  "folder": "admin/gomoku",
+  "title": "Gomoku",
+  "description": "Five-in-a-row on a big board against a computer that builds and blocks threats. Get five before it does.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/gomoku",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 39306,
+      "sha256": "7ad594f8954d4e01578f6f4e53e9810b814a6520656473ed53f3ad660a8b35b8",
+      "source": "published catalog HTML"
+    }
+  ]
+}

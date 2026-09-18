@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Unit Converter</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  /* color-scheme:dark makes the browser paint its OWN widgets dark too; without it
+     Chrome's date-picker calendar icon is near-black on our near-black field. */
+  html{-webkit-text-size-adjust:100%;color-scheme:dark}
+  body{
+    background:#10100e;color:#eee;
+    font-family:ui-monospace,Menlo,Monaco,"Cascadia Mono","Courier New",monospace;
+    font-size:15px;line-height:1.45;
+    padding:20px 20px 64px;
+    overflow-x:hidden;
+  }
+  .wrap{max-width:640px;margin:0 auto}
+
+  /* ---------- type ---------- */
+  h1{font-size:20px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 4px;font-weight:700}
+  .sub{color:#888;font-size:12px;margin:0 0 20px}
+  .lbl{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;margin:0 0 8px}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* ---------- panels ---------- */
+  .panel{border:2px solid #eee;padding:16px;margin:0 0 16px;background:#10100e}
+  .panel h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;margin:0 0 12px;font-weight:400}
+
+  /* ---------- controls ---------- */
+  button{font:inherit}
+  .btn{
+    display:block;width:100%;min-height:44px;padding:11px 14px;
+    background:#ff3b30;color:#10100e;border:2px solid #ff3b30;
+    font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:13px;
+    cursor:pointer;text-align:center;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn2{
+    display:block;width:100%;min-height:44px;padding:11px 14px;
+    background:transparent;color:#ff3b30;border:2px solid #ff3b30;
+    font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:13px;cursor:pointer;
+  }
+  .btn2:active{transform:translateY(1px)}
+  .btn-sm{min-height:44px;width:auto;padding:8px 12px;font-size:11px}
+
+  :focus-visible{outline:2px solid #ff3b30;outline-offset:2px}
+  .btn:focus-visible,[aria-selected="true"]:focus-visible{outline:2px solid #eee;outline-offset:2px}
+
+  input[type=text],input[type=date],input[type=number],select{
+    width:100%;min-height:44px;padding:10px 12px;
+    background:#17171a;color:#eee;border:2px solid #444;
+    font:inherit;font-size:16px; /* 16px stops iOS zoom-on-focus */
+  }
+  input:focus,select:focus{border-color:#ff3b30}
+  select{
+    appearance:none;-webkit-appearance:none;border-radius:0;
+    background-image:linear-gradient(45deg,transparent 50%,#888 50%),linear-gradient(135deg,#888 50%,transparent 50%);
+    background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;
+    background-size:6px 6px,6px 6px;background-repeat:no-repeat;padding-right:34px;
+  }
+  input[type=range]{width:100%;accent-color:#ff3b30;height:44px}
+  input::placeholder{color:#666}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;gap:0;border:2px solid #eee;margin:0 0 16px}
+  .tabs button{
+    flex:1 1 0;min-height:48px;padding:12px 4px;background:transparent;color:#888;
+    border:0;border-right:2px solid #eee;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.1em;font-size:12px;font-weight:700;
+  }
+  .tabs button:last-child{border-right:0}
+  .tabs button[aria-selected="true"]{background:#ff3b30;color:#10100e}
+
+  /* ---------- chips ---------- */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    min-height:44px;padding:10px 12px;background:transparent;color:#888;
+    border:2px solid #444;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.08em;font-size:11px;font-weight:700;
+  }
+  .chip[aria-pressed="true"]{background:#ff3b30;border-color:#ff3b30;color:#10100e}
+
+  /* ---------- converter ---------- */
+  .field{margin:0 0 4px}
+  .field input{font-size:22px;padding:12px;letter-spacing:.02em}
+  .unitbtn{
+    display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin-top:8px;
+    padding:9px 12px;background:transparent;color:#eee;border:2px solid #444;cursor:pointer;text-align:left;
+  }
+  .unitbtn:hover{border-color:#ff3b30}
+  .unitbtn .u-sym{font-weight:700;font-size:15px;color:#ff3b30;min-width:auto}
+  .unitbtn .u-name{color:#888;font-size:12px;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .unitbtn .u-more{color:#888;font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .swaprow{display:flex;justify-content:center;margin:14px 0}
+  .swap{
+    width:auto;min-width:120px;min-height:44px;padding:10px 18px;background:transparent;color:#ff3b30;
+    border:2px solid #ff3b30;cursor:pointer;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.1em;
+  }
+  /* messages quote what the user typed, and a pasted 200-character token has no
+     space to break at: measured 1413px wide inside a 300px panel at 360px, which
+     dragged the whole document to 1443px. The echo is clipped in JS too; this is
+     the belt to that pair of braces. */
+  .msg{font-size:12px;margin:10px 0 0;min-height:0;overflow-wrap:anywhere}
+  .msg.err{color:#ff3b30}
+  .msg.warn{color:#ffb03b}
+  .msg.hint{color:#888}
+  .eq{color:#888;font-size:12px;margin:12px 0 0;word-break:break-word}
+  .eq b{color:#eee;font-weight:700}
+
+  /* ---------- common conversions ---------- */
+  .presets{list-style:none;margin:0;padding:0}
+  .presets li{margin:0 0 8px}
+  .presets li:last-child{margin-bottom:0}
+  .preset{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    width:100%;min-height:44px;padding:10px 12px;background:transparent;color:#eee;
+    border:2px solid #333;cursor:pointer;text-align:left;font-size:13px;
+  }
+  .preset:hover{border-color:#ff3b30}
+  .preset .p-out{color:#ff3b30;font-weight:700;text-align:right;white-space:nowrap}
+  .preset .p-in{color:#888;white-space:nowrap}
+
+  /* ---------- picker dialog ---------- */
+  .backdrop{position:fixed;inset:0;background:rgba(16,16,14,.88);display:none;z-index:50;padding:20px 12px}
+  .backdrop.open{display:block}
+  body.modal-open{overflow:hidden}
+  .dlg{
+    max-width:640px;margin:0 auto;background:#10100e;border:2px solid #eee;
+    display:flex;flex-direction:column;max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px);
+  }
+  .dlg-head{padding:14px 14px 10px;border-bottom:2px solid #eee;flex:0 0 auto}
+  .dlg-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;margin:0 0 10px}
+  .dlg-list{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;padding:8px}
+  .dlg-foot{padding:10px 14px 14px;flex:0 0 auto;border-top:2px solid #333}
+  .uitem{
+    display:flex;align-items:baseline;gap:10px;width:100%;min-height:44px;padding:10px 12px;
+    background:transparent;color:#eee;border:2px solid transparent;cursor:pointer;text-align:left;
+  }
+  .uitem .s{color:#ff3b30;font-weight:700;min-width:64px;flex:0 0 auto}
+  .uitem .n{color:#888;font-size:13px;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+  /* aria-current marks the unit currently in use; .hi is the keyboard cursor.
+     Same specificity, so .hi must stay LAST to win. */
+  .uitem[aria-current="true"]{border-color:#444}
+  .uitem.hi{border-color:#ff3b30;background:#17171a}
+  .empty{color:#888;font-size:13px;padding:16px 12px;text-align:center}
+
+  /* ---------- results grid ---------- */
+  .rows{border-top:2px solid #333}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-bottom:2px solid #333}
+  .row .k{color:#888;font-size:11px;letter-spacing:.1em;text-transform:uppercase;flex:0 1 auto}
+  /* 0 1 auto + min-width:0, NOT 0 0 auto: a flex item that cannot shrink is sized
+     at max-content, so word-break never gets a chance and a long money value
+     pushes the row past 360px. */
+  .row .v{font-weight:700;text-align:right;word-break:break-word;flex:0 1 auto;min-width:0}
+  .row.big .v{color:#ff3b30;font-size:22px}
+  .stack{display:grid;gap:14px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stepper{display:flex;gap:8px;align-items:stretch}
+  .stepper input{text-align:center}
+  /* form controls default to min-width:auto, which for an <input> is its intrinsic
+     ~20-character width, enough to overflow these nowrap rows on a 360px screen. */
+  .inline input,.inline select,.stepper input{min-width:0}
+  .stepper button{
+    flex:0 0 52px;min-height:44px;background:transparent;color:#ff3b30;border:2px solid #ff3b30;
+    font-size:20px;font-weight:700;cursor:pointer;line-height:1;
+  }
+  .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .note{color:#888;font-size:11px;margin:8px 0 0}
+  .chk{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+  .chk input{width:22px;height:22px;min-height:0;accent-color:#ff3b30;flex:0 0 auto}
+
+  /* ---------- toast ---------- */
+  .toast{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:80;
+    background:#ff3b30;color:#10100e;border:2px solid #ff3b30;padding:10px 14px;
+    font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+    max-width:calc(100% - 32px);text-align:center;display:none;
+  }
+  .toast.show{display:block}
+
+  @media (max-width:380px){
+    body{padding:16px 12px 56px}
+    .tabs button{font-size:11px;letter-spacing:.05em}
+    .two{grid-template-columns:1fr}
+    .row{flex-wrap:wrap}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Unit Converter</h1>
+  <p class="sub">Convert, tip, and date maths. Works offline.</p>
+
+  <div class="tabs" role="tablist" aria-label="Tools">
+    <button role="tab" id="tab-convert" aria-controls="p-convert" aria-selected="true">Convert</button>
+    <button role="tab" id="tab-tip" aria-controls="p-tip" aria-selected="false" tabindex="-1">Tip</button>
+    <button role="tab" id="tab-date" aria-controls="p-date" aria-selected="false" tabindex="-1">Dates</button>
+  </div>
+
+  <!-- ============ CONVERT ============ -->
+  <section id="p-convert" role="tabpanel" aria-labelledby="tab-convert" tabindex="0">
+    <div class="panel">
+      <h2 id="cat-label">Category</h2>
+      <div class="chips" id="cats" role="group" aria-labelledby="cat-label"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Convert</h2>
+      <div class="field">
+        <label class="lbl" for="valA">From</label>
+        <input id="valA" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="0" aria-describedby="convMsg">
+        <button type="button" class="unitbtn" id="unitA" aria-haspopup="dialog">
+          <span class="u-sym" id="symA">m</span><span class="u-name" id="nameA">meter</span><span class="u-more">Change</span>
+        </button>
+      </div>
+
+      <div class="swaprow">
+        <button type="button" class="swap" id="swap" aria-label="Swap the two units">&#8645; Swap</button>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="valB">To</label>
+        <input id="valB" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off"
+               spellcheck="false" placeholder="0" aria-describedby="convMsg">
+        <button type="button" class="unitbtn" id="unitB" aria-haspopup="dialog">
+          <span class="u-sym" id="symB">ft</span><span class="u-name" id="nameB">foot</span><span class="u-more">Change</span>
+        </button>
+      </div>
+
+      <p class="msg hint" id="convMsg" role="status">Type in either box; both stay in sync.</p>
+      <p class="eq" id="convEq"></p>
+      <div class="inline" style="margin-top:12px">
+        <button type="button" class="btn2 btn-sm" id="copyRes">Copy result</button>
+        <button type="button" class="btn2 btn-sm" id="clearRes">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 id="presets-label">Common conversions</h2>
+      <ul class="presets" id="presets" aria-labelledby="presets-label"></ul>
+      <p class="note">Tap one to load it above.</p>
+    </div>
+  </section>
+
+  <!-- ============ TIP ============ -->
+  <section id="p-tip" role="tabpanel" aria-labelledby="tab-tip" tabindex="0" hidden>
+    <div class="panel">
+      <h2>Bill</h2>
+      <div class="stack">
+        <div>
+          <label class="lbl" for="bill">Bill amount</label>
+          <div class="inline" style="flex-wrap:nowrap">
+            <select id="cur" aria-label="Currency symbol" style="width:78px;flex:0 0 78px">
+              <option value="$">$</option><option value="&#8364;">&#8364;</option>
+              <option value="&#163;">&#163;</option><option value="&#165;">&#165;</option>
+              <option value="&#8377;">&#8377;</option><option value="">none</option>
+            </select>
+            <input id="bill" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+                   placeholder="0.00" aria-describedby="tipMsg">
+          </div>
+        </div>
+
+        <div>
+          <label class="lbl" for="pct">Tip percent</label>
+          <div class="chips" id="pctChips" role="group" aria-label="Quick tip percentages" style="margin-bottom:10px"></div>
+          <div class="inline" style="flex-wrap:nowrap">
+            <input id="pct" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+                   value="18" style="width:88px;flex:0 0 88px;text-align:center">
+            <span aria-hidden="true" style="color:#888">%</span>
+            <input id="pctRange" type="range" min="0" max="40" step="1" value="18" aria-label="Tip percent slider">
+          </div>
+        </div>
+
+        <div>
+          <label class="lbl" for="split">Split between</label>
+          <div class="stepper">
+            <button type="button" id="splitDn" aria-label="One fewer person">&#8722;</button>
+            <input id="split" type="text" inputmode="numeric" autocomplete="off" value="1" aria-describedby="tipMsg">
+            <button type="button" id="splitUp" aria-label="One more person">+</button>
+          </div>
+          <p class="note">People sharing the bill.</p>
+        </div>
+
+        <div>
+          <label class="lbl" for="roundMode">Round up</label>
+          <select id="roundMode">
+            <option value="0">Off: exact tip</option>
+            <option value="1">Total up to a whole 1</option>
+            <option value="5">Total up to a whole 5</option>
+            <option value="10">Total up to a whole 10</option>
+          </select>
+        </div>
+      </div>
+      <p class="msg hint" id="tipMsg" role="status">Enter a bill amount to see the split.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Result</h2>
+      <div class="rows" id="tipRows" aria-live="polite">
+        <div class="row"><span class="k">Tip</span><span class="v" id="oTip">-</span></div>
+        <div class="row"><span class="k">Total</span><span class="v" id="oTotal">-</span></div>
+        <div class="row big"><span class="k">Each pays</span><span class="v" id="oEach">-</span></div>
+        <div class="row"><span class="k">Tip each</span><span class="v" id="oTipEach">-</span></div>
+        <div class="row"><span class="k">Effective tip</span><span class="v" id="oEff">-</span></div>
+      </div>
+      <p class="note" id="tipNote"></p>
+    </div>
+  </section>
+
+  <!-- ============ DATES ============ -->
+  <section id="p-date" role="tabpanel" aria-labelledby="tab-date" tabindex="0" hidden>
+    <div class="panel">
+      <h2 id="dmode-label">Mode</h2>
+      <div class="chips" id="dmode" role="group" aria-labelledby="dmode-label">
+        <button type="button" class="chip" data-m="diff" aria-pressed="true">Difference</button>
+        <button type="button" class="chip" data-m="add" aria-pressed="false">Add / subtract</button>
+      </div>
+    </div>
+
+    <div id="diffBox">
+      <div class="panel">
+        <h2>Two dates</h2>
+        <div class="stack">
+          <div>
+            <label class="lbl" for="d1">Start date</label>
+            <input id="d1" type="date" min="1000-01-01" max="9999-12-31" placeholder="YYYY-MM-DD" aria-describedby="dateMsg">
+            <button type="button" class="btn2 btn-sm" data-today="d1" style="margin-top:8px">Today</button>
+          </div>
+          <div>
+            <label class="lbl" for="d2">End date</label>
+            <input id="d2" type="date" min="1000-01-01" max="9999-12-31" placeholder="YYYY-MM-DD" aria-describedby="dateMsg">
+            <button type="button" class="btn2 btn-sm" data-today="d2" style="margin-top:8px">Today</button>
+          </div>
+        </div>
+        <p class="msg hint" id="dateMsg" role="status">Pick two dates.</p>
+      </div>
+      <div class="panel">
+        <h2>Difference</h2>
+        <div class="rows" aria-live="polite">
+          <div class="row big"><span class="k">Calendar</span><span class="v" id="oYmd">-</span></div>
+          <div class="row"><span class="k">Total days</span><span class="v" id="oDays">-</span></div>
+          <div class="row"><span class="k">Weeks + days</span><span class="v" id="oWeeks">-</span></div>
+          <div class="row"><span class="k">Months + days</span><span class="v" id="oMonths">-</span></div>
+          <div class="row"><span class="k">Weekdays</span><span class="v" id="oBiz">-</span></div>
+          <div class="row"><span class="k">Hours</span><span class="v" id="oHours">-</span></div>
+          <div class="row"><span class="k">Counting both ends</span><span class="v" id="oIncl">-</span></div>
+        </div>
+        <p class="note" id="diffNote"></p>
+      </div>
+    </div>
+
+    <div id="addBox" hidden>
+      <div class="panel">
+        <h2>Date maths</h2>
+        <div class="stack">
+          <div>
+            <label class="lbl" for="d3">Starting date</label>
+            <input id="d3" type="date" min="1000-01-01" max="9999-12-31" placeholder="YYYY-MM-DD" aria-describedby="addMsg">
+            <button type="button" class="btn2 btn-sm" data-today="d3" style="margin-top:8px">Today</button>
+          </div>
+          <div>
+            <span class="lbl" id="sign-label">Direction</span>
+            <div class="chips" id="sign" role="group" aria-labelledby="sign-label">
+              <button type="button" class="chip" data-s="1" aria-pressed="true">Add (+)</button>
+              <button type="button" class="chip" data-s="-1" aria-pressed="false">Subtract (&#8722;)</button>
+            </div>
+          </div>
+          <div class="two">
+            <div><label class="lbl" for="ay">Years</label><input id="ay" type="text" inputmode="numeric" value="0" autocomplete="off"></div>
+            <div><label class="lbl" for="am">Months</label><input id="am" type="text" inputmode="numeric" value="0" autocomplete="off"></div>
+            <div><label class="lbl" for="aw">Weeks</label><input id="aw" type="text" inputmode="numeric" value="0" autocomplete="off"></div>
+            <div><label class="lbl" for="ad">Days</label><input id="ad" type="text" inputmode="numeric" value="0" autocomplete="off"></div>
+          </div>
+        </div>
+        <p class="msg hint" id="addMsg" role="status">Enter a starting date.</p>
+      </div>
+      <div class="panel">
+        <h2>Result</h2>
+        <div class="rows" aria-live="polite">
+          <div class="row big"><span class="k">Date</span><span class="v" id="oNew">-</span></div>
+          <div class="row"><span class="k">ISO</span><span class="v" id="oIso">-</span></div>
+          <div class="row"><span class="k">From today</span><span class="v" id="oFromToday">-</span></div>
+        </div>
+        <p class="note">Years then months are applied first (a short month clamps to its last day), then weeks and days.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="note" style="text-align:center;color:#666">Nothing leaves this page. Everything runs offline.</p>
+</div>
+
+<!-- unit picker -->
+<div class="backdrop" id="backdrop">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" id="dlg">
+    <div class="dlg-head">
+      <p class="dlg-title" id="dlgTitle">Choose a unit</p>
+      <label class="sr" for="search">Search units</label>
+      <input id="search" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="Search e.g. mile, kg, cup" role="combobox" aria-expanded="true"
+             aria-autocomplete="list" aria-controls="ulist">
+    </div>
+    <div class="dlg-list" id="ulist" role="listbox" aria-labelledby="dlgTitle" tabindex="-1"></div>
+    <div class="dlg-foot"><button type="button" class="btn2" id="dlgClose">Close</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr" id="live" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================================================
+   storage: every touch guarded; the frame may hand us an
+   opaque origin where even reading localStorage throws.
+   ============================================================ */
+var KEY='batchly_unit_converter_v1';
+var S={tab:'convert',cat:'length',pairs:{},tip:{pct:'18',split:'1',round:'0',cur:'$'},dmode:'diff'};
+(function load(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw) return;
+    var o=JSON.parse(raw);
+    if(o&&typeof o==='object'){
+      if(o.tab) S.tab=o.tab;
+      if(o.cat) S.cat=o.cat;
+      if(o.pairs&&typeof o.pairs==='object') S.pairs=o.pairs;
+      if(o.tip&&typeof o.tip==='object') S.tip=Object.assign(S.tip,o.tip);
+      if(o.dmode) S.dmode=o.dmode;
+    }
+  }catch(e){/* no storage: defaults are fine, app still works */}
+})();
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+
+var $=function(id){return document.getElementById(id);};
+
+/* ============================================================
+   unit data
+   f = multiplier to the category's base unit.
+   Temperature is NOT a ratio: it carries toBase/fromBase
+   because each scale has its own zero point.
+   ============================================================ */
+var RAD=180/Math.PI;
+var CATS=[
+{id:'length',name:'Length',base:'m',units:[
+  {id:'nm',s:'nm',n:'nanometer',a:'nanometre',f:1e-9},
+  {id:'um',s:'µm',n:'micrometer',a:'micrometre micron um',f:1e-6},
+  {id:'mm',s:'mm',n:'millimeter',a:'millimetre',f:1e-3},
+  {id:'cm',s:'cm',n:'centimeter',a:'centimetre',f:1e-2},
+  {id:'m',s:'m',n:'meter',a:'metre',f:1},
+  {id:'km',s:'km',n:'kilometer',a:'kilometre klick',f:1000},
+  {id:'thou',s:'thou',n:'mil / thou',a:'mil',f:2.54e-5},
+  {id:'in',s:'in',n:'inch',a:'inches "',f:0.0254},
+  {id:'ft',s:'ft',n:'foot',a:"feet '",f:0.3048},
+  {id:'yd',s:'yd',n:'yard',a:'yards',f:0.9144},
+  {id:'ftm',s:'ftm',n:'fathom',a:'',f:1.8288},
+  {id:'fur',s:'fur',n:'furlong',a:'',f:201.168},
+  {id:'mi',s:'mi',n:'mile',a:'miles',f:1609.344},
+  {id:'nmi',s:'nmi',n:'nautical mile',a:'',f:1852},
+  {id:'au',s:'AU',n:'astronomical unit',a:'',f:149597870700},
+  {id:'ly',s:'ly',n:'light-year',a:'lightyear',f:9460730472580800},
+  {id:'pc',s:'pc',n:'parsec',a:'',f:3.0856775814913673e16}
+],presets:[['mi','km'],['km','mi'],['in','cm'],['ft','m'],['cm','in'],['yd','m']]},
+
+{id:'mass',name:'Mass',base:'kg',units:[
+  {id:'ug',s:'µg',n:'microgram',a:'ug',f:1e-9},
+  {id:'mg',s:'mg',n:'milligram',a:'',f:1e-6},
+  {id:'g',s:'g',n:'gram',a:'gramme',f:1e-3},
+  {id:'kg',s:'kg',n:'kilogram',a:'kilo',f:1},
+  {id:'t',s:'t',n:'tonne (metric ton)',a:'metric ton',f:1000},
+  {id:'gr',s:'gr',n:'grain',a:'',f:6.479891e-5},
+  {id:'ct',s:'ct',n:'carat',a:'',f:0.0002},
+  {id:'oz',s:'oz',n:'ounce',a:'ounces',f:0.028349523125},
+  {id:'lb',s:'lb',n:'pound',a:'pounds lbs',f:0.45359237},
+  {id:'st',s:'st',n:'stone',a:'',f:6.35029318},
+  {id:'ton_us',s:'ton',n:'short ton (US)',a:'us ton',f:907.18474},
+  {id:'ton_uk',s:'lt',n:'long ton (UK)',a:'imperial ton',f:1016.0469088}
+],presets:[['lb','kg'],['kg','lb'],['oz','g'],['st','kg'],['g','oz'],['t','ton_us']]},
+
+/* Affine scales. Base is kelvin. */
+{id:'temperature',name:'Temp',base:'K',affine:true,units:[
+  {id:'C',s:'°C',n:'Celsius',a:'centigrade',toBase:function(v){return v+273.15;},fromBase:function(k){return k-273.15;}},
+  {id:'F',s:'°F',n:'Fahrenheit',a:'',toBase:function(v){return (v-32)*5/9+273.15;},fromBase:function(k){return (k-273.15)*9/5+32;}},
+  {id:'K',s:'K',n:'kelvin',a:'',toBase:function(v){return v;},fromBase:function(k){return k;}},
+  {id:'R',s:'°R',n:'Rankine',a:'',toBase:function(v){return v*5/9;},fromBase:function(k){return k*9/5;}},
+  {id:'Re',s:'°Ré',n:'Réaumur',a:'reaumur',toBase:function(v){return v*1.25+273.15;},fromBase:function(k){return (k-273.15)/1.25;}}
+],presets:[['C','F',0],['C','F',100],['C','F',37],['F','C',98.6],['C','F',-40],['C','K',25]]},
+
+{id:'volume',name:'Volume',base:'L',units:[
+  {id:'ml',s:'mL',n:'milliliter',a:'millilitre',f:0.001},
+  {id:'cm3',s:'cm³',n:'cubic centimeter',a:'cc',f:0.001},
+  {id:'cl',s:'cL',n:'centiliter',a:'centilitre',f:0.01},
+  {id:'l',s:'L',n:'liter',a:'litre',f:1},
+  {id:'m3',s:'m³',n:'cubic meter',a:'cubic metre',f:1000},
+  {id:'tsp',s:'tsp',n:'teaspoon (US)',a:'',f:0.00492892159375},
+  {id:'tbsp',s:'tbsp',n:'tablespoon (US)',a:'',f:0.01478676478125},
+  {id:'floz',s:'fl oz',n:'fluid ounce (US)',a:'',f:0.0295735295625},
+  {id:'cup',s:'cup',n:'cup (US)',a:'',f:0.2365882365},
+  {id:'pt',s:'pt',n:'pint (US)',a:'',f:0.473176473},
+  {id:'qt',s:'qt',n:'quart (US)',a:'',f:0.946352946},
+  {id:'gal',s:'gal',n:'gallon (US)',a:'',f:3.785411784},
+  {id:'floz_uk',s:'fl oz UK',n:'fluid ounce (imperial)',a:'',f:0.0284130625},
+  {id:'pt_uk',s:'pt UK',n:'pint (imperial)',a:'',f:0.56826125},
+  {id:'qt_uk',s:'qt UK',n:'quart (imperial)',a:'',f:1.1365225},
+  {id:'gal_uk',s:'gal UK',n:'gallon (imperial)',a:'',f:4.54609},
+  {id:'in3',s:'in³',n:'cubic inch',a:'',f:0.016387064},
+  {id:'ft3',s:'ft³',n:'cubic foot',a:'',f:28.316846592},
+  {id:'yd3',s:'yd³',n:'cubic yard',a:'',f:764.554857984},
+  {id:'bbl',s:'bbl',n:'barrel (oil)',a:'',f:158.987294928}
+],presets:[['gal','l'],['l','gal'],['floz','ml'],['cup','ml'],['gal_uk','l'],['tsp','ml']]},
+
+{id:'area',name:'Area',base:'m²',units:[
+  {id:'mm2',s:'mm²',n:'square millimeter',a:'',f:1e-6},
+  {id:'cm2',s:'cm²',n:'square centimeter',a:'',f:1e-4},
+  {id:'m2',s:'m²',n:'square meter',a:'square metre',f:1},
+  {id:'ha',s:'ha',n:'hectare',a:'',f:10000},
+  {id:'km2',s:'km²',n:'square kilometer',a:'',f:1e6},
+  {id:'in2',s:'in²',n:'square inch',a:'',f:0.00064516},
+  {id:'ft2',s:'ft²',n:'square foot',a:'sqft',f:0.09290304},
+  {id:'yd2',s:'yd²',n:'square yard',a:'',f:0.83612736},
+  {id:'ac',s:'ac',n:'acre',a:'',f:4046.8564224},
+  {id:'mi2',s:'mi²',n:'square mile',a:'',f:2589988.110336}
+],presets:[['ac','m2'],['ha','ac'],['ft2','m2'],['m2','ft2'],['mi2','km2'],['in2','cm2']]},
+
+{id:'speed',name:'Speed',base:'m/s',units:[
+  {id:'mps',s:'m/s',n:'meters per second',a:'',f:1},
+  {id:'kph',s:'km/h',n:'kilometers per hour',a:'kmh kph',f:1/3.6},
+  {id:'mph',s:'mph',n:'miles per hour',a:'',f:0.44704},
+  {id:'fps',s:'ft/s',n:'feet per second',a:'',f:0.3048},
+  {id:'kn',s:'kn',n:'knot',a:'knots',f:1852/3600},
+  {id:'mach',s:'Mach',n:'Mach (sea level, 15°C)',a:'',f:340.294},
+  {id:'c',s:'c',n:'speed of light',a:'',f:299792458}
+],presets:[['mph','kph'],['kph','mph'],['kn','mph'],['mps','kph'],['fps','mps'],['mach','mph']]},
+
+{id:'time',name:'Time',base:'s',units:[
+  {id:'ns',s:'ns',n:'nanosecond',a:'',f:1e-9},
+  {id:'us',s:'µs',n:'microsecond',a:'us',f:1e-6},
+  {id:'ms',s:'ms',n:'millisecond',a:'',f:1e-3},
+  {id:'s',s:'s',n:'second',a:'seconds sec',f:1},
+  {id:'min',s:'min',n:'minute',a:'minutes',f:60},
+  {id:'h',s:'h',n:'hour',a:'hours hr',f:3600},
+  {id:'d',s:'d',n:'day',a:'days',f:86400},
+  {id:'wk',s:'wk',n:'week',a:'weeks',f:604800},
+  /* average Gregorian month/year, so a year is 365.2425 days */
+  {id:'mo',s:'mo',n:'month (average)',a:'months',f:2629746},
+  {id:'yr',s:'yr',n:'year (average)',a:'years',f:31556952},
+  {id:'dec',s:'dec',n:'decade',a:'',f:315569520},
+  {id:'cen',s:'cen',n:'century',a:'',f:3155695200}
+],presets:[['d','h'],['h','min'],['wk','d'],['yr','d'],['min','s'],['mo','d']]},
+
+{id:'data',name:'Data',base:'B',units:[
+  {id:'bit',s:'bit',n:'bit',a:'bits',f:0.125},
+  {id:'B',s:'B',n:'byte',a:'bytes',f:1},
+  {id:'kbit',s:'kbit',n:'kilobit (1000 bits)',a:'kb',f:125},
+  {id:'kB',s:'kB',n:'kilobyte (1000 B)',a:'',f:1000},
+  {id:'KiB',s:'KiB',n:'kibibyte (1024 B)',a:'',f:1024},
+  {id:'Mbit',s:'Mbit',n:'megabit',a:'mb',f:125000},
+  {id:'MB',s:'MB',n:'megabyte (1000² B)',a:'',f:1e6},
+  {id:'MiB',s:'MiB',n:'mebibyte (1024² B)',a:'',f:1048576},
+  {id:'Gbit',s:'Gbit',n:'gigabit',a:'gb',f:1.25e8},
+  {id:'GB',s:'GB',n:'gigabyte (1000³ B)',a:'',f:1e9},
+  {id:'GiB',s:'GiB',n:'gibibyte (1024³ B)',a:'',f:1073741824},
+  {id:'Tbit',s:'Tbit',n:'terabit',a:'',f:1.25e11},
+  {id:'TB',s:'TB',n:'terabyte',a:'',f:1e12},
+  {id:'TiB',s:'TiB',n:'tebibyte',a:'',f:1099511627776},
+  {id:'PB',s:'PB',n:'petabyte',a:'',f:1e15},
+  {id:'PiB',s:'PiB',n:'pebibyte',a:'',f:1125899906842624}
+],presets:[['GB','MB'],['GB','GiB'],['TB','GB'],['Mbit','MB'],['MB','MiB'],['GiB','MB']]},
+
+{id:'pressure',name:'Pressure',base:'Pa',units:[
+  {id:'Pa',s:'Pa',n:'pascal',a:'',f:1},
+  {id:'hPa',s:'hPa',n:'hectopascal',a:'',f:100},
+  {id:'kPa',s:'kPa',n:'kilopascal',a:'',f:1000},
+  {id:'MPa',s:'MPa',n:'megapascal',a:'',f:1e6},
+  {id:'mbar',s:'mbar',n:'millibar',a:'',f:100},
+  {id:'bar',s:'bar',n:'bar',a:'',f:1e5},
+  {id:'atm',s:'atm',n:'standard atmosphere',a:'',f:101325},
+  /* torr is defined as atm/760 exactly; mmHg is 133.322387415 Pa. They differ ~1e-7. */
+  {id:'Torr',s:'Torr',n:'torr',a:'',f:101325/760},
+  {id:'mmHg',s:'mmHg',n:'millimeter of mercury',a:'',f:133.322387415},
+  {id:'inHg',s:'inHg',n:'inch of mercury',a:'',f:3386.388640341},
+  {id:'psi',s:'psi',n:'pound per square inch',a:'',f:6894.757293168361},
+  {id:'kgfcm2',s:'kgf/cm²',n:'kilogram-force per cm²',a:'at',f:98066.5}
+],presets:[['atm','kPa'],['psi','kPa'],['bar','psi'],['mmHg','kPa'],['atm','psi'],['kPa','psi']]},
+
+{id:'energy',name:'Energy',base:'J',units:[
+  {id:'J',s:'J',n:'joule',a:'',f:1},
+  {id:'kJ',s:'kJ',n:'kilojoule',a:'',f:1000},
+  {id:'MJ',s:'MJ',n:'megajoule',a:'',f:1e6},
+  {id:'cal',s:'cal',n:'calorie (thermochemical)',a:'',f:4.184},
+  {id:'kcal',s:'kcal',n:'kilocalorie (food Calorie)',a:'Calorie',f:4184},
+  {id:'Wh',s:'Wh',n:'watt-hour',a:'',f:3600},
+  {id:'kWh',s:'kWh',n:'kilowatt-hour',a:'',f:3.6e6},
+  {id:'MWh',s:'MWh',n:'megawatt-hour',a:'',f:3.6e9},
+  {id:'eV',s:'eV',n:'electronvolt',a:'',f:1.602176634e-19},
+  {id:'BTU',s:'BTU',n:'British thermal unit (IT)',a:'',f:1055.05585262},
+  {id:'ftlb',s:'ft·lb',n:'foot-pound',a:'footpound',f:1.3558179483314004},
+  {id:'therm',s:'therm',n:'therm (US)',a:'',f:105480400},
+  {id:'erg',s:'erg',n:'erg',a:'',f:1e-7},
+  {id:'tTNT',s:'t TNT',n:'ton of TNT',a:'',f:4.184e9}
+],presets:[['kcal','kJ'],['kWh','MJ'],['BTU','kJ'],['J','cal'],['kWh','kcal'],['ftlb','J']]},
+
+{id:'angle',name:'Angle',base:'°',units:[
+  {id:'deg',s:'°',n:'degree',a:'degrees deg',f:1},
+  {id:'rad',s:'rad',n:'radian',a:'radians',f:RAD},
+  {id:'mrad',s:'mrad',n:'milliradian',a:'',f:RAD/1000},
+  {id:'grad',s:'gon',n:'gradian',a:'grad gon',f:0.9},
+  {id:'arcmin',s:'′',n:'arcminute',a:'arcmin moa',f:1/60},
+  {id:'arcsec',s:'″',n:'arcsecond',a:'arcsec',f:1/3600},
+  {id:'turn',s:'turn',n:'turn / revolution',a:'revolution rev',f:360}
+],presets:[['rad','deg'],['deg','rad'],['turn','deg'],['grad','deg'],['deg','arcmin'],['arcsec','deg']]}
+];
+
+var DEFAULT_PAIR={length:['m','ft'],mass:['kg','lb'],temperature:['C','F'],volume:['l','gal'],
+  area:['m2','ft2'],speed:['kph','mph'],time:['h','min'],data:['GB','MB'],pressure:['atm','kPa'],
+  energy:['kcal','kJ'],angle:['deg','rad']};
+
+function cat(id){ for(var i=0;i<CATS.length;i++) if(CATS[i].id===id) return CATS[i]; return CATS[0]; }
+function unit(c,id){ for(var i=0;i<c.units.length;i++) if(c.units[i].id===id) return c.units[i]; return c.units[0]; }
+function toBase(u,v){ return u.toBase? u.toBase(v) : v*u.f; }
+function fromBase(u,v){ return u.fromBase? u.fromBase(v) : v/u.f; }
+
+/* ============================================================
+   number parsing + formatting
+   ============================================================ */
+/* Comma is a thousands separator in some places and a decimal point in
+   others. Heuristic: a single comma followed by exactly 3 digits at the
+   end of the number is grouping (1,500); anything else is a decimal
+   comma (1,5 / 12,50). Genuinely ambiguous input resolves to grouping,
+   which is what a US-facing keypad user means. */
+function parseNum(str){
+  var s=String(str).replace(/−/g,'-').replace(/[\s'_  ]/g,'');
+  if(s.indexOf(',')>-1 && s.indexOf('.')===-1){
+    var parts=s.split(',');
+    var decimalComma = parts.length===2 && !/^\d{3}$/.test(parts[1]);
+    s = decimalComma ? parts.join('.') : parts.join('');
+  }else{
+    s=s.replace(/,/g,'');
+  }
+  if(!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(s)) return null;
+  var n=parseFloat(s);
+  return isFinite(n)? n : null;
+}
+
+/* Quoting the user's input back at them is good feedback right up until the
+   input is a 200-character paste: the line then has no break opportunity and
+   pushes the page sideways. Clip the echo; the message stays readable. */
+function clip(s,n){ s=String(s); n=n||32; return s.length>n? s.slice(0,n)+'…' : s; }
+
+function sigDigits(s){ return s.replace(/^-/,'').replace('.','').replace(/^0+/,'').length; }
+/* Two-stage on purpose. JS's default toString is the SHORTEST string that
+   round-trips, so an exact conversion prints exactly (1.609344) and a
+   14-digit value keeps all 14 (9460730472580.8), and a flat toPrecision(12)
+   would silently chop that .8 off. Float noise, on the other hand, always
+   needs 16-17 digits to round-trip (0.1+0.2 -> 0.30000000000000004), so a
+   too-long string is the tell: fall back to toPrecision and trim the tail. */
+function tidyExp(s){ return s.replace(/\.?0+e/,'e'); }
+function fmt(v,sig){
+  if(typeof v!=='number'||!isFinite(v)) return '-';
+  if(v===0) return '0';
+  var a=Math.abs(v);
+  /* 2^53 is the last integer a double counts exactly; past ~1e16 fixed
+     notation would just be inventing digits, so switch to exponential */
+  var expo = a>=1e16 || a<1e-6;
+  if(!sig){
+    var s0=String(v);
+    /* 15 digits is the line: a 16-digit fraction is float noise
+       (3 ft -> 0.9144000000000001 m), but a whole number below 2^53 is
+       counted exactly, so print every digit of it (1 PiB in bytes). */
+    /* v%1===0 already proves the double IS that integer exactly, so print every
+       digit of it; the old 2^53 ceiling here silently truncated 1 light-year in
+       metres (9460730472580800) to ...580000. Above 1e16 we go exponential anyway. */
+    if(sigDigits(s0.split('e')[0])<=15 || (v%1===0 && a<1e16)){
+      return expo? tidyExp(s0) : s0;
+    }
+  }
+  if(expo) return tidyExp(v.toExponential(Math.min(sig||12,12)-1));
+  var s=v.toPrecision(sig||12);
+  if(s.indexOf('e')>-1) s=Number(s).toString(); /* toPrecision goes exponential past its digit count */
+  if(s.indexOf('.')>-1) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
+function group(s){
+  if(typeof s!=='string'||s.indexOf('e')>-1) return s;
+  var neg=s.charAt(0)==='-';
+  if(neg) s=s.slice(1);
+  var p=s.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return (neg?'-':'')+p.join('.');
+}
+function fmtG(v,sig){ return group(fmt(v,sig)); }
+
+/* ============================================================
+   toast + live region
+   ============================================================ */
+var toastEl=$('toast'),toastT=null;
+function toast(msg){
+  toastEl.textContent=msg; toastEl.classList.add('show');
+  if(toastT) clearTimeout(toastT);
+  toastT=setTimeout(function(){ toastEl.classList.remove('show'); },2200);
+}
+var liveEl=$('live'),liveT=null;
+function announce(msg){
+  if(liveT) clearTimeout(liveT);
+  liveT=setTimeout(function(){ liveEl.textContent=msg; },450);
+}
+
+function copyText(text){
+  if(!text){ toast('Nothing to copy'); return; }
+  var done=function(ok){ toast(ok?'Copied':'Copy blocked; select the text and copy manually'); };
+  /* handled flips only once we hold a real promise. Setting it before the call
+     meant a synchronously-throwing clipboard API (sandboxed frames do this)
+     swallowed the error AND skipped the fallback: a copy that reported nothing. */
+  var handled=false;
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText&&window.isSecureContext){
+      var pr=navigator.clipboard.writeText(text);
+      if(pr&&typeof pr.then==='function'){
+        handled=true;
+        pr.then(function(){done(true);},function(){ done(fallbackCopy(text)); });
+      }
+    }
+  }catch(e){ handled=false; }
+  if(!handled) done(fallbackCopy(text));
+}
+function fallbackCopy(text){
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=text; ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0,ta.value.length);
+    var ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  }catch(e){ return false; }
+}
+
+/* ============================================================
+   tabs
+   ============================================================ */
+var TABS=[['tab-convert','p-convert','convert'],['tab-tip','p-tip','tip'],['tab-date','p-date','date']];
+function setTab(name,focus){
+  TABS.forEach(function(t){
+    var on=t[2]===name;
+    var b=$(t[0]),p=$(t[1]);
+    b.setAttribute('aria-selected',on?'true':'false');
+    b.tabIndex=on?0:-1;
+    p.hidden=!on;
+    if(on&&focus) b.focus();
+  });
+  S.tab=name; save();
+}
+TABS.forEach(function(t,i){
+  var b=$(t[0]);
+  b.addEventListener('click',function(){ setTab(t[2],false); });
+  b.addEventListener('keydown',function(e){
+    var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:e.key==='Home'?-99:e.key==='End'?99:0;
+    if(!d) return;
+    e.preventDefault();
+    var j = d===-99?0 : d===99?TABS.length-1 : (i+d+TABS.length)%TABS.length;
+    setTab(TABS[j][2],true);
+  });
+});
+
+/* ============================================================
+   converter
+   ============================================================ */
+var elA=$('valA'),elB=$('valB'),msgEl=$('convMsg'),eqEl=$('convEq');
+var curCat=cat(S.cat), uA, uB, active='a';
+
+function pairFor(c){
+  var has=function(id){ for(var i=0;i<c.units.length;i++) if(c.units[i].id===id) return true; return false; };
+  var p=S.pairs[c.id];
+  /* a stored id that no longer exists must fall back to the sensible
+     default pair, not silently to whatever unit happens to be first */
+  if(!p||!has(p[0])||!has(p[1])) p=DEFAULT_PAIR[c.id];
+  var a=unit(c,p&&p[0]), b=unit(c,p&&p[1]);
+  if(a.id===b.id) b=c.units[(c.units.indexOf(a)+1)%c.units.length];
+  return [a,b];
+}
+function setMsg(text,kind){
+  msgEl.textContent=text;
+  msgEl.className='msg '+(kind||'hint');
+}
+function renderUnitBtns(){
+  $('symA').textContent=uA.s; $('nameA').textContent=uA.n;
+  $('symB').textContent=uB.s; $('nameB').textContent=uB.n;
+  $('unitA').setAttribute('aria-label','From unit: '+uA.n+' ('+uA.s+'). Change unit.');
+  $('unitB').setAttribute('aria-label','To unit: '+uB.n+' ('+uB.s+'). Change unit.');
+}
+/* Built once, then only the aria-pressed flags are updated. Rebuilding the strip
+   inside selectCat destroyed the very chip that was just clicked, which dumps a
+   keyboard user's focus back to the top of the document. */
+function buildCats(){
+  var host=$('cats'); host.innerHTML='';
+  CATS.forEach(function(c){
+    var b=document.createElement('button');
+    b.type='button'; b.className='chip'; b.textContent=c.name;
+    b.setAttribute('data-cat',c.id);
+    b.addEventListener('click',function(){ selectCat(c.id); });
+    host.appendChild(b);
+  });
+  syncCats();
+}
+function syncCats(){
+  Array.prototype.forEach.call($('cats').children,function(b){
+    b.setAttribute('aria-pressed',String(b.getAttribute('data-cat')===curCat.id));
+  });
+}
+function selectCat(id){
+  curCat=cat(id); S.cat=id;
+  var p=pairFor(curCat); uA=p[0]; uB=p[1];
+  syncCats(); renderUnitBtns(); buildPresets();
+  /* keep the number the user typed, reconvert it under the new units, and keep
+     it from whichever box actually holds it, so typing into "To" then switching
+     category no longer throws that number away and substitutes a 1 */
+  var src=(active==='b'&&parseNum(elB.value)!==null)?'b':'a';
+  if(src==='a'&&parseNum(elA.value)===null) elA.value='1';
+  active=src;
+  recompute(src); save();
+}
+
+function recompute(from){
+  var src=from==='a'?elA:elB, dst=from==='a'?elB:elA;
+  var su=from==='a'?uA:uB, du=from==='a'?uB:uA;
+  var raw=src.value.trim();
+  if(raw===''){ dst.value=''; setMsg('Type in either box; both stay in sync.','hint'); eqEl.textContent=''; announce(''); return; }
+  /* "-", "." and a dangling exponent are half-typed numbers, not mistakes.
+     Flashing "not a number" at someone mid-keystroke is noise, not feedback. */
+  if(/^[+-]?\.?$/.test(raw)||/[eE][+-]?$/.test(raw)){
+    dst.value=''; setMsg('Keep typing; that number is not finished.','hint');
+    eqEl.textContent=''; return;
+  }
+  var n=parseNum(raw);
+  if(n===null){
+    dst.value='';
+    setMsg('"'+clip(raw)+'" is not a number. Try 12.5, 1,000 or 1e3.','err');
+    eqEl.textContent=''; announce('Invalid number'); return;
+  }
+  var base=toBase(su,n);
+  var out=fromBase(du,base);
+  dst.value=fmtG(out);
+  if(curCat.affine && base<0){
+    setMsg('That is below absolute zero (0 K). The maths still holds, the physics does not.','warn');
+  }else{
+    setMsg('Type in either box; both stay in sync.','hint');
+  }
+  var line=fmt(n)+' '+su.s+' = '+fmt(out)+' '+du.s;
+  eqEl.innerHTML='<b>'+esc(fmtG(n)+' '+su.s)+'</b> = <b>'+esc(fmtG(out)+' '+du.s)+'</b>';
+  announce(line);
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+
+/* the field being typed in is never rewritten, so the caret never jumps */
+elA.addEventListener('input',function(){ active='a'; recompute('a'); });
+elB.addEventListener('input',function(){ active='b'; recompute('b'); });
+
+function reconvert(){
+  /* prefer the field the user last touched; fall back to whichever has a value */
+  var side=active;
+  if((side==='a'?elA:elB).value.trim()===''){
+    if(elA.value.trim()!=='') side='a';
+    else if(elB.value.trim()!=='') side='b';
+  }
+  recompute(side);
+}
+
+$('swap').addEventListener('click',function(){
+  var t=uA; uA=uB; uB=t;
+  var tv=elA.value; elA.value=elB.value; elB.value=tv;
+  active = active==='a'?'b':'a';
+  /* values swapped alongside the units, so the pairing is already correct;
+     recompute only to refresh the summary line. Presets are per-CATEGORY, so
+     rebuilding them here just threw away six live DOM nodes for nothing. */
+  renderUnitBtns(); reconvert(); storePair();
+  toast('Swapped');
+});
+$('clearRes').addEventListener('click',function(){
+  elA.value=''; elB.value=''; active='a';
+  setMsg('Cleared. Type a number in either box.','hint'); eqEl.textContent='';
+  elA.focus();
+});
+$('copyRes').addEventListener('click',function(){
+  var v=(active==='a'?elB:elA).value;
+  copyText(v);
+});
+function storePair(){ S.pairs[curCat.id]=[uA.id,uB.id]; save(); }
+
+/* ---- presets ---- */
+function buildPresets(){
+  var host=$('presets'); host.innerHTML='';
+  curCat.presets.forEach(function(p){
+    var a=unit(curCat,p[0]), b=unit(curCat,p[1]);
+    var v=(p.length>2 && typeof p[2]==='number')? p[2] : 1;
+    var out=fromBase(b,toBase(a,v));
+    var li=document.createElement('li');
+    var btn=document.createElement('button');
+    btn.type='button'; btn.className='preset';
+    var l=document.createElement('span'); l.className='p-in'; l.textContent=fmtG(v,6)+' '+a.s+' =';
+    var r=document.createElement('span'); r.className='p-out'; r.textContent=fmtG(out,7)+' '+b.s;
+    btn.appendChild(l); btn.appendChild(r);
+    btn.setAttribute('aria-label','Load '+fmt(v,6)+' '+a.n+' to '+b.n);
+    btn.addEventListener('click',function(){
+      uA=a; uB=b; elA.value=String(v); active='a';
+      renderUnitBtns(); recompute('a'); storePair();
+      elA.focus();
+    });
+    li.appendChild(btn); host.appendChild(li);
+  });
+}
+
+/* ============================================================
+   unit picker dialog
+   ============================================================ */
+var backdrop=$('backdrop'),dlg=$('dlg'),search=$('search'),ulist=$('ulist');
+var wrapEl=document.querySelector('.wrap');
+var pickSide='a', hi=0, results=[], lastFocus=null;
+
+function openPicker(side){
+  pickSide=side;
+  /* the trigger button, NOT document.activeElement: Safari (and iOS in
+     particular) does not focus a <button> on tap, so activeElement is <body>
+     there and closing the dialog dumped the user at the top of the page. */
+  lastFocus=$(side==='a'?'unitA':'unitB');
+  $('dlgTitle').textContent='Choose a '+curCat.name.toLowerCase()+' unit ('+(side==='a'?'from':'to')+')';
+  /* Open BEFORE rendering. renderList -> syncHi -> scrollIntoView is a no-op
+     inside a display:none subtree, so rendering first left the list pinned to
+     the top with the unit actually in use off-screen (measured: parsec sits
+     861px down a 586px-tall list, scrollTop stayed 0). */
+  backdrop.classList.add('open');
+  /* the trap below only catches Tab; a screen reader's virtual cursor and a
+     touch scroll both walk straight past it unless the page behind is muted */
+  document.body.classList.add('modal-open');
+  search.value=''; renderList('');
+  /* focus first, THEN mute the page: Chrome refuses to apply aria-hidden to a
+     subtree that still holds focus, so setting it while the trigger button was
+     focused silently left the whole page exposed to a screen reader. */
+  search.focus();
+  if(wrapEl) wrapEl.setAttribute('aria-hidden','true');
+  document.addEventListener('keydown',dlgKeys,true);
+}
+function closePicker(){
+  backdrop.classList.remove('open');
+  document.body.classList.remove('modal-open');
+  if(wrapEl) wrapEl.removeAttribute('aria-hidden');
+  search.removeAttribute('aria-activedescendant');
+  document.removeEventListener('keydown',dlgKeys,true);
+  if(lastFocus&&lastFocus.focus) lastFocus.focus();
+}
+function score(u,q){
+  var s=u.s.toLowerCase(), n=u.n.toLowerCase(), a=(u.a||'').toLowerCase();
+  if(s===q) return 0;
+  if(n===q) return 1;
+  if(s.indexOf(q)===0) return 2;
+  if(n.indexOf(q)===0) return 3;
+  if(a.split(' ').indexOf(q)>-1) return 4;
+  if(n.indexOf(q)>-1) return 5;
+  if(s.indexOf(q)>-1) return 6;
+  if(a.indexOf(q)>-1) return 7;
+  return -1;
+}
+function renderList(q){
+  q=String(q).trim().toLowerCase();
+  var cursel=(pickSide==='a'?uA:uB).id;
+  results = q==='' ? curCat.units.slice()
+    : curCat.units.map(function(u){ return {u:u,r:score(u,q)}; })
+        .filter(function(o){ return o.r>=0; })
+        .sort(function(x,y){ return x.r-y.r; })
+        .map(function(o){ return o.u; });
+  ulist.innerHTML='';
+  if(!results.length){
+    var e=document.createElement('p'); e.className='empty';
+    e.textContent='No '+curCat.name.toLowerCase()+' unit matches “'+clip(q,24)+'”. Try a symbol like kg, or clear the search.';
+    ulist.appendChild(e);
+    hi=-1; search.removeAttribute('aria-activedescendant');
+    search.setAttribute('aria-expanded','false'); /* the listbox really is empty */
+    return;
+  }
+  search.setAttribute('aria-expanded','true');
+  hi = q===''? Math.max(0,results.map(function(u){return u.id;}).indexOf(cursel)) : 0;
+  results.forEach(function(u,i){
+    var b=document.createElement('button');
+    b.type='button'; b.className='uitem';
+    b.id='uopt-'+i;
+    b.setAttribute('role','option');
+    b.setAttribute('aria-selected','false');
+    if(u.id===cursel) b.setAttribute('aria-current','true');
+    var s=document.createElement('span'); s.className='s'; s.textContent=u.s;
+    var n=document.createElement('span'); n.className='n'; n.textContent=u.n;
+    b.appendChild(s); b.appendChild(n);
+    b.addEventListener('click',function(){ pick(u); });
+    ulist.appendChild(b);
+  });
+  syncHi();
+}
+/* Focus never leaves the search box, so without aria-activedescendant the arrow
+   keys moved a highlight no screen reader ever announced. */
+function syncHi(){
+  Array.prototype.forEach.call(ulist.children,function(c,i){
+    if(!c.getAttribute||c.getAttribute('role')!=='option') return;
+    c.classList.toggle('hi',i===hi);
+    c.setAttribute('aria-selected',i===hi?'true':'false');
+  });
+  var el=hi>=0? ulist.children[hi] : null;
+  if(el&&el.id) search.setAttribute('aria-activedescendant',el.id);
+  else search.removeAttribute('aria-activedescendant');
+  if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
+}
+function moveHi(d){
+  if(!results.length) return;
+  hi=(hi+d+results.length)%results.length;
+  syncHi();
+}
+function pick(u){
+  if(pickSide==='a'){ if(u.id===uB.id) uB=uA; uA=u; }
+  else { if(u.id===uA.id) uA=uB; uB=u; }
+  renderUnitBtns(); reconvert(); storePair(); closePicker();
+}
+function dlgKeys(e){
+  if(!backdrop.classList.contains('open')) return;
+  if(e.key==='Escape'){ e.preventDefault(); closePicker(); return; }
+  if(e.key==='ArrowDown'){ e.preventDefault(); moveHi(1); return; }
+  if(e.key==='ArrowUp'){ e.preventDefault(); moveHi(-1); return; }
+  if(e.key==='Enter'&&results.length&&hi>=0&&document.activeElement===search){ e.preventDefault(); pick(results[hi]); return; }
+  if(e.key==='Tab'){ /* keep focus inside the dialog */
+    var f=dlg.querySelectorAll('button,input');
+    if(!f.length) return;
+    var first=f[0], last=f[f.length-1];
+    /* if focus already escaped (a re-rendered list can drop it on <body>),
+       pull it back rather than letting Tab wander into the page behind */
+    if(!dlg.contains(document.activeElement)){ e.preventDefault(); first.focus(); return; }
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+}
+search.addEventListener('input',function(){ renderList(search.value); });
+$('unitA').addEventListener('click',function(){ openPicker('a'); });
+$('unitB').addEventListener('click',function(){ openPicker('b'); });
+$('dlgClose').addEventListener('click',closePicker);
+backdrop.addEventListener('mousedown',function(e){ if(e.target===backdrop) closePicker(); });
+
+/* ============================================================
+   tip calculator
+   ============================================================ */
+var bill=$('bill'),pct=$('pct'),pctRange=$('pctRange'),split=$('split'),
+    roundMode=$('roundMode'),cur=$('cur'),tipMsg=$('tipMsg'),tipNote=$('tipNote');
+var QUICK=[10,15,18,20,25];
+
+/* Built once. Rebuilding these on every keystroke would destroy the very
+   button a keyboard user just pressed and dump focus back to the body. */
+function buildPctChips(){
+  var host=$('pctChips'); host.innerHTML='';
+  QUICK.forEach(function(p){
+    var b=document.createElement('button');
+    b.type='button'; b.className='chip'; b.textContent=p+'%';
+    b.setAttribute('data-pct',String(p));
+    b.addEventListener('click',function(){
+      pct.value=String(p); pctRange.value=String(p); calcTip();
+    });
+    host.appendChild(b);
+  });
+  syncPctChips();
+}
+function syncPctChips(){
+  var v=parseNum(pct.value);
+  Array.prototype.forEach.call($('pctChips').children,function(b){
+    b.setAttribute('aria-pressed', String(v===parseFloat(b.getAttribute('data-pct'))));
+  });
+}
+function money(cents,symbol){
+  var neg=cents<0; if(neg) cents=-cents;
+  var s=(cents/100).toFixed(2);
+  var p=s.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return (neg?'-':'')+symbol+p.join('.');
+}
+function setTipOut(t,total,each,tipEach,eff){
+  $('oTip').textContent=t; $('oTotal').textContent=total;
+  $('oEach').textContent=each; $('oTipEach').textContent=tipEach; $('oEff').textContent=eff;
+}
+function calcTip(){
+  var sym=cur.value;
+  var b=parseNum(bill.value), p=parseNum(pct.value), n=parseNum(split.value);
+  tipNote.textContent='';
+  syncPctChips(); /* reflects the percent field even when the bill is unusable */
+  /* Persist BEFORE the early returns. This used to sit at the very bottom, so
+     every setting chosen in the app's default state (empty bill) was thrown
+     away: pick £ and "round to 5", reload, and you were back on $ and Off. */
+  S.tip={pct:pct.value,split:split.value,round:roundMode.value,cur:cur.value}; save();
+
+  if(bill.value.trim()===''){
+    setTipOut('-','-','-','-','-');
+    tipMsg.className='msg hint'; tipMsg.textContent='Enter a bill amount to see the split.';
+    return;
+  }
+  /* Ceilings, not vanity: parseNum happily accepts 1e308, and bill*pct then
+     overflows to Infinity, which toFixed(2) renders as the literal "$Infinity".
+     A refusal with a reason beats a confident nonsense number. */
+  var MAXBILL=1e12, MAXPCT=1e5;
+  if(b===null||b<0||b>MAXBILL){
+    setTipOut('-','-','-','-','-');
+    tipMsg.className='msg err';
+    tipMsg.textContent = (b!==null&&b>MAXBILL)
+      ? 'That bill is too large to split. Keep it under 1,000,000,000,000.'
+      : 'Bill "'+clip(bill.value.trim())+'" is not a valid amount. Try 42.50.';
+    return;
+  }
+  if(p===null||p<0||p>MAXPCT){
+    setTipOut('-','-','-','-','-');
+    tipMsg.className='msg err';
+    tipMsg.textContent = (p!==null&&p>MAXPCT)
+      ? 'Tip percent must be 100,000 or less.'
+      : 'Tip percent must be a number of 0 or more.';
+    return;
+  }
+  if(n===null||n<1||Math.floor(n)!==n||n>999){
+    setTipOut('-','-','-','-','-');
+    tipMsg.className='msg err'; tipMsg.textContent='Split must be a whole number of people from 1 to 999.';
+    return;
+  }
+  /* all money maths in integer cents; floats lose pennies */
+  var billC=Math.round(b*100);
+  var tipC=Math.round(billC*p/100);
+  var totalC=billC+tipC;
+  var step=parseInt(roundMode.value,10)||0;
+  var preRoundC=totalC;
+  if(step>0){
+    var stepC=step*100;
+    totalC=Math.ceil(totalC/stepC)*stepC;
+    tipC=totalC-billC;
+  }
+  /* round each share UP to the cent so the table always covers the bill */
+  var eachC=Math.ceil(totalC/n);
+  var overC=eachC*n-totalC;
+  var tipEachC=Math.ceil(tipC/n);
+  var eff=billC>0? (tipC/billC*100) : null;
+
+  setTipOut(money(tipC,sym),money(totalC,sym),money(eachC,sym),money(tipEachC,sym),
+            eff===null? 'n/a' : (Math.round(eff*100)/100)+'%');
+
+  var notes=[];
+  /* only claim a rounding that actually happened: a total already on a whole 5
+     was being announced as "rounded up", which reads like the number moved */
+  if(step>0&&totalC!==preRoundC) notes.push('Total rounded up to a whole '+step+'; the tip absorbed the difference.');
+  if(overC>0) notes.push('Each share is rounded up to the cent, so the table pays '+money(overC,sym)+' over the total.');
+  if(billC===0) notes.push('A zero bill has no percentage to work from.');
+  tipNote.textContent=notes.join(' ');
+
+  tipMsg.className='msg hint';
+  tipMsg.textContent=n>1? ('Split '+n+' ways.') : 'One person.';
+}
+[bill,pct,split].forEach(function(el){ el.addEventListener('input',calcTip); });
+[roundMode,cur].forEach(function(el){ el.addEventListener('change',calcTip); });
+pctRange.addEventListener('input',function(){ pct.value=pctRange.value; calcTip(); });
+pct.addEventListener('input',function(){
+  var v=parseNum(pct.value);
+  /* clamp instead of ignoring out-of-range values: leaving the thumb parked at
+     whatever it showed last means a slider reading 18 next to a field reading
+     60, a control that contradicts the number it drives */
+  if(v!==null) pctRange.value=String(Math.min(40,Math.max(0,v)));
+});
+function bumpSplit(d){
+  var n=parseNum(split.value);
+  if(n===null||n<1) n=1;
+  n=Math.min(999,Math.max(1,Math.floor(n)+d));
+  split.value=String(n); calcTip();
+}
+$('splitUp').addEventListener('click',function(){ bumpSplit(1); });
+$('splitDn').addEventListener('click',function(){ bumpSplit(-1); });
+
+/* ============================================================
+   dates: all arithmetic in UTC so DST never shifts a day
+   ============================================================ */
+var DAYMS=86400000;
+var WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function parseDate(v){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v).trim());
+  if(!m) return null;
+  var y=+m[1],mo=+m[2]-1,d=+m[3];
+  if(y<1000||y>9999||mo<0||mo>11||d<1||d>31) return null;
+  var t=Date.UTC(y,mo,d);
+  var dt=new Date(t);
+  /* rejects 2026-02-31 and friends, which Date.UTC would silently roll over */
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo||dt.getUTCDate()!==d) return null;
+  return t;
+}
+function isoOf(t){
+  var d=new Date(t),p=function(x){return (x<10?'0':'')+x;};
+  return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate());
+}
+function pretty(t){
+  var d=new Date(t);
+  return WD[d.getUTCDay()].slice(0,3)+' '+d.getUTCDate()+' '+MN[d.getUTCMonth()]+' '+d.getUTCFullYear();
+}
+function todayUTC(){
+  var n=new Date();
+  return Date.UTC(n.getFullYear(),n.getMonth(),n.getDate());
+}
+function daysInMonth(y,m){ return new Date(Date.UTC(y,m+1,0)).getUTCDate(); }
+/* month arithmetic clamps: 31 Jan + 1 month = 28/29 Feb, not 3 March */
+function addMonths(t,n){
+  var d=new Date(t);
+  var y=d.getUTCFullYear(), m=d.getUTCMonth(), day=d.getUTCDate();
+  var tm=m+n, ty=y+Math.floor(tm/12);
+  tm=((tm%12)+12)%12;
+  var dim=daysInMonth(ty,tm);
+  if(day>dim) day=dim;
+  return Date.UTC(ty,tm,day);
+}
+/* Calendar breakdown. Naive "borrow days from the previous month" goes
+   negative on cases like 31 Jan -> 1 Mar, so walk whole months with the
+   clamping adder instead and measure the remainder in real days. */
+function ymdDiff(a,b){
+  var da=new Date(a),db=new Date(b);
+  var months=(db.getUTCFullYear()-da.getUTCFullYear())*12+(db.getUTCMonth()-da.getUTCMonth());
+  if(addMonths(a,months)>b) months--;
+  if(months<0) months=0;
+  var anchor=addMonths(a,months);
+  var days=Math.round((b-anchor)/DAYMS);
+  return {y:Math.floor(months/12),m:months%12,d:days,months:months};
+}
+/* Mon–Fri days in [a,b): whole weeks are 5 each, then walk the remainder. */
+function weekdays(a,b){
+  var total=Math.round((b-a)/DAYMS);
+  var full=Math.floor(total/7), rem=total-full*7, c=full*5;
+  for(var i=0;i<rem;i++){
+    var w=new Date(a+(full*7+i)*DAYMS).getUTCDay();
+    if(w>=1&&w<=5) c++;
+  }
+  return c;
+}
+function plural(n,word){ return n+' '+word+(Math.abs(n)===1?'':'s'); }
+
+var d1=$('d1'),d2=$('d2'),d3=$('d3'),dateMsg=$('dateMsg'),addMsg=$('addMsg');
+var addSign=1;
+
+function calcDiff(){
+  var out=['oYmd','oDays','oWeeks','oMonths','oBiz','oHours','oIncl'];
+  var blank=function(){ out.forEach(function(id){ $(id).textContent='-'; }); };
+  var v1=d1.value.trim(), v2=d2.value.trim();
+  if(!v1||!v2){
+    blank(); $('diffNote').textContent='';
+    dateMsg.className='msg hint'; dateMsg.textContent='Pick both dates.';
+    return;
+  }
+  var a=parseDate(v1), b=parseDate(v2);
+  if(a===null||b===null){
+    blank(); $('diffNote').textContent='';
+    dateMsg.className='msg err';
+    dateMsg.textContent='Use a real date in YYYY-MM-DD form, year 1000–9999 (got "'+clip(a===null?v1:v2,16)+'").';
+    return;
+  }
+  var swapped=a>b;
+  if(swapped){ var t=a; a=b; b=t; }
+  var days=Math.round((b-a)/DAYMS);
+  var k=ymdDiff(a,b);
+  var parts=[];
+  if(k.y) parts.push(plural(k.y,'year'));
+  if(k.m) parts.push(plural(k.m,'month'));
+  if(k.d||!parts.length) parts.push(plural(k.d,'day'));
+  $('oYmd').textContent=parts.join(', ');
+  $('oDays').textContent=group(String(days))+(days===1?' day':' days');
+  $('oWeeks').textContent=group(String(Math.floor(days/7)))+'w '+(days%7)+'d';
+  $('oMonths').textContent=k.months+'mo '+k.d+'d';
+  $('oBiz').textContent=group(String(weekdays(a,b)));
+  $('oHours').textContent=group(String(days*24));
+  /* same-day is the common case here and days+1 is then exactly 1; the hardcoded
+     plural read "1 days" */
+  $('oIncl').textContent=group(String(days+1))+(days===0?' day':' days');
+
+  dateMsg.className='msg hint';
+  dateMsg.textContent=(swapped?'End date is earlier, so they were swapped. ':'')+
+    pretty(a)+' → '+pretty(b);
+  $('diffNote').textContent= days===0
+    ? 'Same day: zero days apart.'
+    : 'Weekdays counts Mon–Fri from '+isoOf(a)+' up to but not including '+isoOf(b)+'.';
+}
+function calcAdd(){
+  var v=d3.value.trim();
+  var blank=function(){ ['oNew','oIso','oFromToday'].forEach(function(id){ $(id).textContent='-'; }); };
+  if(!v){ blank(); addMsg.className='msg hint'; addMsg.textContent='Enter a starting date.'; return; }
+  var t=parseDate(v);
+  if(t===null){ blank(); addMsg.className='msg err';
+    addMsg.textContent='Use a real date in YYYY-MM-DD form, year 1000–9999 (got "'+clip(v,16)+'").'; return; }
+  var nums=[['ay','years'],['am','months'],['aw','weeks'],['ad','days']].map(function(p){
+    var raw=$(p[0]).value.trim();
+    if(raw==='') return 0;
+    var n=parseNum(raw);
+    return (n===null||Math.floor(n)!==n)? NaN : n;
+  });
+  if(nums.some(function(n){ return isNaN(n); })){
+    blank(); addMsg.className='msg err';
+    addMsg.textContent='Years, months, weeks and days must be whole numbers (or blank).'; return;
+  }
+  var y=nums[0],mo=nums[1],w=nums[2],dd=nums[3];
+  if(Math.abs(y)>5000||Math.abs(mo)>60000||Math.abs(w)>500000||Math.abs(dd)>3000000){
+    blank(); addMsg.className='msg err'; addMsg.textContent='That duration is too large to land on a real date.'; return;
+  }
+  var r=addMonths(t,addSign*(y*12+mo));
+  r=r+addSign*(w*7+dd)*DAYMS;
+  var rd=new Date(r);
+  if(!isFinite(r)||rd.getUTCFullYear()<1000||rd.getUTCFullYear()>9999){
+    blank(); addMsg.className='msg err'; addMsg.textContent='Result falls outside year 1000–9999.'; return;
+  }
+  $('oNew').textContent=WD[rd.getUTCDay()]+', '+rd.getUTCDate()+' '+MN[rd.getUTCMonth()]+' '+rd.getUTCFullYear();
+  $('oIso').textContent=isoOf(r);
+  var delta=Math.round((r-todayUTC())/DAYMS);
+  $('oFromToday').textContent = delta===0? 'today'
+    : (delta>0? 'in '+group(String(delta))+' days' : group(String(-delta))+' days ago');
+  addMsg.className='msg hint';
+  addMsg.textContent=pretty(t)+' '+(addSign>0?'+':'−')+' '+
+    [plural(y,'year'),plural(mo,'month'),plural(w,'week'),plural(dd,'day')].join(', ');
+}
+[d1,d2].forEach(function(el){ el.addEventListener('input',calcDiff); el.addEventListener('change',calcDiff); });
+[d3,$('ay'),$('am'),$('aw'),$('ad')].forEach(function(el){ el.addEventListener('input',calcAdd); el.addEventListener('change',calcAdd); });
+Array.prototype.forEach.call(document.querySelectorAll('[data-today]'),function(b){
+  b.addEventListener('click',function(){
+    var target=$(b.getAttribute('data-today'));
+    target.value=isoOf(todayUTC());
+    if(target===d3) calcAdd(); else calcDiff();
+  });
+});
+Array.prototype.forEach.call($('sign').children,function(b){
+  b.addEventListener('click',function(){
+    addSign=parseInt(b.getAttribute('data-s'),10);
+    Array.prototype.forEach.call($('sign').children,function(o){
+      o.setAttribute('aria-pressed',String(o===b));
+    });
+    calcAdd();
+  });
+});
+/* setDmode is the ONLY writer of S.dmode. calcDiff/calcAdd used to stamp it too,
+   and init runs BOTH of them, so calcAdd always won and the next save() wrote
+   dmode:'add', reopening the app in Add/subtract no matter what the user chose. */
+function setDmode(m){
+  $('diffBox').hidden = m!=='diff';
+  $('addBox').hidden = m==='diff';
+  Array.prototype.forEach.call($('dmode').children,function(b){
+    b.setAttribute('aria-pressed',String(b.getAttribute('data-m')===m));
+  });
+  S.dmode=m; save();
+  if(m==='diff') calcDiff(); else calcAdd();
+}
+Array.prototype.forEach.call($('dmode').children,function(b){
+  b.addEventListener('click',function(){ setDmode(b.getAttribute('data-m')); });
+});
+
+/* ============================================================
+   first run
+   ============================================================ */
+(function init(){
+  curCat=cat(S.cat); S.cat=curCat.id; /* drop an unknown category id rather than re-saving it */
+  var p=pairFor(curCat); uA=p[0]; uB=p[1];
+  buildCats(); renderUnitBtns(); buildPresets();
+  elA.value='1'; recompute('a');
+
+  pct.value=S.tip.pct; split.value=S.tip.split;
+  /* assigning a value no <option> carries leaves selectedIndex at -1 and paints
+     the control BLANK; corrupt storage must not produce an empty dropdown */
+  roundMode.value=S.tip.round; if(roundMode.selectedIndex<0) roundMode.value='0';
+  cur.value=S.tip.cur;        if(cur.selectedIndex<0) cur.value='$';
+  var pv=parseNum(pct.value); if(pv!==null&&pv>=0&&pv<=40) pctRange.value=String(pv);
+  buildPctChips(); calcTip();
+
+  var today=isoOf(todayUTC());
+  d1.value=today; d2.value=today; d3.value=today;
+  setDmode(S.dmode==='add'?'add':'diff');
+  calcDiff(); calcAdd();
+
+  setTab(S.tab==='tip'?'tip':S.tab==='date'?'date':'convert',false);
+})();
+})();
+</script>
+</body>
+</html>

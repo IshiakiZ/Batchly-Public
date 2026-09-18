@@ -1,0 +1,20 @@
+{
+  "folder": "admin/dots-and-boxes",
+  "title": "Dots and Boxes",
+  "description": "Draw lines, complete boxes, and claim more than the computer. Master the chains to win the endgame.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/dots-and-boxes",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 43366,
+      "sha256": "779db64f19c654609b7e593ce71075be9083214edcce02ecd0f2baf823429bd6",
+      "source": "published catalog HTML"
+    }
+  ]
+}

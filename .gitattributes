@@ -1,0 +1,5 @@
+# Preserve published file bytes so the checksums also match GitHub downloads.
+catalog/** -text
+*.mjs text eol=lf
+*.md text eol=lf
+*.yml text eol=lf

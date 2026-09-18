@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Cryptogram: crack a letter-substitution cipher hiding a famous quote. Click a coded letter and type its real letter; matching codes fill together. Frequency helper, mistake checker, hint reveal. 60 puzzles." />
+<title>CRYPTOGRAM</title>
+<!--
+  CRYPTOGRAM: original letter-substitution puzzle for Batchly.
+  ==========================================================================
+  DESIGN NOTES
+
+  The puzzle
+    A quote is enciphered with a random 1:1 letter substitution. Every plain
+    letter maps to exactly one distinct cipher letter and back. The cipher is
+    a DERANGEMENT of A..Z (no letter is ever its own code), which is the
+    classic cryptogram rule (a letter that stood for itself would be a free
+    give-away). The player reads the coded text and, one code at a time, types
+    the real letter they think it stands for. Because a code means the same
+    plain letter everywhere, filling one cell fills EVERY cell with that code
+    at once; that shared-guess mechanic is the whole game.
+
+  State model (guess is per-code, not per-cell)
+    guesses[codeLetter] -> plainLetterGuess. Each on-screen letter cell just
+    renders guesses[its code]. So a single map drives the entire board, win
+    detection is "every code that appears is guessed to its true plain letter",
+    and there is no way for two cells of the same code to disagree.
+
+  Solver aids (all honest, none reveal the answer except Hint)
+    - Frequency strip: every code that appears, with its count, sorted most-
+      common first, next to the real English ordering E T A O I N S H R D L U.
+      Matching your commonest codes to E/T/A is the canonical way in.
+    - Conflict flag (amber): if you use the same real letter for two different
+      codes it is flagged: a valid solution uses each real letter once.
+    - Check (toggle): colours filled cells green/red against the solution and
+      counts mistakes. A pure self-check; off by default.
+    - Hint: locks in the most useful still-unknown code at its TRUE letter.
+      Locked codes can't be edited and are counted.
+
+  Fairness / no-leaderboard
+    has_leaderboard = false, so this game posts NO score to the host, ever.
+    There is no window.parent.postMessage("batchly-score") anywhere. Winning
+    shows the decoded quote, its author, your time and hints, and offers a new
+    puzzle. Nothing is submitted on load, on win, or on restart.
+
+  Input
+    Full keyboard (type letters, Backspace, arrows, space to skip) AND an on-
+    screen keyboard for touch, plus click-to-select on cells and frequency
+    chips. Nothing traps focus; a single document-level key listener drives
+    typing so the native focus ring is never hijacked.
+
+  Self-contained
+    One file. No network, no fonts, no images: all glyphs are text, all art
+    is CSS. Fills the iframe viewport; the coded text scrolls inside its panel
+    while the toolbar, frequency strip and keyboard stay put.
+  ==========================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --panel2:#1f1f26;
+    --inset:#0c0c0f;
+    --line:#2e2e36;
+    --line2:#42424e;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --dim:#6c6c78;
+    --red:#ef3a3a;
+    --green:#4ec86a;
+    --amber:#e8b23a;
+    --blue:#5aa9e6;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%; width:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+    touch-action:manipulation;
+  }
+  button{ font-family:inherit; color:inherit; cursor:pointer; }
+
+  #app{
+    display:flex; flex-direction:column;
+    height:100%; width:100%;
+    max-width:1000px; margin:0 auto;
+    padding:8px;
+    gap:8px;
+  }
+
+  /* ---- top bar ---- */
+  #top{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    flex:0 0 auto;
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .brand .logo{
+    font-weight:800; letter-spacing:1px;
+    font-size:clamp(15px,3.4vw,20px);
+    background:var(--red); color:#120000;
+    padding:3px 8px; border:2px solid var(--bone);
+  }
+  .brand .sub{ color:var(--mute); font-size:11px; letter-spacing:.5px; }
+  #stats{
+    margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;
+    font-size:12px; color:var(--mute);
+  }
+  #stats b{ color:var(--bone); font-weight:700; }
+  .stat{
+    background:var(--panel); border:2px solid var(--line);
+    padding:3px 8px; white-space:nowrap;
+  }
+  .stat.mistake{ border-color:var(--red); color:var(--red); }
+
+  /* ---- toolbar ---- */
+  #tools{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    flex:0 0 auto;
+  }
+  .btn{
+    background:var(--panel); border:2px solid var(--bone);
+    color:var(--bone); padding:6px 10px; font-size:12px; font-weight:700;
+    letter-spacing:.5px; border-radius:0;
+    transition:transform .04s ease, background .12s ease, color .12s ease;
+  }
+  .btn:hover{ background:var(--bone); color:#111; }
+  .btn:active{ transform:translate(1px,1px); }
+  .btn.on{ background:var(--green); color:#08210e; border-color:var(--green); }
+  .btn.warn{ border-color:var(--red); }
+  .btn.warn:hover{ background:var(--red); color:#fff; }
+  .btn.ghost{ border-color:var(--line2); color:var(--mute); }
+  .btn.ghost:hover{ background:var(--line2); color:var(--bone); }
+  .btn.icon{ padding:6px 9px; }
+  #tools .spacer{ flex:1 1 auto; }
+
+  /* ---- selected-code status line ---- */
+  #status{
+    flex:0 0 auto;
+    font-size:12px; color:var(--mute); min-height:16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  #status .kbd{
+    display:inline-block; min-width:16px; text-align:center;
+    background:var(--panel2); border:1px solid var(--line2); padding:0 5px;
+    color:var(--bone); font-weight:700;
+  }
+  #status .arrow{ color:var(--red); font-weight:800; }
+  #status .pick{ color:var(--bone); }
+
+  /* ---- puzzle panel ---- */
+  #puzzleWrap{
+    flex:1 1 auto; min-height:0;
+    background:var(--inset); border:2px solid var(--line);
+    overflow:auto; padding:14px 12px;
+    display:flex;
+  }
+  #puzzle{
+    display:flex; flex-wrap:wrap; align-content:flex-start;
+    justify-content:center; align-items:flex-start;
+    gap:2px 0; margin:auto; width:100%;
+  }
+  .word{ display:inline-flex; margin:4px 9px 8px 0; }
+  .cell{
+    display:flex; flex-direction:column; align-items:center;
+    width:clamp(17px,4.8vw,30px);
+    padding:0 1px;
+    user-select:none;
+  }
+  .cell .guess{
+    width:100%; text-align:center;
+    font-size:clamp(16px,4.6vw,26px); line-height:1.15;
+    height:clamp(22px,6vw,34px);
+    color:var(--bone);
+  }
+  .cell.letter{ cursor:pointer; }
+  .cell.letter .guess{ border-bottom:2px solid var(--line2); }
+  .cell.punc .guess{ color:var(--mute); }
+  .cell .code{
+    font-size:clamp(9px,2.3vw,12px); line-height:1.4;
+    color:var(--dim); letter-spacing:.5px; margin-top:2px;
+    min-height:14px;
+  }
+  /* letter cell states */
+  .cell.letter.same .guess{ background:rgba(239,58,58,.15); }
+  .cell.letter.same .code{ color:var(--red); }
+  .cell.letter.sel .guess{ background:var(--red); color:#120000; border-bottom-color:var(--red); }
+  .cell.letter.sel .code{ color:var(--red); }
+  .cell.letter.lock .guess{ color:var(--blue); border-bottom-color:var(--blue); }
+  .cell.letter.lock .code{ color:var(--blue); }
+  .cell.letter.conf .guess{ color:var(--amber); border-bottom-color:var(--amber); }
+  .cell.letter.ok .guess{ color:var(--green); border-bottom-color:var(--green); }
+  .cell.letter.bad .guess{ color:var(--red); border-bottom-color:var(--red); }
+  .cell.letter.sel.bad .guess{ color:#120000; }
+
+  /* ---- frequency strip ---- */
+  #freqBar{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px 8px;
+    display:flex; align-items:center; gap:8px;
+  }
+  #freqBar .flabel{
+    font-size:10px; color:var(--dim); line-height:1.3; white-space:nowrap;
+    flex:0 0 auto;
+  }
+  #freqBar .flabel b{ color:var(--mute); }
+  #freqChips{
+    display:flex; gap:5px; overflow-x:auto; padding-bottom:2px;
+    flex:1 1 auto; scrollbar-width:thin;
+  }
+  .chip{
+    flex:0 0 auto; min-width:26px;
+    background:var(--panel2); border:2px solid var(--line2);
+    display:flex; flex-direction:column; align-items:center;
+    padding:2px 4px; cursor:pointer; line-height:1.1;
+  }
+  .chip:hover{ border-color:var(--bone); }
+  .chip.sel{ border-color:var(--red); background:rgba(239,58,58,.18); }
+  .chip .cc{ font-size:13px; font-weight:800; color:var(--bone); }
+  .chip .cn{ font-size:9px; color:var(--dim); }
+  .chip .cg{ font-size:10px; font-weight:700; color:var(--green); min-height:12px; }
+  .chip.lock .cc{ color:var(--blue); }
+
+  /* ---- on-screen keyboard ---- */
+  #keys{
+    flex:0 0 auto;
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .krow{ display:flex; gap:4px; justify-content:center; }
+  .key{
+    flex:1 1 0; min-width:0; max-width:42px;
+    background:var(--panel2); border:2px solid var(--line2);
+    color:var(--bone); font-weight:700;
+    font-size:clamp(12px,3.4vw,15px);
+    padding:9px 0; text-align:center; border-radius:0;
+    transition:transform .04s ease, background .1s ease;
+  }
+  .key:hover{ background:var(--line2); }
+  .key:active{ transform:translate(1px,1px); }
+  .key.used{ color:var(--dim); border-color:var(--line); }
+  .key.wide{ flex:1.6 1 0; max-width:64px; font-size:11px; letter-spacing:.5px; }
+  .key.del{ color:var(--red); border-color:var(--red); }
+
+  /* ---- overlays ---- */
+  .overlay{
+    position:fixed; inset:0; z-index:40;
+    background:rgba(8,8,10,.88);
+    display:flex; align-items:center; justify-content:center;
+    padding:16px;
+  }
+  .overlay.hidden{ display:none; }
+  .card{
+    background:var(--panel); border:2px solid var(--bone);
+    box-shadow:8px 8px 0 0 rgba(239,58,58,.35);
+    max-width:520px; width:100%;
+    max-height:calc(100% - 24px); overflow:auto;
+    padding:20px;
+  }
+  .card h2{
+    margin:0 0 4px; font-size:clamp(20px,5vw,28px); letter-spacing:1px;
+    color:var(--green);
+  }
+  .card h2.title{ color:var(--red); }
+  .card .quote{
+    font-size:clamp(15px,3.6vw,19px); line-height:1.45; margin:14px 0 6px;
+    color:var(--bone);
+  }
+  .card .by{ color:var(--mute); font-size:13px; margin-bottom:14px; }
+  .card .win-stats{
+    display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 16px;
+    font-size:12px; color:var(--mute);
+  }
+  .card .win-stats .s{ background:var(--panel2); border:2px solid var(--line); padding:4px 9px; }
+  .card .win-stats .s b{ color:var(--bone); }
+  .card p{ font-size:13px; line-height:1.55; color:var(--mute); margin:8px 0; }
+  .card ul{ font-size:13px; line-height:1.6; color:var(--mute); padding-left:18px; margin:8px 0; }
+  .card ul b{ color:var(--bone); }
+  .card .row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .card .btn.big{ padding:10px 16px; font-size:14px; }
+  .card .swatch{ display:inline-block; width:11px; height:11px; border:1px solid var(--line2); vertical-align:middle; margin-right:2px; }
+
+  /* scrollbars */
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-track{ background:var(--inset); }
+  ::-webkit-scrollbar-thumb{ background:var(--line2); border:2px solid var(--inset); }
+
+  @media (max-height:560px){
+    .cell .guess{ height:clamp(20px,5vw,30px); font-size:clamp(15px,4.2vw,22px); }
+    #freqBar .flabel{ display:none; }
+    .key{ padding:7px 0; }
+  }
+  @media (max-width:420px){
+    .brand .sub{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <div class="brand">
+      <span class="logo">CRYPTOGRAM</span>
+      <span class="sub">crack the cipher</span>
+    </div>
+    <div id="stats">
+      <span class="stat">TIME <b id="stTime">0:00</b></span>
+      <span class="stat">FILLED <b id="stFilled">0/0</b></span>
+      <span class="stat">HINTS <b id="stHints">0</b></span>
+      <span class="stat mistake" id="stMistakeWrap" style="display:none">MISTAKES <b id="stMistake">0</b></span>
+    </div>
+  </div>
+
+  <div id="tools">
+    <button class="btn" id="btnNew">NEW</button>
+    <button class="btn" id="btnHint">HINT</button>
+    <button class="btn" id="btnCheck">CHECK</button>
+    <button class="btn ghost" id="btnClear">CLEAR</button>
+    <span class="spacer"></span>
+    <button class="btn icon ghost" id="btnHelp" aria-label="How to play">?</button>
+  </div>
+
+  <div id="status"></div>
+
+  <div id="puzzleWrap">
+    <div id="puzzle"></div>
+  </div>
+
+  <div id="freqBar">
+    <div class="flabel">CODE FREQ<br><b>English: E T A O I N</b></div>
+    <div id="freqChips"></div>
+  </div>
+
+  <div id="keys"></div>
+</div>
+
+<!-- WIN overlay -->
+<div class="overlay hidden" id="winOverlay">
+  <div class="card">
+    <h2>SOLVED</h2>
+    <div class="quote" id="winQuote"></div>
+    <div class="by" id="winBy"></div>
+    <div class="win-stats">
+      <span class="s">TIME <b id="winTime">0:00</b></span>
+      <span class="s">HINTS <b id="winHints">0</b></span>
+    </div>
+    <div class="row">
+      <button class="btn big" id="winNew">NEW PUZZLE</button>
+      <button class="btn big ghost" id="winClose">REVIEW BOARD</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP overlay -->
+<div class="overlay hidden" id="helpOverlay">
+  <div class="card">
+    <h2 class="title">HOW TO PLAY</h2>
+    <p>A famous quote has been scrambled with a secret code: every letter has
+    been swapped for another one, the same way every time. Your job is to break
+    the code and read the quote.</p>
+    <ul>
+      <li><b>Pick a code letter</b>: click any coded cell, or tap its chip in
+        the frequency strip. The small letter under each blank is the code.</li>
+      <li><b>Type its real letter</b>: use your keyboard or the on-screen keys.
+        Every cell with that same code fills in together.</li>
+      <li><b>Frequency helper</b>: the strip shows how often each code appears,
+        commonest first. In English, <b>E T A O I N</b> lead; match your top
+        codes to those to get started.</li>
+      <li><b>No letter is its own code</b>, so a code never stands for itself.</li>
+      <li><b><span class="swatch" style="background:#e8b23a"></span>Amber</b> warns
+        you used one real letter for two different codes: a real solution uses
+        each letter once.</li>
+      <li><b>CHECK</b> marks filled cells
+        <span style="color:var(--green)">green</span> /
+        <span style="color:var(--red)">red</span> against the answer.
+        <b>HINT</b> locks in one correct
+        <span style="color:var(--blue)">blue</span> letter. <b>NEW</b> deals a
+        fresh puzzle; <b>CLEAR</b> wipes your guesses.</li>
+    </ul>
+    <p style="color:var(--dim)">Keys: letters type · Backspace deletes · arrows move · space skips ahead.</p>
+    <div class="row">
+      <button class="btn big" id="helpClose">START SOLVING</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- puzzle bank: quotes are pangrams, proverbs, or public-domain authors ----
+  var QUOTES = [
+    {t:"The quick brown fox jumps over the lazy dog.", a:"Pangram"},
+    {t:"Pack my box with five dozen liquor jugs.", a:"Pangram"},
+    {t:"How vexingly quick daft zebras jump.", a:"Pangram"},
+    {t:"The five boxing wizards jump quickly.", a:"Pangram"},
+    {t:"Sphinx of black quartz, judge my vow.", a:"Pangram"},
+    {t:"Jackdaws love my big sphinx of quartz.", a:"Pangram"},
+    {t:"Bright vixens jump; dozy fowl quack.", a:"Pangram"},
+    {t:"Waltz, bad nymph, for quick jigs vex.", a:"Pangram"},
+    {t:"A journey of a thousand miles begins with a single step.", a:"Lao Tzu"},
+    {t:"Nature does not hurry, yet everything is accomplished.", a:"Lao Tzu"},
+    {t:"It does not matter how slowly you go as long as you do not stop.", a:"Confucius"},
+    {t:"The man who moves a mountain begins by carrying away small stones.", a:"Confucius"},
+    {t:"Everything has beauty, but not everyone sees it.", a:"Confucius"},
+    {t:"Excellence is not an act but a habit; we are what we repeatedly do.", a:"Aristotle"},
+    {t:"Knowing yourself is the beginning of all wisdom.", a:"Aristotle"},
+    {t:"The whole is greater than the sum of its parts.", a:"Aristotle"},
+    {t:"The only true wisdom is in knowing you know nothing.", a:"Socrates"},
+    {t:"Focus your energy not on fighting the old, but on building the new.", a:"Socrates"},
+    {t:"An unexamined life is not worth living.", a:"Socrates"},
+    {t:"The beginning is the most important part of the work.", a:"Plato"},
+    {t:"Luck is what happens when preparation meets opportunity.", a:"Seneca"},
+    {t:"We suffer more often in imagination than in reality.", a:"Seneca"},
+    {t:"Every new beginning comes from some other beginning's end.", a:"Seneca"},
+    {t:"You have power over your mind, not outside events.", a:"Marcus Aurelius"},
+    {t:"The happiness of your life depends on the quality of your thoughts.", a:"Marcus Aurelius"},
+    {t:"Waste no time arguing what a good man should be. Be one.", a:"Marcus Aurelius"},
+    {t:"An investment in knowledge pays the best interest.", a:"Benjamin Franklin"},
+    {t:"Well done is better than well said.", a:"Benjamin Franklin"},
+    {t:"Lost time is never found again.", a:"Benjamin Franklin"},
+    {t:"By failing to prepare, you are preparing to fail.", a:"Benjamin Franklin"},
+    {t:"Early to bed and early to rise makes a man healthy and wise.", a:"Benjamin Franklin"},
+    {t:"The secret of getting ahead is getting started.", a:"Mark Twain"},
+    {t:"Kindness is a language the deaf can hear and the blind can see.", a:"Mark Twain"},
+    {t:"Courage is mastery of fear, not absence of fear.", a:"Mark Twain"},
+    {t:"When you find yourself on the side of the majority, pause and reflect.", a:"Mark Twain"},
+    {t:"Go where there is no path, and leave a trail.", a:"Ralph Waldo Emerson"},
+    {t:"What lies within us matters more than what lies behind us.", a:"Ralph Waldo Emerson"},
+    {t:"To be yourself in a world trying to change you is a great triumph.", a:"Ralph Waldo Emerson"},
+    {t:"Go confidently in the direction of your dreams.", a:"Henry David Thoreau"},
+    {t:"Success comes to those who are too busy to look for it.", a:"Henry David Thoreau"},
+    {t:"Be yourself; everyone else is already taken.", a:"Oscar Wilde"},
+    {t:"We are all in the gutter, but some of us look at the stars.", a:"Oscar Wilde"},
+    {t:"Experience is simply the name we give our mistakes.", a:"Oscar Wilde"},
+    {t:"This above all: to thine own self be true.", a:"William Shakespeare"},
+    {t:"We know what we are, but know not what we may be.", a:"William Shakespeare"},
+    {t:"All the world's a stage, and we are merely players.", a:"William Shakespeare"},
+    {t:"There is no charm equal to tenderness of heart.", a:"Jane Austen"},
+    {t:"It is a truth universally acknowledged that we crave a good puzzle.", a:"after Jane Austen"},
+    {t:"Knowledge is power.", a:"Francis Bacon"},
+    {t:"The pen is mightier than the sword.", a:"Edward Bulwer-Lytton"},
+    {t:"A picture is worth a thousand words.", a:"Proverb"},
+    {t:"Actions speak louder than words.", a:"Proverb"},
+    {t:"Necessity is the mother of invention.", a:"Proverb"},
+    {t:"Where there is a will, there is a way.", a:"Proverb"},
+    {t:"Fortune favors the bold.", a:"Latin Proverb"},
+    {t:"Still waters run deep.", a:"Proverb"},
+    {t:"The early bird catches the worm.", a:"Proverb"},
+    {t:"Do not count your chickens before they hatch.", a:"Proverb"},
+    {t:"When in Rome, do as the Romans do.", a:"Proverb"},
+    {t:"Rome was not built in a day.", a:"Proverb"},
+    {t:"A chain is only as strong as its weakest link.", a:"Proverb"},
+    {t:"Practice makes perfect.", a:"Proverb"}
+  ];
+
+  var ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+  // ---- state ----
+  var entry, plain, enc, dec, cipherStr;
+  var guesses;          // code -> guessed plain letter
+  var revealed;         // Set of locked (hinted) codes
+  var letterCells;      // [{code, cell, guessEl, pos}]
+  var freqChipEls;      // code -> chip element
+  var selectedIdx = -1;
+  var selectedCode = null;
+  var checkMode = false;
+  var solved = false;
+  var hintCount = 0;
+  var lastIndex = -1;
+
+  // timer
+  var baseElapsed = 0, runStart = 0, running = false;
+
+  // ---- dom ----
+  var $ = function(id){ return document.getElementById(id); };
+  var puzzleEl = $("puzzle");
+  var freqChipsEl = $("freqChips");
+  var statusEl = $("status");
+  var keysEl = $("keys");
+  var keyEls = {};
+
+  // ---- cipher build (derangement: no fixed points) ----
+  function makeCipher(){
+    var p, tries = 0;
+    do {
+      p = ALPHA.slice();
+      for (var i = p.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+      }
+      tries++;
+    } while (hasFixedPoint(p) && tries < 500);
+    // fallback: force-fix any residual fixed point by rotating with a neighbour
+    for (var k = 0; k < p.length; k++){
+      if (p[k] === ALPHA[k]){
+        var swapWith = (k + 1) % p.length;
+        var t = p[k]; p[k] = p[swapWith]; p[swapWith] = t;
+      }
+    }
+    var e = {}, d = {};
+    for (var m = 0; m < ALPHA.length; m++){ e[ALPHA[m]] = p[m]; d[p[m]] = ALPHA[m]; }
+    return { enc: e, dec: d };
+  }
+  function hasFixedPoint(p){
+    for (var i = 0; i < p.length; i++){ if (p[i] === ALPHA[i]) return true; }
+    return false;
+  }
+
+  // ---- build a new puzzle ----
+  function newPuzzle(){
+    var idx;
+    do { idx = Math.floor(Math.random() * QUOTES.length); }
+    while (QUOTES.length > 1 && idx === lastIndex);
+    lastIndex = idx;
+    entry = QUOTES[idx];
+    plain = entry.t.toUpperCase();
+
+    var c = makeCipher();
+    enc = c.enc; dec = c.dec;
+
+    // encode
+    var out = "";
+    for (var i = 0; i < plain.length; i++){
+      var ch = plain[i];
+      out += (ch >= "A" && ch <= "Z") ? enc[ch] : ch;
+    }
+    cipherStr = out;
+
+    guesses = {};
+    revealed = {};
+    checkMode = false;
+    solved = false;
+    hintCount = 0;
+    selectedIdx = -1;
+    selectedCode = null;
+
+    $("btnCheck").classList.remove("on");
+    $("winOverlay").classList.add("hidden");
+
+    buildBoard();
+    buildFreq();
+    startTimer();
+    // select first letter cell so typing works immediately
+    if (letterCells.length){ selectedIdx = 0; selectedCode = letterCells[0].code; }
+    render();
+  }
+
+  // ---- board DOM ----
+  function buildBoard(){
+    puzzleEl.innerHTML = "";
+    letterCells = [];
+    var curWord = null;
+    for (var i = 0; i < cipherStr.length; i++){
+      var ch = cipherStr[i];
+      if (ch === " "){
+        curWord = null;
+        continue;
+      }
+      if (!curWord){
+        curWord = document.createElement("div");
+        curWord.className = "word";
+        puzzleEl.appendChild(curWord);
+      }
+      var isLetter = (ch >= "A" && ch <= "Z");
+      var cell = document.createElement("div");
+      cell.className = "cell " + (isLetter ? "letter" : "punc");
+      var g = document.createElement("div");
+      g.className = "guess";
+      var code = document.createElement("div");
+      code.className = "code";
+      if (isLetter){
+        code.textContent = ch;
+        var pos = letterCells.length;
+        var rec = { code: ch, cell: cell, guessEl: g, pos: pos };
+        letterCells.push(rec);
+        (function(p){
+          cell.addEventListener("click", function(){ selectPos(p); });
+        })(pos);
+      } else {
+        g.textContent = ch;      // punctuation shown as-is
+        code.innerHTML = "&nbsp;";
+      }
+      cell.appendChild(g);
+      cell.appendChild(code);
+      curWord.appendChild(cell);
+    }
+  }
+
+  // ---- frequency strip ----
+  function buildFreq(){
+    freqChipsEl.innerHTML = "";
+    freqChipEls = {};
+    var counts = {};
+    for (var i = 0; i < letterCells.length; i++){
+      var cd = letterCells[i].code;
+      counts[cd] = (counts[cd] || 0) + 1;
+    }
+    var codes = Object.keys(counts);
+    codes.sort(function(a, b){
+      if (counts[b] !== counts[a]) return counts[b] - counts[a];
+      return a < b ? -1 : 1;
+    });
+    for (var k = 0; k < codes.length; k++){
+      (function(cd){
+        var chip = document.createElement("div");
+        chip.className = "chip";
+        var cc = document.createElement("div"); cc.className = "cc"; cc.textContent = cd;
+        var cn = document.createElement("div"); cn.className = "cn"; cn.textContent = counts[cd];
+        var cg = document.createElement("div"); cg.className = "cg"; cg.textContent = "";
+        chip.appendChild(cc); chip.appendChild(cn); chip.appendChild(cg);
+        chip.addEventListener("click", function(){ selectCode(cd); });
+        freqChipsEl.appendChild(chip);
+        freqChipEls[cd] = { chip: chip, guessEl: cg };
+      })(codes[k]);
+    }
+  }
+
+  // ---- selection ----
+  function selectPos(pos){
+    if (pos < 0 || pos >= letterCells.length) return;
+    selectedIdx = pos;
+    selectedCode = letterCells[pos].code;
+    render();
+  }
+  function selectCode(cd){
+    for (var i = 0; i < letterCells.length; i++){
+      if (letterCells[i].code === cd){ selectPos(i); return; }
+    }
+  }
+  function move(dir){
+    if (!letterCells.length) return;
+    if (selectedIdx < 0) selectedIdx = dir > 0 ? 0 : letterCells.length - 1;
+    else selectedIdx = (selectedIdx + dir + letterCells.length) % letterCells.length;
+    selectedCode = letterCells[selectedIdx].code;
+    render();
+  }
+  function advance(dir){
+    if (!letterCells.length) return;
+    var i = selectedIdx < 0 ? (dir > 0 ? -1 : 0) : selectedIdx;
+    for (var n = 0; n < letterCells.length; n++){
+      i = (i + dir + letterCells.length) % letterCells.length;
+      if (!revealed[letterCells[i].code]){
+        selectedIdx = i; selectedCode = letterCells[i].code; render(); return;
+      }
+    }
+    move(dir); // everything locked
+  }
+
+  // ---- editing ----
+  function typeLetter(L){
+    if (solved) return;
+    if (selectedIdx < 0){ selectPos(0); }
+    if (selectedIdx < 0) return;
+    var code = letterCells[selectedIdx].code;
+    if (revealed[code]){ advance(1); return; }
+    guesses[code] = L;
+    advance(1);
+    // advance() already re-rendered; ensure render for the set value too
+    render();
+  }
+  function doDelete(){
+    if (solved) return;
+    if (selectedIdx < 0) return;
+    var code = letterCells[selectedIdx].code;
+    if (revealed[code]){ move(-1); return; }
+    if (guesses[code]){
+      delete guesses[code];
+    } else {
+      move(-1);
+      var c2 = letterCells[selectedIdx].code;
+      if (!revealed[c2] && guesses[c2]) delete guesses[c2];
+    }
+    render();
+  }
+
+  // ---- actions ----
+  function doHint(){
+    if (solved) return;
+    var counts = {};
+    for (var i = 0; i < letterCells.length; i++){
+      var cd = letterCells[i].code;
+      counts[cd] = (counts[cd] || 0) + 1;
+    }
+    var cands = [];
+    for (var c in counts){
+      if (!revealed[c] && guesses[c] !== dec[c]) cands.push(c);
+    }
+    if (!cands.length) return;
+    cands.sort(function(a, b){ return counts[b] - counts[a]; });
+    var pick = cands[0];
+    guesses[pick] = dec[pick];
+    revealed[pick] = true;
+    hintCount++;
+    selectCode(pick);
+  }
+  function toggleCheck(){
+    checkMode = !checkMode;
+    $("btnCheck").classList.toggle("on", checkMode);
+    render();
+  }
+  function clearAll(){
+    if (solved) return;
+    for (var c in guesses){
+      if (!revealed[c]) delete guesses[c];
+    }
+    render();
+  }
+
+  // ---- render ----
+  function render(){
+    // conflicts: a plain-letter guess used by 2+ distinct codes
+    var byGuess = {};
+    for (var c in guesses){
+      var v = guesses[c];
+      if (!v) continue;
+      (byGuess[v] = byGuess[v] || []).push(c);
+    }
+    var conflictCodes = {};
+    for (var g in byGuess){ if (byGuess[g].length > 1){ byGuess[g].forEach(function(cc){ conflictCodes[cc] = true; }); } }
+
+    var mistakes = 0;
+    for (var i = 0; i < letterCells.length; i++){
+      var rec = letterCells[i];
+      var code = rec.code;
+      var val = guesses[code] || "";
+      rec.guessEl.textContent = val;
+      var cls = "cell letter";
+      if (code === selectedCode) cls += " same";
+      if (i === selectedIdx) cls += " sel";
+      if (revealed[code]) cls += " lock";
+      var correct = (val && val === dec[code]);
+      if (val && val !== dec[code]) mistakes++;
+      if (checkMode && val){
+        cls += correct ? " ok" : " bad";
+      } else if (conflictCodes[code] && !revealed[code]){
+        cls += " conf";
+      }
+      rec.cell.className = cls;
+    }
+
+    // frequency chip guesses + selection
+    for (var cd in freqChipEls){
+      var fc = freqChipEls[cd];
+      fc.guessEl.textContent = guesses[cd] ? guesses[cd] : "";
+      fc.chip.classList.toggle("sel", cd === selectedCode);
+      fc.chip.classList.toggle("lock", !!revealed[cd]);
+    }
+
+    // on-screen keyboard "used" marks
+    var usedPlain = {};
+    for (var c2 in guesses){ if (guesses[c2]) usedPlain[guesses[c2]] = true; }
+    for (var kk in keyEls){
+      if (kk.length === 1) keyEls[kk].classList.toggle("used", !!usedPlain[kk]);
+    }
+
+    // stats
+    var distinct = {};
+    for (var m = 0; m < letterCells.length; m++) distinct[letterCells[m].code] = true;
+    var total = Object.keys(distinct).length;
+    var filled = 0;
+    for (var d in distinct){ if (guesses[d]) filled++; }
+    $("stFilled").textContent = filled + "/" + total;
+    $("stHints").textContent = hintCount;
+    var mw = $("stMistakeWrap");
+    if (checkMode){ mw.style.display = ""; $("stMistake").textContent = mistakes; }
+    else mw.style.display = "none";
+
+    updateStatusLine();
+
+    // win?
+    if (!solved){
+      var allRight = true;
+      for (var dc in distinct){ if (guesses[dc] !== dec[dc]){ allRight = false; break; } }
+      if (allRight && total > 0) onWin();
+    }
+  }
+
+  function updateStatusLine(){
+    if (selectedCode){
+      var g = guesses[selectedCode];
+      var lock = revealed[selectedCode] ? " (locked)" : "";
+      statusEl.innerHTML =
+        'Code <span class="kbd">' + selectedCode + '</span> ' +
+        '<span class="arrow">&rarr;</span> ' +
+        (g ? '<span class="pick">' + g + '</span>' + lock
+           : 'type its real letter' + lock);
+    } else {
+      statusEl.textContent = "Click a coded letter, then type the letter you think it stands for.";
+    }
+  }
+
+  // ---- win ----
+  function onWin(){
+    solved = true;
+    running = false;
+    baseElapsed = nowElapsed();
+    $("winQuote").textContent = "“" + entry.t + "”";
+    $("winBy").textContent = "by " + entry.a;
+    $("winTime").textContent = fmtTime(baseElapsed);
+    $("winHints").textContent = hintCount;
+    $("winOverlay").classList.remove("hidden");
+    // NOTE: has_leaderboard = false -> no score is posted to the host, ever.
+  }
+
+  // ---- timer ----
+  function startTimer(){ baseElapsed = 0; runStart = Date.now(); running = true; }
+  function nowElapsed(){ return baseElapsed + (running ? (Date.now() - runStart) : 0); }
+  function fmtTime(ms){
+    var s = Math.floor(ms / 1000);
+    var m = Math.floor(s / 60);
+    var ss = s % 60;
+    return m + ":" + (ss < 10 ? "0" : "") + ss;
+  }
+  setInterval(function(){
+    if (!solved) $("stTime").textContent = fmtTime(nowElapsed());
+  }, 250);
+  document.addEventListener("visibilitychange", function(){
+    if (solved) return;
+    if (document.hidden){
+      if (running){ baseElapsed = nowElapsed(); running = false; }
+    } else {
+      if (!running){ runStart = Date.now(); running = true; }
+    }
+  });
+
+  // ---- on-screen keyboard ----
+  function buildKeyboard(){
+    var rows = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+    keysEl.innerHTML = "";
+    for (var r = 0; r < rows.length; r++){
+      var row = document.createElement("div");
+      row.className = "krow";
+      if (r === 2){
+        row.appendChild(makeKey("DEL", true));
+      }
+      for (var i = 0; i < rows[r].length; i++){
+        row.appendChild(makeKey(rows[r][i], false));
+      }
+      if (r === 2){
+        row.appendChild(makeKey("DEL2", true, "←")); // second delete for balance
+      }
+      keysEl.appendChild(row);
+    }
+  }
+  function makeKey(label, wide, glyph){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "key" + (wide ? " wide del" : "");
+    b.textContent = glyph || label;
+    // avoid stealing focus so the global keydown listener stays authoritative
+    b.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    b.addEventListener("click", function(){
+      if (label === "DEL" || label === "DEL2") doDelete();
+      else typeLetter(label);
+    });
+    if (label.length === 1) keyEls[label] = b;
+    return b;
+  }
+
+  // ---- global keyboard ----
+  document.addEventListener("keydown", function(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+    // overlays
+    if (!$("winOverlay").classList.contains("hidden")){
+      if (k === "Enter"){ e.preventDefault(); newPuzzle(); }
+      else if (k === "Escape"){ e.preventDefault(); $("winOverlay").classList.add("hidden"); }
+      return;
+    }
+    if (!$("helpOverlay").classList.contains("hidden")){
+      if (k === "Enter" || k === "Escape"){ e.preventDefault(); $("helpOverlay").classList.add("hidden"); }
+      return;
+    }
+    if (k === "ArrowRight"){ e.preventDefault(); move(1); return; }
+    if (k === "ArrowLeft"){ e.preventDefault(); move(-1); return; }
+    if (k === "ArrowDown"){ e.preventDefault(); move(1); return; }
+    if (k === "ArrowUp"){ e.preventDefault(); move(-1); return; }
+    if (k === " " || k === "Spacebar"){ e.preventDefault(); advance(1); return; }
+    if (k === "Backspace" || k === "Delete"){ e.preventDefault(); doDelete(); return; }
+    if (k && k.length === 1 && /[a-zA-Z]/.test(k)){ e.preventDefault(); typeLetter(k.toUpperCase()); return; }
+  });
+
+  // ---- button wiring ----
+  $("btnNew").addEventListener("click", newPuzzle);
+  $("btnHint").addEventListener("click", doHint);
+  $("btnCheck").addEventListener("click", toggleCheck);
+  $("btnClear").addEventListener("click", clearAll);
+  $("btnHelp").addEventListener("click", function(){ $("helpOverlay").classList.remove("hidden"); });
+  $("helpClose").addEventListener("click", function(){ $("helpOverlay").classList.add("hidden"); });
+  $("winNew").addEventListener("click", newPuzzle);
+  $("winClose").addEventListener("click", function(){ $("winOverlay").classList.add("hidden"); });
+
+  // ---- boot ----
+  buildKeyboard();
+  newPuzzle();
+  // show help on first load so the rules are on-screen
+  $("helpOverlay").classList.remove("hidden");
+})();
+</script>
+
+<style data-batchly="hit-targets">/* Batchly mobile hit-target shim: >=44px tappables on phones/touch only */
+@media (max-width: 900px), (pointer: coarse){
+  #tools .btn{min-height:44px;touch-action:manipulation}
+  #tools .btn.icon{min-width:44px}
+  #keys .key{min-height:44px;touch-action:manipulation}
+  .card .btn{min-height:44px}
+  #freqChips .chip{min-height:44px}
+}
+</style>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "folder": "admin/encode",
+  "title": "Encode",
+  "description": "Base64, URL, hex and HTML entity encoding both ways, plus a JWT decoder. All local.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/encode",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 57273,
+      "sha256": "88759b6194fd4b9a7ab85de58afb7c8f4bd9a0798b33601250e25b4b6e1179de",
+      "source": "published catalog HTML"
+    }
+  ]
+}

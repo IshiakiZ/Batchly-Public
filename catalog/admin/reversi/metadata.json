@@ -1,0 +1,20 @@
+{
+  "folder": "admin/reversi",
+  "title": "Reversi",
+  "description": "Play Reversi (Othello) against a computer that thinks ahead. Flank your opponent's discs to flip them and own the most at the end.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/reversi",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 46270,
+      "sha256": "2cfec34a5438106293a6a7ff107fcddf32b380ba23a32162aa6a0d5e0385dd16",
+      "source": "published catalog HTML"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "folder": "admin/mastermind",
+  "title": "Mastermind",
+  "description": "Crack the hidden colour code in ten guesses. Black and white pegs tell you how close you are. A pure deduction classic.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/mastermind",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 42451,
+      "sha256": "01b28cd84050e8150cd9b661e7e3a7760014dceef5c7f42e94b5eaf39b3efabe",
+      "source": "published catalog HTML"
+    }
+  ]
+}

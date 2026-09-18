@@ -1,0 +1,20 @@
+{
+  "folder": "admin/word-search",
+  "title": "Word Search",
+  "description": "Find every hidden word in the letter grid: across, down, and diagonally, forwards or back. Fresh themed puzzles each round.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/word-search",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 32611,
+      "sha256": "0e0c4d715da629ce6c1c519e831b14ae90cfce66c37424151e39c77f5fbe41a3",
+      "source": "published catalog HTML"
+    }
+  ]
+}

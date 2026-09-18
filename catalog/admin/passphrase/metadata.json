@@ -1,0 +1,20 @@
+{
+  "folder": "admin/passphrase",
+  "title": "Passphrase",
+  "description": "Generate strong passwords and diceware passphrases with real entropy figures. Nothing is stored or sent.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/passphrase",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 56120,
+      "sha256": "056c5a5097a949eecb4fadc2a607346a09b0db76db1a8f77f8b521dcc0fc9412",
+      "source": "published catalog HTML"
+    }
+  ]
+}

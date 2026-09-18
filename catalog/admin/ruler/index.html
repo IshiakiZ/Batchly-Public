@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ruler</title>
+<style>
+  :root{
+    --bg:#10100e;
+    --fg:#eee;
+    --muted:#888;
+    --accent:#ff3b30;
+    --mono: ui-monospace, Menlo, Monaco, "Cascadia Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  /* Author `display` rules outrank the UA's [hidden]{display:none} (author origin wins),
+     so an element like `label.field{display:block}` would stay visible while marked hidden.
+     Re-assert it once, here, or every `hidden` toggle in the app is a no-op. */
+  [hidden]{display:none !important}
+  /* Reserve the scrollbar. Without this, a canvas that resizes to the body width can
+     oscillate: taller page -> scrollbar -> narrower body -> shorter canvas -> no scrollbar. */
+  html{overflow-y:scroll}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.5;
+    overflow-x:hidden;
+    -webkit-text-size-adjust:100%;
+  }
+  .col{max-width:640px;margin:0 auto;padding:0 20px}
+  .bleed{width:100%}
+
+  h1{
+    font-size:15px;letter-spacing:.18em;text-transform:uppercase;
+    margin:0;font-weight:700;
+  }
+  .lbl{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  }
+  header{padding-top:20px}
+  .headrow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .chip{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    border:2px solid var(--fg);padding:4px 8px;display:inline-block;
+  }
+  .chip.warn{border-color:var(--accent);color:var(--accent)}
+
+  /* ---- tabs ---- */
+  [role=tablist]{display:flex;gap:0;margin:16px 0 0;border:2px solid var(--fg)}
+  [role=tab]{
+    flex:1 1 0;min-height:44px;background:transparent;border:0;
+    border-right:2px solid var(--fg);
+    color:var(--fg);font-family:var(--mono);font-size:11px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:0 4px;
+  }
+  [role=tab]:last-child{border-right:0}
+  [role=tab][aria-selected=true]{background:var(--accent);color:var(--bg)}
+
+  /* ---- buttons ---- */
+  button{font-family:var(--mono)}
+  .btn{
+    display:block;width:100%;min-height:44px;
+    background:var(--accent);color:var(--bg);border:2px solid var(--accent);
+    font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    cursor:pointer;padding:10px 14px;
+  }
+  .btn.sec{background:transparent;color:var(--accent)}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap}
+  .btnrow .btn{flex:1 1 140px;width:auto}
+
+  .seg{display:flex;border:2px solid var(--fg);width:100%}
+  .seg button{
+    flex:1 1 0;min-height:44px;background:transparent;border:0;
+    border-right:2px solid var(--fg);color:var(--fg);
+    font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
+
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  [role=tab]:focus-visible,.seg button:focus-visible{outline-offset:-4px}
+
+  /* ---- panels / notes ---- */
+  .panel{border:2px solid var(--fg);padding:16px;margin:16px 0}
+  .panel.alert{border-color:var(--accent)}
+  .panel h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px;font-weight:700}
+  .note{color:var(--muted);font-size:12px;margin:10px 0}
+  .note strong{color:var(--fg);font-weight:700}
+  .err{color:var(--accent);font-size:12px;margin:8px 0}
+
+  /* ---- readout ---- */
+  .readout{margin:14px 0 4px}
+  .big{font-size:30px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px;letter-spacing:.06em}
+
+  /* ---- stages ---- */
+  .stage{
+    position:relative;
+    user-select:none;-webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    background:var(--bg);
+    border-top:2px solid var(--fg);border-bottom:2px solid var(--fg);
+    margin:16px 0;
+  }
+  /* Only the draggable surfaces swallow touch gestures. The plain ruler must stay
+     scrollable, or a finger landing on it would freeze the page. */
+  #mStage,#cStage{touch-action:none;cursor:crosshair}
+  .stage canvas{display:block}
+  .stage.vert{border-right:2px solid var(--fg);width:max-content}
+
+  /* drag handles: 44px touch target, thin visual line drawn on the canvas */
+  .handle{
+    position:absolute;width:44px;height:100%;top:0;left:0;
+    background:transparent;border:0;padding:0;margin:0;cursor:grab;
+    touch-action:none;
+  }
+  .handle .cap{
+    position:absolute;left:50%;transform:translateX(-50%);
+    background:var(--accent);color:var(--bg);
+    font-size:11px;font-weight:700;letter-spacing:.1em;
+    padding:3px 7px;pointer-events:none;
+  }
+  .handle[data-handle=a] .cap{top:0}
+  .handle[data-handle=b] .cap{bottom:0}
+  .handle[data-handle=c] .cap{top:50%;transform:translate(-50%,-50%)}
+  .handle[disabled]{opacity:.35;cursor:not-allowed}
+  .stage.vert .handle{width:100%;height:44px;left:0}
+  /* bottom:auto resets the horizontal-mode rule for marker B, which would
+     otherwise stretch its cap between top:50% and bottom:0 */
+  .stage.vert .handle .cap{left:auto;bottom:auto;transform:translateY(-50%);top:50%}
+  .stage.vert .handle[data-handle=a] .cap{left:0;right:auto}
+  .stage.vert .handle[data-handle=b] .cap{right:0;left:auto}
+  .handle:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+
+  .sr{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+  }
+
+  /* ---- calibrate ---- */
+  .presets{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+  .preset{
+    flex:1 1 150px;min-height:56px;text-align:left;
+    background:transparent;border:2px solid var(--fg);color:var(--fg);
+    padding:8px 10px;cursor:pointer;
+  }
+  .preset[aria-pressed=true]{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+  .preset[disabled]{opacity:.35;cursor:not-allowed}
+  .preset .pn{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .preset .pd{display:block;font-size:11px;letter-spacing:.06em;opacity:.75}
+
+  label.field{display:block;margin:12px 0 0}
+  label.field .lbl{display:block;margin-bottom:6px}
+  input[type=number],input[type=text]{
+    width:100%;min-height:44px;background:transparent;color:var(--fg);
+    border:2px solid var(--fg);font-family:var(--mono);font-size:16px;
+    padding:8px 10px;
+  }
+  details{border:2px solid var(--fg);margin:16px 0}
+  summary{
+    min-height:44px;display:flex;align-items:center;padding:0 14px;cursor:pointer;
+    font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  }
+  details .inner{padding:0 14px 14px}
+  .kv{display:flex;justify-content:space-between;gap:12px;border-top:2px solid #2a2a28;padding:8px 0;font-size:12px}
+  .kv span:first-child{color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-size:11px}
+  footer{padding:8px 0 40px;color:var(--muted);font-size:12px}
+  hr{border:0;border-top:2px solid #2a2a28;margin:20px 0}
+</style>
+</head>
+<body>
+
+<header class="col">
+  <div class="headrow">
+    <h1>Ruler</h1>
+    <span class="chip" id="calChip">&nbsp;</span>
+  </div>
+  <div role="tablist" aria-label="Ruler sections">
+    <button role="tab" id="tab-ruler"   aria-controls="p-ruler"   aria-selected="true"  tabindex="0">Ruler</button>
+    <button role="tab" id="tab-measure" aria-controls="p-measure" aria-selected="false" tabindex="-1">Measure</button>
+    <button role="tab" id="tab-cal"     aria-controls="p-cal"     aria-selected="false" tabindex="-1">Calibrate</button>
+  </div>
+</header>
+
+<div class="col" id="alerts"></div>
+
+<!-- ============================ RULER ============================ -->
+<section role="tabpanel" id="p-ruler" aria-labelledby="tab-ruler" tabindex="0">
+  <div class="col">
+    <div class="seg" role="group" aria-label="Ruler orientation" style="margin-top:16px">
+      <button type="button" id="oriH" aria-pressed="true">Horizontal</button>
+      <button type="button" id="oriV" aria-pressed="false">Vertical</button>
+    </div>
+  </div>
+
+  <div class="bleed">
+    <div class="stage" id="rulerStage"><canvas id="rulerCanvas"></canvas></div>
+  </div>
+
+  <div class="col">
+    <p class="note" id="rulerSpan"></p>
+    <p class="note">Lay the object along the scale with one end flush against the red
+      <strong>0</strong> line at the very start. Centimetres run along one side, inches along the other.
+      This page sits inside a frame, so the object cannot hang off the edge of the screen;
+      for anything awkward, use <strong>Measure</strong> and put a marker at each end.</p>
+  </div>
+</section>
+
+<!-- ============================ MEASURE ============================ -->
+<section role="tabpanel" id="p-measure" aria-labelledby="tab-measure" tabindex="0" hidden>
+  <div class="col">
+    <div class="seg" role="group" aria-label="Measure orientation" style="margin-top:16px">
+      <button type="button" id="mOriH" aria-pressed="true">Horizontal</button>
+      <button type="button" id="mOriV" aria-pressed="false">Vertical</button>
+    </div>
+    <p class="note">Drag the two markers to the ends of the object lying on the
+      screen. <strong>Two fingers work at once</strong>, one on each marker.</p>
+  </div>
+
+  <div class="bleed">
+    <div class="stage" id="mStage">
+      <canvas id="mCanvas"></canvas>
+      <button class="handle" data-handle="a" id="hA" role="slider"
+              aria-label="Marker A" aria-valuemin="0" aria-valuenow="0" aria-valuemax="100"><span class="cap">A</span></button>
+      <button class="handle" data-handle="b" id="hB" role="slider"
+              aria-label="Marker B" aria-valuemin="0" aria-valuenow="0" aria-valuemax="100"><span class="cap">B</span></button>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="readout">
+      <div class="big" id="mBig" aria-hidden="true">-</div>
+      <div class="sub" id="mSub" aria-hidden="true"></div>
+      <div class="sr" id="mLive" aria-live="polite"></div>
+    </div>
+    <div class="btnrow" style="margin-top:14px">
+      <button type="button" class="btn sec" id="mReset">Reset markers</button>
+    </div>
+    <p class="note">Arrow keys nudge a focused marker by 1&nbsp;mm, Shift+Arrow by 1&nbsp;cm,
+      Home / End jump to the ends.</p>
+  </div>
+</section>
+
+<!-- ============================ CALIBRATE ============================ -->
+<section role="tabpanel" id="p-cal" aria-labelledby="tab-cal" tabindex="0" hidden>
+  <div class="col">
+    <div class="panel" style="margin-top:16px">
+      <h2>Why this step exists</h2>
+      <p class="note" style="margin:0">A browser has <strong>no idea how big your screen physically is</strong>.
+        A CSS pixel is a unit of layout, not of length, and <code>devicePixelRatio</code> only describes
+        rendering density, not size. The only way to get real millimetres is to show you a line and have
+        you match it to an object whose size is known. <strong>Everything this app reports is exactly as
+        accurate as this one measurement.</strong></p>
+    </div>
+
+    <p class="lbl" id="presetsLbl">1. Pick a reference object</p>
+    <div class="presets" id="presets" role="group" aria-labelledby="presetsLbl"></div>
+    <p class="err" id="presetErr" role="status"></p>
+
+    <label class="field" id="customWrap" hidden>
+      <span class="lbl">Known length in millimetres (10 – 2000)</span>
+      <input type="number" id="customMm" min="10" max="2000" step="0.01" inputmode="decimal" value="100">
+    </label>
+
+    <p class="lbl" style="margin-top:18px">2. Drag the red edge until the shape matches the real object</p>
+  </div>
+
+  <div class="bleed">
+    <div class="stage" id="cStage">
+      <canvas id="cCanvas"></canvas>
+      <button class="handle" data-handle="c" id="hC" role="slider"
+              aria-label="Calibration edge" aria-valuemin="10" aria-valuenow="0" aria-valuemax="100"><span class="cap">↔</span></button>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="btnrow">
+      <button type="button" class="btn sec" id="nudgeM" aria-label="Move edge 1 pixel left">− 1 px</button>
+      <button type="button" class="btn sec" id="nudgeP" aria-label="Move edge 1 pixel right">+ 1 px</button>
+    </div>
+
+    <div style="margin-top:16px">
+      <div class="kv"><span>Reference</span><span id="kRef">-</span></div>
+      <div class="kv"><span>On-screen length</span><span id="kPx">-</span></div>
+      <div class="kv"><span>Scale</span><span id="kScale">-</span></div>
+      <div class="kv"><span>CSS resolution</span><span id="kDpi">-</span></div>
+      <div class="kv"><span>Physical density</span><span id="kPpi">-</span></div>
+    </div>
+
+    <div class="btnrow" style="margin-top:16px">
+      <button type="button" class="btn" id="calSave">Save calibration</button>
+      <button type="button" class="btn sec" id="calReset">Reset to default</button>
+    </div>
+    <p class="err" id="calMsg" role="status"></p>
+
+    <details>
+      <summary>No reference object? Estimate from screen size</summary>
+      <div class="inner">
+        <p class="note">If you know your display's advertised diagonal, this gets you close.
+          It is an <strong>estimate</strong>: advertised diagonals are rounded, and on a desktop it is
+          wrong if the browser is zoomed. Matching a real object is always better.</p>
+        <label class="field">
+          <span class="lbl">Screen diagonal (inches)</span>
+          <input type="number" id="diagIn" min="1" max="120" step="0.1" inputmode="decimal" placeholder="e.g. 6.1">
+        </label>
+        <div class="kv" style="margin-top:12px"><span>Reported screen</span><span id="kScreen">-</span></div>
+        <div class="kv"><span>Estimated scale</span><span id="kEst">-</span></div>
+        <button type="button" class="btn sec" id="estApply" style="margin-top:12px">Use this estimate</button>
+        <p class="err" id="estMsg" role="status"></p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer class="col">
+  <hr>
+  <p>An on-screen ruler is only as good as its calibration. Nothing in a web browser reports the physical
+    size of your screen, so the numbers here come entirely from the reference length you matched.
+    Re-calibrate if you change device, change display scaling, or zoom the page.</p>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------------------------------------------------------
+   Units and the default guess.
+   CSS defines 1in === 96px. That is a fixed definition of the CSS
+   reference pixel, NOT a measurement of your screen; real displays
+   land anywhere from ~70 to ~160 CSS dpi. So this default is a
+   starting point only, and the UI says so loudly until calibrated.
+--------------------------------------------------------------- */
+var MM_PER_IN = 25.4;
+var DEFAULT_PX_PER_MM = 96 / MM_PER_IN;   // 3.7795...
+var STORE_KEY = "batchly.ruler.v1";
+
+var state = {
+  pxPerMm: DEFAULT_PX_PER_MM,
+  calibrated: false,
+  source: "",
+  dpr: null            // devicePixelRatio recorded at calibration time
+};
+var storageBlocked = false;
+
+/* ---------------- storage: every access guarded, app works without it -------- */
+function loadState(){
+  var raw;
+  try { raw = window.localStorage.getItem(STORE_KEY); }
+  catch(e){ storageBlocked = true; return; }
+  if(!raw) return;
+  try {
+    var o = JSON.parse(raw);
+    var p = parseFloat(o && o.pxPerMm);
+    // Sanity band: below ~1 or above ~40 px/mm is not a real display.
+    if(isFinite(p) && p > 1 && p < 40){
+      state.pxPerMm = p;
+      state.calibrated = true;
+      state.source = typeof o.source === "string" ? o.source : "";
+      state.dpr = (typeof o.dpr === "number" && o.dpr > 0) ? o.dpr : null;
+    }
+  } catch(e){ /* corrupt value: fall back to the default silently, it is not user data */ }
+}
+function saveState(){
+  try {
+    window.localStorage.setItem(STORE_KEY, JSON.stringify({
+      pxPerMm: state.pxPerMm, source: state.source, dpr: state.dpr, v: 1
+    }));
+    // A write can fail transiently (quota pressure, a private-mode quirk) and then start
+    // working again. Latching the flag on would leave "Calibration cannot be saved" on
+    // screen contradicting the "Saved." message right below it.
+    storageBlocked = false;
+    return true;
+  } catch(e){ storageBlocked = true; return false; }
+}
+function clearState(){
+  try { window.localStorage.removeItem(STORE_KEY); storageBlocked = false; }
+  catch(e){ storageBlocked = true; }
+}
+
+/* ---------------- small helpers ---------------- */
+function $(id){ return document.getElementById(id); }
+/* Do NOT floor this at 1. Zooming OUT on a 1x display gives a devicePixelRatio below 1,
+   and clamping it away had two costs: the "display scale changed" warning never fired for
+   zoom-out (the saved px/mm is just as wrong in that direction), and `device ppi`, which is
+   CSS dpi x dpr, read high. Guard only against 0/NaN, which would divide by zero below. */
+function dprNow(){
+  var d = window.devicePixelRatio;
+  return (typeof d === "number" && isFinite(d) && d > 0) ? d : 1;
+}
+function fmt(n, d){ return n.toFixed(d); }
+/* role=status elements are live regions, and re-assigning the SAME string still replaces the
+   text node, which some screen readers re-announce. renderCalibrate() runs on every
+   pointermove, so a pinned message would machine-gun the user. Write only on a real change. */
+function setText(el, s){ if(el.textContent !== s) el.textContent = s; }
+/* Dragging preventDefault()s pointerdown (it has to, or the page pans mid-drag), which
+   also suppresses the default focus. Without this, the documented "drag, then arrow-key
+   to fine-tune" flow silently does nothing until you Tab back to the handle. */
+function focusQuietly(el){
+  if(!el || el.disabled) return;
+  try { el.focus({ preventScroll: true }); } catch(err){ try { el.focus(); } catch(e2){} }
+}
+
+/* Nearest 1/16 inch as a reduced fraction: 5.0625in -> 5 1/16" */
+function inchFraction(inches){
+  var s = Math.round(inches * 16);
+  var whole = Math.floor(s / 16);
+  var n = s % 16, d = 16;
+  while(n > 0 && n % 2 === 0){ n /= 2; d /= 2; }
+  if(n === 0) return whole + '"';
+  return (whole > 0 ? whole + " " : "") + n + "/" + d + '"';
+}
+
+/* Debounced screen-reader announcements: the visible number updates every
+   frame while dragging, but firing a live region that fast is useless noise. */
+function makeAnnouncer(el){
+  var t = null;
+  return function(text){
+    if(t) clearTimeout(t);
+    t = setTimeout(function(){ el.textContent = text; }, 400);
+  };
+}
+
+/* =================================================================
+   SCALE DRAWING
+   Tick positions are computed in continuous CSS px from pxPerMm and
+   only rounded at paint time; rounding is never accumulated, so the
+   last tick on a long ruler is as accurate as the first.
+================================================================= */
+function drawScale(canvas, opt){
+  var dpr = dprNow();
+  var L = Math.max(1, Math.floor(opt.len));      // length axis, CSS px
+  var W = Math.max(1, Math.floor(opt.cross));    // cross axis, CSS px
+  var vert = !!opt.vertical;
+  var ppm = opt.pxPerMm;
+
+  var cssW = vert ? W : L, cssH = vert ? L : W;
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width  = cssW + "px";
+  canvas.style.height = cssH + "px";
+
+  var ctx = canvas.getContext("2d");
+  if(!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  function snap(v){ return Math.round(v * dpr) / dpr; }
+  /* Rect snapped to the device-pixel grid so hairlines stay sharp.
+     Snapping the two edges (not the width) keeps every tick the same weight. */
+  function rect(x, y, w, h){
+    var x1 = snap(x), y1 = snap(y), x2 = snap(x + w), y2 = snap(y + h);
+    ctx.fillRect(x1, y1, Math.max(1 / dpr, x2 - x1), Math.max(1 / dpr, y2 - y1));
+  }
+  /* A tick centred on `pos` along the length axis, growing `len` inward
+     from `from` on the cross axis. Clamped so the tick at 0 stays visible. */
+  function tick(pos, thick, from, len){
+    var a = Math.min(Math.max(pos - thick / 2, 0), L - thick);
+    if(vert) rect(from, a, len, thick);
+    else     rect(a, from, thick, len);
+  }
+
+  var MET = 30, IMP = 30;             // major tick lengths, per side
+  var LEN = [10, 13, 17, 22, 30];     // tick length by hierarchy level
+
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+
+  /* ---- metric: 1mm minor, 5mm medium, 10mm major + number (cm) ---- */
+  ctx.fillStyle = "#888";
+  var mmStep = ppm < 2.2 ? 5 : 1;     // drop 1mm ticks when they would blur together
+  var mmMax = Math.floor(L / ppm);
+  var i, pos;
+  for(i = 0; i <= mmMax; i += mmStep){
+    if(i % 10 === 0 || i % 5 === 0) continue;      // majors/mediums drawn below in --fg
+    tick(i * ppm, 1, 0, LEN[0]);
+  }
+  ctx.fillStyle = "#eee";
+  for(i = 0; i <= mmMax; i += 5){
+    if(i % 10 === 0) continue;
+    tick(i * ppm, 1, 0, LEN[2]);
+  }
+  var pxPerCm = ppm * 10;
+  var cmLabelEvery = pxPerCm >= 22 ? 1 : (pxPerCm >= 11 ? 2 : 5);
+  for(i = 0; i <= mmMax; i += 10){
+    pos = i * ppm;
+    tick(pos, 2, 0, LEN[4]);
+    if((i / 10) % cmLabelEvery === 0){
+      var t = String(i / 10);
+      if(vert){ ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(t, MET + 5, pos + 3); }
+      else    { ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText(t, pos + 4, MET + 3); }
+    }
+  }
+
+  /* ---- imperial: sixteenths, with the classic length hierarchy ----
+     Level = how "round" the sixteenth index is: /16 inch, /8, /4, /2, whole. */
+  var pxPerIn = ppm * MM_PER_IN;
+  var sub = 16;
+  while(sub > 1 && pxPerIn / sub < 3.5) sub /= 2;   // thin out when too dense to read
+  var stepSixteenth = 16 / sub;
+  var sixMax = Math.floor(L / (pxPerIn / 16));
+  var inLabelEvery = pxPerIn >= 26 ? 1 : 2;
+  for(i = 0; i <= sixMax; i += stepSixteenth){
+    var lvl = (i % 16 === 0) ? 4 : (i % 8 === 0) ? 3 : (i % 4 === 0) ? 2 : (i % 2 === 0) ? 1 : 0;
+    pos = i * (pxPerIn / 16);
+    ctx.fillStyle = lvl === 0 ? "#888" : "#eee";
+    tick(pos, lvl === 4 ? 2 : 1, W - LEN[lvl], LEN[lvl]);
+    if(lvl === 4 && (i / 16) % inLabelEvery === 0){
+      ctx.fillStyle = "#eee";
+      var it = String(i / 16);
+      if(vert){ ctx.textAlign = "right"; ctx.textBaseline = "top"; ctx.fillText(it, W - IMP - 5, pos + 3); }
+      else    { ctx.textAlign = "left";  ctx.textBaseline = "bottom"; ctx.fillText(it, pos + 4, W - IMP - 3); }
+    }
+  }
+
+  /* ---- unit captions, in the quiet band between the two scales ---- */
+  ctx.fillStyle = "#888";
+  ctx.textBaseline = "middle";
+  if(vert){
+    // Vertical: the quiet band runs down the middle, so caption near the origin end.
+    ctx.textAlign = "center";
+    ctx.fillText("CM", MET + 22, 14);
+    ctx.fillText("IN", W - IMP - 22, 14);
+  } else {
+    ctx.textAlign = "left";
+    ctx.fillText("CM", 6, W / 2 - 9);
+    ctx.fillText("IN", 6, W / 2 + 9);
+  }
+
+  /* ---- the zero line, drawn last so nothing sits on top of it ---- */
+  ctx.fillStyle = "#ff3b30";
+  if(vert) rect(0, 0, W, 2); else rect(0, 0, 2, W);
+
+  return { ctx: ctx, dpr: dpr, L: L, W: W, vert: vert, rect: rect, snap: snap };
+}
+
+/* =================================================================
+   LAYOUT SIZING
+================================================================= */
+function stageWidth(el){
+  var w = el.getBoundingClientRect().width;
+  return Math.max(120, Math.floor(w));
+}
+function verticalLength(){
+  // Fit inside the frame without forcing a scroll to see the whole ruler.
+  return Math.max(280, Math.min(Math.floor(window.innerHeight * 0.82), 1600));
+}
+
+/* =================================================================
+   TAB 1: RULER
+================================================================= */
+var rulerVertical = false;
+var rulerStage = $("rulerStage"), rulerCanvas = $("rulerCanvas");
+
+function renderRuler(){
+  var stage = rulerStage;
+  stage.classList.toggle("vert", rulerVertical);
+  var len, cross;
+  if(rulerVertical){
+    cross = Math.min(200, stageWidth(stage.parentNode));
+    len = verticalLength();
+  } else {
+    cross = 140;
+    len = stageWidth(stage.parentNode);
+  }
+  var r = drawScale(rulerCanvas, { len: len, cross: cross, vertical: rulerVertical, pxPerMm: state.pxPerMm });
+  if(!r){ $("rulerSpan").textContent = "This browser could not create a canvas, so the ruler cannot be drawn."; return; }
+  var mm = len / state.pxPerMm;
+  $("rulerSpan").textContent =
+    "This ruler spans 0 – " + fmt(mm / 10, 1) + " cm (" + inchFraction(mm / MM_PER_IN) + ")" +
+    (state.calibrated ? "." : ", using the uncalibrated default. Treat it as wrong until you calibrate.");
+}
+/* Orientation is one shared setting; both tabs show a control for it so neither
+   silently inherits a state the user set on a screen they are not looking at. */
+$("oriH").addEventListener("click", function(){ setOrientation(false); });
+$("oriV").addEventListener("click", function(){ setOrientation(true); });
+$("mOriH").addEventListener("click", function(){ setOrientation(false); });
+$("mOriV").addEventListener("click", function(){ setOrientation(true); });
+function setOrientation(v){
+  rulerVertical = v;
+  $("oriH").setAttribute("aria-pressed", String(!v));
+  $("oriV").setAttribute("aria-pressed", String(v));
+  $("mOriH").setAttribute("aria-pressed", String(!v));
+  $("mOriV").setAttribute("aria-pressed", String(v));
+  refreshAll();
+}
+
+/* =================================================================
+   TAB 2: MEASURE (two handles, genuinely multi-touch)
+================================================================= */
+var mStage = $("mStage"), mCanvas = $("mCanvas");
+var mVertical = false;                 // measure surface follows the horizontal layout
+var mLen = 0, mCross = 190;
+var handles = { a: 0, b: 0 };
+var announceM = makeAnnouncer($("mLive"));
+
+function measureLayout(){
+  mVertical = rulerVertical;
+  mStage.classList.toggle("vert", mVertical);
+  if(mVertical){
+    mCross = Math.min(220, stageWidth(mStage.parentNode));
+    mLen = verticalLength();
+  } else {
+    mCross = 190;
+    mLen = stageWidth(mStage.parentNode);
+  }
+}
+function defaultHandles(){
+  handles.a = Math.round(mLen * 0.15);
+  handles.b = Math.round(mLen * 0.6);
+}
+var mInit = false;
+function renderMeasure(){
+  measureLayout();
+  /* The panel may be measured while hidden (width 0). Placing handles from that
+     bogus width would strand them at the far left once the tab is opened, so the
+     first real layout is what seeds them. */
+  if(mLen < 150) return;
+  if(!mInit){ defaultHandles(); mInit = true; }
+  handles.a = Math.min(Math.max(handles.a, 0), mLen);
+  handles.b = Math.min(Math.max(handles.b, 0), mLen);
+
+  var r = drawScale(mCanvas, { len: mLen, cross: mCross, vertical: mVertical, pxPerMm: state.pxPerMm });
+  if(!r){ $("mBig").textContent = "Canvas unavailable"; return; }
+
+  var ctx = r.ctx;
+  var lo = Math.min(handles.a, handles.b), hi = Math.max(handles.a, handles.b);
+  // shaded span between the markers
+  ctx.fillStyle = "rgba(255,59,48,0.16)";
+  if(mVertical) ctx.fillRect(0, lo, mCross, hi - lo);
+  else          ctx.fillRect(lo, 0, hi - lo, mCross);
+  // the marker lines themselves (2 CSS px, snapped, drawn over everything)
+  ctx.fillStyle = "#ff3b30";
+  [handles.a, handles.b].forEach(function(p){
+    var a = Math.min(Math.max(p - 1, 0), mLen - 2);
+    if(mVertical) r.rect(0, a, mCross, 2); else r.rect(a, 0, 2, mCross);
+  });
+
+  positionHandle($("hA"), handles.a);
+  positionHandle($("hB"), handles.b);
+  updateMeasureReadout();
+}
+function positionHandle(btn, pos){
+  /* Keep the whole 44px hit area on screen. pos-22 goes negative at the 0 end and past the
+     far end at the other, and body{overflow-x:hidden} clips whatever lands outside, so at
+     exactly the positions that matter most (an object flush with the edge) half the touch
+     target stopped existing. The red line is painted on the canvas at the true position, so
+     only the invisible grab area moves. */
+  var off = Math.min(Math.max(pos - 22, 0), Math.max(0, mLen - 44));
+  if(mVertical){ btn.style.top = off + "px"; btn.style.left = "0px"; }
+  else         { btn.style.left = off + "px"; btn.style.top = "0px"; }
+  var mm = pos / state.pxPerMm;
+  btn.setAttribute("aria-valuemin", "0");
+  btn.setAttribute("aria-valuemax", fmt(mLen / state.pxPerMm, 1));
+  btn.setAttribute("aria-valuenow", fmt(mm, 1));
+  btn.setAttribute("aria-valuetext", fmt(mm, 1) + " millimetres");
+}
+function updateMeasureReadout(){
+  var mm = Math.abs(handles.b - handles.a) / state.pxPerMm;
+  var inches = mm / MM_PER_IN;
+  $("mBig").textContent = fmt(mm / 10, 2) + " cm";
+  $("mSub").textContent = fmt(mm, 1) + " mm   ·   " + fmt(inches, 3) + " in   ·   " + inchFraction(inches) +
+                          (state.calibrated ? "" : "   ·   NOT CALIBRATED");
+  announceM(fmt(mm / 10, 2) + " centimetres, " + fmt(inches, 2) + " inches" +
+            (state.calibrated ? "" : ", not calibrated"));
+}
+/* Measure against the CANVAS, not the stage. getBoundingClientRect() on the stage
+   returns its border box, and .stage has a 2px top border; in vertical mode every
+   pointer position came out 2px (~0.5mm) below where the handle actually lands, since
+   absolutely-positioned handles are laid out from the padding box. */
+function posFromEvent(e){
+  var rect = mCanvas.getBoundingClientRect();
+  var p = mVertical ? (e.clientY - rect.top) : (e.clientX - rect.left);
+  return Math.min(Math.max(p, 0), mLen);
+}
+/* Multi-pointer: each pointer claims a marker for the life of its gesture,
+   so two fingers drag two different markers instead of fighting over one. */
+var claims = new Map();
+/* Grab offset per pointer. The hit area is 44px wide but the marker it represents is a 2px
+   line, so recentring the marker under the finger on the first pointermove threw it up to
+   22px (about 6mm) off the end the user had just lined it up with. Tapping bare stage
+   still jumps the nearest marker to the tap (offset 0); grabbing a marker now drags it. */
+var grabOff = new Map();
+mStage.addEventListener("pointerdown", function(e){
+  var forced = e.target.closest ? e.target.closest("[data-handle]") : null;
+  var key;
+  var taken = new Set(claims.values());
+  if(forced){
+    key = forced.getAttribute("data-handle");
+    if(taken.has(key)) return;
+    grabOff.set(e.pointerId, handles[key] - posFromEvent(e));
+  } else {
+    var pos = posFromEvent(e);
+    var free = ["a", "b"].filter(function(k){ return !taken.has(k); });
+    if(!free.length) return;
+    free.sort(function(k1, k2){ return Math.abs(handles[k1] - pos) - Math.abs(handles[k2] - pos); });
+    key = free[0];
+    handles[key] = pos;
+    grabOff.set(e.pointerId, 0);
+  }
+  claims.set(e.pointerId, key);
+  try { mStage.setPointerCapture(e.pointerId); } catch(err){}
+  e.preventDefault();
+  focusQuietly($("h" + key.toUpperCase()));
+  renderMeasure();
+});
+mStage.addEventListener("pointermove", function(e){
+  var key = claims.get(e.pointerId);
+  if(!key) return;
+  var off = grabOff.get(e.pointerId) || 0;
+  handles[key] = Math.min(Math.max(posFromEvent(e) + off, 0), mLen);
+  e.preventDefault();
+  renderMeasure();
+});
+function endPointer(e){
+  if(claims.has(e.pointerId)){
+    claims.delete(e.pointerId);
+    grabOff.delete(e.pointerId);
+    try { mStage.releasePointerCapture(e.pointerId); } catch(err){}
+  }
+}
+mStage.addEventListener("pointerup", endPointer);
+mStage.addEventListener("pointercancel", endPointer);
+
+["hA", "hB"].forEach(function(id){
+  $(id).addEventListener("keydown", function(e){
+    var key = this.getAttribute("data-handle");
+    var stepMm = e.shiftKey ? 10 : 1;
+    if(e.key === "Home"){ handles[key] = 0; renderMeasure(); e.preventDefault(); return; }
+    if(e.key === "End"){ handles[key] = mLen; renderMeasure(); e.preventDefault(); return; }
+    /* Position grows away from the 0 end, and in vertical mode that end is the TOP, so the
+       flat "Up = more" mapping drove the marker DOWNWARDS when the user pressed Up. Map each
+       key to the direction it actually points on screen instead. */
+    var d = 0;
+    if(mVertical){
+      if(e.key === "ArrowDown" || e.key === "ArrowRight") d = stepMm;
+      else if(e.key === "ArrowUp" || e.key === "ArrowLeft") d = -stepMm;
+    } else {
+      if(e.key === "ArrowRight" || e.key === "ArrowUp") d = stepMm;
+      else if(e.key === "ArrowLeft" || e.key === "ArrowDown") d = -stepMm;
+    }
+    if(!d) return;
+    handles[key] = Math.min(Math.max(handles[key] + d * state.pxPerMm, 0), mLen);
+    e.preventDefault();
+    renderMeasure();
+  });
+  // A click that is not a drag should not do anything surprising.
+  $(id).addEventListener("click", function(e){ e.preventDefault(); });
+});
+$("mReset").addEventListener("click", function(){ defaultHandles(); renderMeasure(); });
+
+/* =================================================================
+   TAB 3: CALIBRATE
+================================================================= */
+var PRESETS = [
+  { id:"card",    name:"Credit card",  mm:85.60,  detail:"85.60 mm wide (ID-1)", shape:"card", ratio:53.98/85.60 },
+  { id:"quarter", name:"US quarter",   mm:24.26,  detail:"24.26 mm across",      shape:"circle" },
+  { id:"ruler",   name:"Real ruler",   mm:100,    detail:"100 mm, most accurate", shape:"bar" },
+  { id:"a4",      name:"A4 paper",     mm:210,    detail:"210 mm short edge",    shape:"bar" },
+  { id:"letter",  name:"US Letter",    mm:215.9,  detail:"215.9 mm short edge",  shape:"bar" },
+  { id:"custom",  name:"Custom",       mm:100,    detail:"Any known length",     shape:"bar" }
+];
+var selectedPreset = PRESETS[0];
+var calPx = 0;                 // candidate on-screen length, CSS px; this IS the measurement
+var calStageW = 0, calStageH = 200;
+var cStage = $("cStage"), cCanvas = $("cCanvas");
+
+/* The floor is 10mm, not 1mm, because the drag handle clamps calPx to a 10px minimum: a
+   1mm "reference" could therefore never be drawn shorter than 10px, which works out to
+   10 px/mm, inside the 1..40 sanity band, so Save stayed enabled and the app cheerfully
+   stored a calibration off by a factor of three. Nothing under a centimetre is a usable
+   reference anyway (the smallest real one here is a 24mm coin). */
+var CUSTOM_MIN_MM = 10, CUSTOM_MAX_MM = 2000;
+function presetMm(){
+  if(selectedPreset.id !== "custom") return selectedPreset.mm;
+  var v = parseFloat($("customMm").value);
+  // Enforce the same band the input's min/max advertise. Without this the HTML
+  // constraint is decorative and a 0.2 mm "reference" would still arm Save.
+  return (isFinite(v) && v >= CUSTOM_MIN_MM && v <= CUSTOM_MAX_MM) ? v : NaN;
+}
+/* calPx must never become NaN: it is both the measurement and the handle position,
+   and a NaN would render as "NaNpx" and stick until the next valid preset. */
+function setCalPxFromMm(){
+  var mm = presetMm();
+  if(isFinite(mm) && isFinite(state.pxPerMm)) calPx = mm * state.pxPerMm;
+}
+function buildPresets(){
+  var wrap = $("presets");
+  wrap.textContent = "";
+  PRESETS.forEach(function(p){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "preset";
+    b.setAttribute("aria-pressed", String(p.id === selectedPreset.id));
+    b.dataset.id = p.id;
+    b.innerHTML = '<span class="pn"></span><span class="pd"></span>';
+    b.querySelector(".pn").textContent = p.name;
+    b.querySelector(".pd").textContent = p.detail;
+    b.addEventListener("click", function(){ selectPreset(p.id); });
+    wrap.appendChild(b);
+  });
+}
+function selectPreset(id){
+  var p = PRESETS.filter(function(x){ return x.id === id; })[0];
+  if(!p) return;
+  selectedPreset = p;
+  $("customWrap").hidden = (id !== "custom");
+  Array.prototype.forEach.call($("presets").children, function(b){
+    b.setAttribute("aria-pressed", String(b.dataset.id === id));
+  });
+  $("calMsg").textContent = "";     // a stale "Saved." under a different reference reads as a lie
+  setCalPxFromMm();                 // start from the current scale; keep the old px if mm is unusable
+  renderCalibrate();
+  if(id === "custom") $("customMm").focus();
+}
+$("customMm").addEventListener("input", function(){
+  $("calMsg").textContent = "";
+  setCalPxFromMm();
+  renderCalibrate();
+});
+
+function renderCalibrate(){
+  var w = stageWidth(cStage.parentNode);
+  // Hidden panel => width is meaningless; never clamp calPx against it.
+  if(w < 150) return;
+  calStageW = w;
+  var mm = presetMm();
+  var needed = isFinite(mm) ? Math.round(mm * state.pxPerMm) : 0;
+
+  // Height: enough for the shape, capped so the stage never eats the screen.
+  var want = 200;
+  if(selectedPreset.shape === "circle") want = Math.min(Math.max(calPx + 40, 160), 420);
+  else if(selectedPreset.shape === "card") want = Math.min(Math.max(calPx * (selectedPreset.ratio || 0.63) + 48, 160), 420);
+  calStageH = Math.round(Math.min(want, Math.max(160, window.innerHeight * 0.55)));
+
+  var maxPx = calStageW - 2;
+  var tooBig = isFinite(mm) && needed > maxPx;
+
+  // Math.min/Math.max propagate NaN, so a bad calPx would survive the clamp. Belt and braces.
+  if(!isFinite(calPx)) calPx = Math.min(Math.max(needed || 10, 10), maxPx);
+  calPx = Math.min(Math.max(calPx, 10), maxPx);
+
+  /* Clamped-at-the-limit was a silent failure: the edge simply stopped following the finger
+     while Save stayed armed on whatever number the clamp produced. Clamping has to happen
+     before the message so we can report it. */
+  var pinned = isFinite(mm) && !tooBig && calPx >= maxPx - 0.5;
+  var errEl = $("presetErr");
+  if(!isFinite(mm)){
+    setText(errEl, "Enter a known length in millimetres, between " +
+      CUSTOM_MIN_MM + " and " + CUSTOM_MAX_MM + ".");
+  } else if(tooBig){
+    setText(errEl, selectedPreset.name + " needs about " + needed + " px on screen but this panel is only " +
+      maxPx + " px wide. Rotate the device, use a wider window, or calibrate with a credit card or coin instead.");
+  } else if(pinned){
+    setText(errEl, "The red edge has reached the right limit of this panel (" + maxPx +
+      " px). If the shape is still smaller than the real object, this reference is too big for " +
+      "this screen. Pick a smaller one.");
+  } else {
+    setText(errEl, "");
+  }
+  drawCalibrate();
+
+  var h = $("hC");
+  // Same reasoning as positionHandle(): keep the whole 44px target inside the stage.
+  h.style.left = Math.min(Math.max(calPx - 22, 0), Math.max(0, calStageW - 44)) + "px";
+  h.style.top = "0px";
+  h.setAttribute("aria-valuemin", "10");
+  h.setAttribute("aria-valuemax", String(maxPx));
+  h.setAttribute("aria-valuenow", String(Math.round(calPx)));
+  h.setAttribute("aria-valuetext", Math.round(calPx) + " pixels for " + (isFinite(mm) ? mm : "?") + " millimetres");
+  var inert = !!tooBig || !isFinite(mm);
+  h.disabled = inert;
+  // The nudge buttons drive the same value as the handle; leaving them live while the
+  // handle is disabled is a control that appears to work but can never produce a save.
+  $("nudgeM").disabled = inert;
+  $("nudgeP").disabled = inert;
+
+  var ppm = (isFinite(mm) && mm > 0) ? calPx / mm : NaN;
+  $("kRef").textContent   = selectedPreset.name + (isFinite(mm) ? " · " + mm + " mm" : "");
+  $("kPx").textContent    = fmt(calPx, 1) + " px";
+  $("kScale").textContent = isFinite(ppm) ? fmt(ppm, 4) + " px / mm" : "-";
+  $("kDpi").textContent   = isFinite(ppm) ? fmt(ppm * MM_PER_IN, 1) + " CSS dpi" : "-";
+  $("kPpi").textContent   = isFinite(ppm) ? fmt(ppm * MM_PER_IN * dprNow(), 0) + " device ppi (dpr " + fmt(dprNow(), 2) + ")" : "-";
+  $("calSave").disabled = !isFinite(ppm) || !(ppm > 1 && ppm < 40) || tooBig;
+}
+
+function drawCalibrate(){
+  var dpr = dprNow();
+  cCanvas.width = Math.round(calStageW * dpr);
+  cCanvas.height = Math.round(calStageH * dpr);
+  cCanvas.style.width = calStageW + "px";
+  cCanvas.style.height = calStageH + "px";
+  var ctx = cCanvas.getContext("2d");
+  if(!ctx){ $("calMsg").textContent = "This browser could not create a canvas, so calibration cannot be drawn."; return; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, calStageW, calStageH);
+
+  var W = calStageW, H = calStageH;
+  var shape = selectedPreset.shape;
+
+  ctx.strokeStyle = "#eee";
+  ctx.fillStyle = "#eee";
+  ctx.lineWidth = 2;
+
+  if(shape === "circle"){
+    var rr = calPx / 2;
+    var cy = H / 2;
+    ctx.beginPath();
+    ctx.arc(rr, cy, Math.max(1, rr - 1), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#888";
+    ctx.fillRect(0, cy - 0.5, calPx, 1);              // diameter guide
+  } else if(shape === "card"){
+    var ratio = selectedPreset.ratio || 0.63;
+    var ch = Math.min(calPx * ratio, H - 44);
+    var ty = 22;
+    /* Inset the horizontal edges by half the 2px line width, exactly as the left/right edges
+       already are. Centring them on ty and ty+ch made the OUTER height ch+2 while the outer
+       width stayed exactly calPx, so the drawn card was 54.51mm tall instead of 53.98mm.
+       Since matching both dimensions is the whole point of drawing a real ID-1 outline, a
+       user who trusted the short edge saved a scale ~1% low: the same magnitude of error the
+       +/-1px nudge buttons exist to remove. */
+    ctx.beginPath();
+    ctx.moveTo(1, ty + ch - 1); ctx.lineTo(1, ty + 1);
+    ctx.lineTo(calPx - 1, ty + 1); ctx.lineTo(calPx - 1, ty + ch - 1);
+    // bottom edge only when it actually fits, so a clipped card never looks like a wrong size
+    if(calPx * ratio <= H - 44) ctx.closePath();
+    ctx.stroke();
+  } else {
+    var by = H / 2;
+    ctx.fillStyle = "#888";
+    ctx.fillRect(0, by - 0.5, calPx, 1);
+    ctx.fillStyle = "#eee";
+    ctx.fillRect(0, by - 18, 2, 36);
+  }
+
+  /* Origin (0) and the draggable edge. Both marker bars sit INSIDE the span:
+     [0,2] and [calPx-2,calPx], so their outer faces are exactly calPx apart and
+     line up with the shape outlines above. Drawing the edge at calPx-1 (centred on
+     calPx while the origin is not centred on 0) made the pair disagree by 1 px,
+     ~0.26 mm at 96 dpi, and the whole app's accuracy rides on this one number. */
+  ctx.fillStyle = "#ff3b30";
+  ctx.fillRect(0, 0, 2, H);
+  ctx.fillRect(Math.max(0, Math.min(calPx - 2, W - 2)), 0, 2, H);
+
+  ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  ctx.fillStyle = "#888";
+  ctx.textBaseline = "bottom";
+  ctx.textAlign = "left";
+  ctx.fillText("0", 6, H - 6);
+  ctx.textAlign = "right";
+  var mm = presetMm();
+  if(isFinite(mm)) ctx.fillText(mm + " MM", Math.max(40, calPx - 6), H - 6);
+}
+
+function rawCalPos(e){
+  var rect = cCanvas.getBoundingClientRect();   // canvas, not stage; see posFromEvent
+  return e.clientX - rect.left;
+}
+// Math.max on the upper bound so a not-yet-measured stage can never invert the clamp.
+function clampCal(v){ return Math.min(Math.max(v, 10), Math.max(10, calStageW - 2)); }
+function calPosFromEvent(e){ return clampCal(rawCalPos(e)); }
+var calPointer = null;
+var calGrabOff = 0;
+cStage.addEventListener("pointerdown", function(e){
+  if($("hC").disabled) return;
+  if(calPointer !== null) return;
+  calPointer = e.pointerId;
+  try { cStage.setPointerCapture(e.pointerId); } catch(err){}
+  /* Tapping the bare stage jumps the edge there; grabbing the handle keeps its offset.
+     That second half was only a comment: pointerdown left calPx alone, then the first
+     pointermove snapped it to the finger, up to 22px away. On an 85.6mm card that is a
+     6.8% jump, in the one interaction the entire app's accuracy rests on. */
+  if(e.target.closest && e.target.closest("[data-handle]")){
+    calGrabOff = calPx - rawCalPos(e);
+  } else {
+    calGrabOff = 0;
+    calPx = calPosFromEvent(e);
+  }
+  e.preventDefault();
+  focusQuietly($("hC"));
+  renderCalibrate();
+});
+cStage.addEventListener("pointermove", function(e){
+  if(calPointer !== e.pointerId) return;
+  calPx = clampCal(rawCalPos(e) + calGrabOff);
+  e.preventDefault();
+  renderCalibrate();
+});
+function endCal(e){
+  if(calPointer === e.pointerId){
+    calPointer = null;
+    calGrabOff = 0;
+    try { cStage.releasePointerCapture(e.pointerId); } catch(err){}
+  }
+}
+cStage.addEventListener("pointerup", endCal);
+cStage.addEventListener("pointercancel", endCal);
+$("hC").addEventListener("click", function(e){ e.preventDefault(); });
+$("hC").addEventListener("keydown", function(e){
+  var step = e.shiftKey ? 10 : 1;
+  var d = 0;
+  if(e.key === "ArrowRight" || e.key === "ArrowUp") d = step;
+  else if(e.key === "ArrowLeft" || e.key === "ArrowDown") d = -step;
+  else return;
+  calPx += d;
+  e.preventDefault();
+  renderCalibrate();
+});
+$("nudgeM").addEventListener("click", function(){ calPx -= 1; renderCalibrate(); });
+$("nudgeP").addEventListener("click", function(){ calPx += 1; renderCalibrate(); });
+
+$("calSave").addEventListener("click", function(){
+  var mm = presetMm();
+  var ppm = calPx / mm;
+  if(!isFinite(ppm) || !(ppm > 1 && ppm < 40)){
+    $("calMsg").textContent = "That works out to an impossible screen scale. Check the reference length.";
+    return;
+  }
+  state.pxPerMm = ppm;
+  state.calibrated = true;
+  state.source = selectedPreset.name + " (" + mm + " mm)";
+  state.dpr = dprNow();
+  var ok = saveState();
+  $("calMsg").textContent = ok
+    ? "Saved. Every scale in the app now reads " + fmt(ppm, 3) + " px per mm."
+    : "Applied for this session, but it could NOT be saved: this page is embedded without access to storage, so the calibration is lost on reload.";
+  refreshAll();
+});
+$("calReset").addEventListener("click", function(){
+  state.pxPerMm = DEFAULT_PX_PER_MM;
+  state.calibrated = false;
+  state.source = "";
+  state.dpr = null;
+  clearState();
+  setCalPxFromMm();
+  $("calMsg").textContent = "Reset to the CSS default of 96 dpi. This is a placeholder, not a measurement.";
+  refreshAll();
+});
+
+/* ---- estimate from advertised screen diagonal ----
+   pxPerMm = hypot(screen.width, screen.height) / (diagonal_in * 25.4)
+   screen.* are CSS px, so devicePixelRatio cancels out of this entirely. */
+function screenDiagCssPx(){
+  var w = window.screen && window.screen.width, h = window.screen && window.screen.height;
+  if(!w || !h) return null;
+  return { w: w, h: h, d: Math.sqrt(w * w + h * h) };
+}
+function diagInches(){ return parseFloat($("diagIn").value); }
+function renderEstimate(){
+  var s = screenDiagCssPx();
+  $("kScreen").textContent = s ? (s.w + " × " + s.h + " CSS px") : "not reported by this browser";
+  var d = diagInches();
+  if(!s || !isFinite(d) || d <= 0){ $("kEst").textContent = "-"; return null; }
+  var ppm = s.d / (d * MM_PER_IN);
+  $("kEst").textContent = fmt(ppm, 4) + " px / mm  ·  " + fmt(ppm * MM_PER_IN, 1) + " CSS dpi";
+  return ppm;
+}
+$("diagIn").addEventListener("input", function(){ $("estMsg").textContent = ""; renderEstimate(); });
+$("estApply").addEventListener("click", function(){
+  var s = screenDiagCssPx();
+  if(!s){ $("estMsg").textContent = "This browser does not report a screen size, so the estimate cannot be made here."; return; }
+  var ppm = renderEstimate();
+  if(ppm === null){ $("estMsg").textContent = "Enter your screen's diagonal in inches first."; return; }
+  if(!(ppm > 1 && ppm < 40)){ $("estMsg").textContent = "That diagonal gives an impossible result. Check the number."; return; }
+  state.pxPerMm = ppm;
+  state.calibrated = true;
+  state.source = "screen diagonal estimate (" + diagInches() + " in)";
+  state.dpr = dprNow();
+  var ok = saveState();
+  $("estMsg").textContent = ok ? "Applied and saved as an estimate. Verify it against a real object when you can."
+                               : "Applied for this session only; storage is blocked in this frame.";
+  setCalPxFromMm();
+  refreshAll();
+});
+
+/* =================================================================
+   ALERTS: first run, blocked storage, changed display scale
+================================================================= */
+var alertsSig = null;
+function renderAlerts(){
+  var box = $("alerts");
+
+  /* devicePixelRatio changes when a desktop browser zooms, or when the window moves to a
+     display with different scaling. Either way the saved px/mm no longer holds. */
+  var dNow = dprNow();
+  var zoomOff = !!(state.calibrated && state.dpr && Math.abs(state.dpr - dNow) > 0.005);
+  var scaled = zoomOff ? state.pxPerMm * (state.dpr / dNow) : 0;
+
+  /* refreshAll() runs on every resize frame. Tearing this box down and rebuilding it
+     unconditionally would yank focus off whichever alert button the user was on, so
+     only touch the DOM when the content actually differs. */
+  var sig = [state.calibrated, storageBlocked, zoomOff,
+             fmt(state.pxPerMm, 4), fmt(dNow, 3), state.dpr === null ? "" : fmt(state.dpr, 3)].join("|");
+  if(sig === alertsSig) return;
+  alertsSig = sig;
+  box.textContent = "";
+
+  if(!state.calibrated){
+    var p = document.createElement("div");
+    p.className = "panel alert";
+    p.innerHTML = '<h2>Not calibrated yet</h2>' +
+      '<p class="note" style="margin:0 0 12px">This ruler is showing the CSS default of 96 dpi, which is a ' +
+      'definition, not a measurement of your screen. On a real device it can be wrong by 50% or more. ' +
+      'Match one known object and it becomes accurate.</p>';
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "btn"; b.textContent = "Calibrate now";
+    b.addEventListener("click", function(){ activateTab("tab-cal"); });
+    p.appendChild(b);
+    box.appendChild(p);
+  }
+
+  if(storageBlocked){
+    var s = document.createElement("div");
+    s.className = "panel";
+    s.innerHTML = '<h2>Calibration cannot be saved</h2><p class="note" style="margin:0">' +
+      'This page is embedded in a way that blocks local storage. Calibration still works, ' +
+      'but it will be gone when you reload.</p>';
+    box.appendChild(s);
+  }
+
+  if(zoomOff){
+    var z = document.createElement("div");
+    z.className = "panel alert";
+    /* The corrected value must clear the same sanity band as a fresh calibration. It did
+       not: a large zoom step (say 1x -> 5x) drops it below 1 px/mm, which the app would run
+       on happily and then saveState() would persist, only for loadState() to reject it on
+       the next load and drop the user back to the uncalibrated default with no explanation.
+       Offer the button only when the arithmetic lands somewhere believable. */
+    var scaledOk = isFinite(scaled) && scaled > 1 && scaled < 40;
+    z.innerHTML = '<h2>Display scale changed</h2><p class="note" style="margin:0 0 12px">' +
+      'Your device pixel ratio was ' + fmt(state.dpr, 2) + ' when you calibrated and is ' + fmt(dNow, 2) +
+      ' now, usually browser zoom. ' +
+      (scaledOk
+        ? 'If it is the same screen, the correct scale is ' + fmt(scaled, 3) +
+          ' px/mm. If you moved to a different display, calibrate again instead.'
+        : 'That is too large a jump to correct arithmetically; calibrate again on this display.') +
+      '</p>';
+    if(scaledOk){
+      var zb = document.createElement("button");
+      zb.type = "button"; zb.className = "btn sec"; zb.textContent = "Adjust for zoom";
+      zb.addEventListener("click", function(){
+        state.pxPerMm = scaled; state.dpr = dprNow(); saveState();
+        // This button is inside the panel about to be removed; park focus somewhere real.
+        var sel = document.querySelector('[role=tab][aria-selected=true]');
+        refreshAll();
+        if(sel) focusQuietly(sel);
+      });
+      z.appendChild(zb);
+    }
+    box.appendChild(z);
+  }
+}
+function renderChip(){
+  var c = $("calChip");
+  c.textContent = fmt(state.pxPerMm, 3) + " px/mm · " +
+    (state.calibrated ? (state.source || "calibrated") : "uncalibrated");
+  c.className = "chip" + (state.calibrated ? "" : " warn");
+}
+
+/* =================================================================
+   TABS
+================================================================= */
+var TABS = ["tab-ruler", "tab-measure", "tab-cal"];
+function activateTab(id){
+  TABS.forEach(function(t){
+    var tab = $(t), panel = $(tab.getAttribute("aria-controls"));
+    var on = (t === id);
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    panel.hidden = !on;
+  });
+  $(id).focus();
+  refreshAll();
+}
+TABS.forEach(function(t, i){
+  $(t).addEventListener("click", function(){ activateTab(t); });
+  $(t).addEventListener("keydown", function(e){
+    var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if(!d) return;
+    e.preventDefault();
+    activateTab(TABS[(i + d + TABS.length) % TABS.length]);
+  });
+});
+
+/* =================================================================
+   GLOBAL REFRESH + RESIZE
+================================================================= */
+function refreshAll(){
+  renderChip();
+  renderAlerts();
+  if(!$("p-ruler").hidden)   renderRuler();
+  if(!$("p-measure").hidden) renderMeasure();
+  if(!$("p-cal").hidden)     renderCalibrate();
+}
+var rafPending = false;
+function onResize(){
+  if(rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(function(){ rafPending = false; refreshAll(); });
+}
+window.addEventListener("resize", onResize);
+window.addEventListener("orientationchange", onResize);
+if(window.ResizeObserver){
+  // Observe the full-width stage wrappers, not the body: their width tracks the frame
+  // while their height does not, which keeps the canvas resize from feeding itself.
+  try {
+    var ro = new ResizeObserver(onResize);
+    Array.prototype.forEach.call(document.querySelectorAll(".bleed"), function(el){ ro.observe(el); });
+  } catch(e){}
+}
+/* Re-arm a media query on the current dpr so zoom changes are noticed immediately.
+   This is a nicety, not the safety net: renderAlerts() re-reads devicePixelRatio on
+   every refreshAll(), and zooming fires resize, so the stale-calibration warning still
+   appears on browsers where resolution queries are unsupported. */
+var dprMq = null, dprMqHandler = null;
+function watchDpr(){
+  try {
+    if(dprMq && dprMqHandler){
+      // The legacy addListener path has no {once:true}; without this removal each zoom
+      // step left another live listener behind, all of them calling refreshAll().
+      if(dprMq.removeEventListener) dprMq.removeEventListener("change", dprMqHandler);
+      else if(dprMq.removeListener) dprMq.removeListener(dprMqHandler);
+      dprMq = null; dprMqHandler = null;
+    }
+    var d = dprNow();
+    /* A band, not "(resolution: Xdppx)". An exact match on a fractional ratio can be
+       false the instant it is built (the UA rounds), and a query that is false now
+       never fires a change event: a watcher that looks armed but is dead. */
+    var mq = window.matchMedia(
+      "(min-resolution: " + (d - 0.01).toFixed(4) + "dppx) and " +
+      "(max-resolution: " + (d + 0.01).toFixed(4) + "dppx)");
+    if(!mq || mq.matches !== true) return;   // feature unsupported here: leave it to resize
+    dprMqHandler = function(){ refreshAll(); watchDpr(); };
+    dprMq = mq;
+    if(mq.addEventListener) mq.addEventListener("change", dprMqHandler);
+    else if(mq.addListener) mq.addListener(dprMqHandler);
+    else { dprMq = null; dprMqHandler = null; }
+  } catch(e){ /* older browser: the resize handler still catches most cases */ }
+}
+
+/* =================================================================
+   BOOT
+================================================================= */
+loadState();
+buildPresets();
+selectPreset("card");
+renderEstimate();
+watchDpr();
+refreshAll();
+// Fonts/layout can settle a frame late inside an iframe; one extra pass keeps the first paint honest.
+requestAnimationFrame(refreshAll);
+window.addEventListener("load", refreshAll);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Word Search: pick a theme and size, then drag or tap across the grid to find every hidden word. Words hide in all 8 directions, including backwards and diagonal. Beat the clock." />
+<title>WORD SEARCH</title>
+<!--
+  WORD SEARCH: self-contained themed word-search generator + player for Batchly.
+  ==========================================================================
+  DESIGN NOTES
+
+  Generator (every listed word is GUARANTEED placed)
+    For a chosen word set + square size, buildGrid() enumerates EVERY legal
+    (row, col, direction) placement for each word (8 directions incl. reverse
+    and diagonal) and picks one at random. Overlaps that share matching
+    letters are allowed. If any word has zero legal placements in the current
+    partial grid, that whole grid is discarded and a fresh attempt starts
+    (up to 400). If 400 attempts somehow fail, the caller drops the longest
+    word and retries, so a playable puzzle is always produced and every word
+    shown in the list is actually in the grid. Empty cells are then filled
+    with random letters. Words are pre-filtered so none exceeds the grid size.
+
+  Selection (mouse, touch, keyboard)
+    Pointer events drive drag-select; the cell under the finger is found via
+    elementFromPoint so touch tracks correctly. A selection is only valid along
+    a straight line in one of the 8 directions. On release the selected letters
+    (forward OR reversed) are matched against the unfound word list. Two-click
+    / keyboard play is also supported: tap/Enter an anchor cell, then tap/Enter
+    the far end. Arrow keys move focus between cells. Focus is never trapped.
+
+  No leaderboard
+    has_leaderboard = false for this game, so it posts NO score message of any
+    kind: not on load, not on win. Nothing is sent to the parent frame.
+  ==========================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --panel2:#1f1f26;
+    --inset:#0c0c0f;
+    --board:#0b0b0f;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --mute2:#6e6e7a;
+    --red:#ef3a3a;
+    --green:#4ec86a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-size-adjust:100%;
+    user-select:none; -webkit-user-select:none;
+  }
+
+  #app{ height:100%; display:flex; flex-direction:column; gap:8px; padding:8px; }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:7px 8px;
+  }
+  #brand{
+    display:flex; align-items:baseline; gap:8px;
+    font-size:14px; font-weight:700; letter-spacing:.20em;
+    white-space:nowrap; margin-right:auto;
+  }
+  #brand .dot{ color:var(--red); }
+  #brand .sub{ font-size:9px; letter-spacing:.14em; color:var(--mute); font-weight:400; }
+
+  .ctl{ display:flex; align-items:center; gap:6px; }
+  .lab{ font-size:9px; letter-spacing:.12em; color:var(--mute); text-transform:uppercase; }
+
+  select, button{
+    font-family:var(--mono);
+    background:var(--panel2); color:var(--bone);
+    border:2px solid var(--line2);
+    border-radius:0;
+    padding:6px 9px; font-size:11px; letter-spacing:.06em;
+    cursor:pointer; outline:none;
+  }
+  select{ padding-right:22px; -webkit-appearance:none; appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--bone) 50%),linear-gradient(135deg,var(--bone) 50%,transparent 50%);
+    background-position:calc(100% - 12px) 52%, calc(100% - 7px) 52%;
+    background-size:5px 5px,5px 5px; background-repeat:no-repeat; }
+  button{ font-weight:700; text-transform:uppercase; }
+  button.primary{ background:var(--red); border-color:var(--red); color:#120404; }
+  button:hover{ transform:translate(-1px,-1px); box-shadow:2px 2px 0 0 var(--line2); }
+  button.primary:hover{ box-shadow:2px 2px 0 0 #7a1414; }
+  button:active{ transform:translate(0,0); box-shadow:none; }
+  select:focus-visible, button:focus-visible{ outline:2px solid var(--bone); outline-offset:2px; }
+
+  /* ---------- instruction line ---------- */
+  #instr{
+    flex:0 0 auto; font-size:10px; color:var(--mute); letter-spacing:.03em;
+    padding:0 2px; line-height:1.4;
+  }
+  #instr b{ color:var(--bone); font-weight:700; }
+
+  /* ---------- stage ---------- */
+  #stage{ flex:1 1 auto; min-height:0; display:flex; gap:8px; }
+
+  #boardArea{
+    flex:1 1 auto; min-width:0; min-height:0; position:relative;
+    background:var(--panel); border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center; padding:8px;
+  }
+  #boardWrap{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  #board{
+    display:grid; background:var(--board);
+    border:2px solid var(--line2);
+    touch-action:none;
+  }
+  .cell{
+    display:flex; align-items:center; justify-content:center;
+    width:var(--cell,28px); height:var(--cell,28px);
+    font-family:var(--mono); font-size:var(--font,15px); font-weight:700;
+    line-height:1; color:var(--bone);
+    background:transparent; border:1px solid #1b1b22;
+    border-radius:0; padding:0; margin:0; cursor:pointer;
+    text-transform:uppercase; transition:background-color .08s, color .08s, box-shadow .08s;
+    -webkit-user-select:none; user-select:none;
+  }
+  .cell:hover{ background:#191922; }
+  .cell.selecting{ background:var(--bone); color:#10100e; }
+  .cell.anchor{ background:var(--red); color:#120404; box-shadow:inset 0 0 0 2px var(--bone); }
+  .cell.found{ background:var(--fc,#ef3a3a); color:#0c0c0f; }
+  .cell.found:hover{ background:var(--fc,#ef3a3a); }
+  .cell.hint{ animation:hintpulse .7s ease-in-out infinite; }
+  @keyframes hintpulse{
+    0%,100%{ box-shadow:inset 0 0 0 2px var(--red); background:#2a1414; }
+    50%{ box-shadow:inset 0 0 0 3px var(--red); background:#4a1c1c; }
+  }
+  .cell:focus-visible{ outline:2px solid var(--bone); outline-offset:-2px; z-index:2; }
+
+  /* ---------- side panel ---------- */
+  #side{
+    flex:0 0 224px; display:flex; flex-direction:column; gap:8px; min-height:0;
+  }
+  #stats{
+    flex:0 0 auto; display:flex; gap:8px;
+  }
+  .stat{
+    flex:1 1 0; background:var(--panel); border:2px solid var(--line);
+    padding:7px 8px; display:flex; flex-direction:column; gap:2px; min-width:0;
+  }
+  .stat .k{ font-size:8px; letter-spacing:.14em; color:var(--mute); text-transform:uppercase; }
+  .stat .v{ font-size:18px; font-weight:700; letter-spacing:.04em; }
+  .stat .v small{ font-size:11px; color:var(--mute); font-weight:400; }
+
+  #wordsBox{
+    flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+    background:var(--panel); border:2px solid var(--line);
+  }
+  #wordsHead{
+    flex:0 0 auto; display:flex; justify-content:space-between; align-items:center;
+    padding:6px 9px; border-bottom:2px solid var(--line); font-size:9px;
+    letter-spacing:.14em; color:var(--mute); text-transform:uppercase;
+  }
+  #wordsHead .theme{ color:var(--bone); font-weight:700; }
+  #wordList{
+    flex:1 1 auto; min-height:0; overflow:auto; list-style:none; margin:0;
+    padding:8px 9px; display:flex; flex-direction:column; gap:5px;
+  }
+  #wordList li{
+    font-size:12px; letter-spacing:.08em; color:var(--bone);
+    display:flex; align-items:center; gap:7px;
+  }
+  #wordList li .swatch{
+    width:9px; height:9px; flex:0 0 auto; border:1px solid var(--line2); background:transparent;
+  }
+  #wordList li.done{ color:var(--mute2); }
+  #wordList li.done .txt{ text-decoration:line-through; text-decoration-thickness:2px; }
+  #wordList li.done .swatch{ border-color:transparent; }
+
+  /* ---------- win overlay ---------- */
+  #overlay{
+    position:absolute; inset:0; z-index:10;
+    background:rgba(9,9,11,.86);
+    display:flex; align-items:center; justify-content:center; padding:16px;
+  }
+  #overlay[hidden]{ display:none; }
+  .card{
+    background:var(--panel); border:2px solid var(--red);
+    box-shadow:6px 6px 0 0 rgba(239,58,58,.35);
+    padding:20px 22px; max-width:340px; width:100%; text-align:center;
+  }
+  .card h2{ margin:0 0 4px; font-size:22px; letter-spacing:.16em; }
+  .card .cheer{ color:var(--red); }
+  .card p{ margin:6px 0 16px; font-size:12px; color:var(--mute); line-height:1.5; }
+  .card p b{ color:var(--bone); }
+  .card .row{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+
+  /* ---------- help overlay ---------- */
+  #help{
+    position:fixed; inset:0; z-index:20; background:rgba(9,9,11,.9);
+    display:flex; align-items:center; justify-content:center; padding:16px;
+  }
+  #help[hidden]{ display:none; }
+  .helpCard{
+    background:var(--panel); border:2px solid var(--line2);
+    padding:20px 22px; max-width:430px; width:100%;
+  }
+  .helpCard h2{ margin:0 0 12px; font-size:16px; letter-spacing:.14em; }
+  .helpCard ul{ margin:0 0 16px; padding-left:18px; }
+  .helpCard li{ font-size:12px; color:var(--bone); line-height:1.7; }
+  .helpCard li b{ color:var(--red); }
+  .helpCard .row{ display:flex; justify-content:flex-end; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:760px){
+    #stage{ flex-direction:column; }
+    #side{ flex:0 0 auto; }
+    #wordsBox{ max-height:30vh; }
+    #wordList{ flex-direction:row; flex-wrap:wrap; gap:6px 12px; }
+    #wordList li{ font-size:12px; }
+    #brand .sub{ display:none; }
+  }
+  @media (max-width:420px){
+    #brand{ font-size:12px; letter-spacing:.14em; }
+    .ctl .lab{ display:none; }
+    #instr{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="bar">
+    <div id="brand">WORD<span class="dot">·</span>SEARCH <span class="sub">find them all</span></div>
+
+    <div class="ctl">
+      <span class="lab">Theme</span>
+      <select id="themeSel" aria-label="Theme"></select>
+    </div>
+    <div class="ctl">
+      <span class="lab">Size</span>
+      <select id="sizeSel" aria-label="Grid size">
+        <option value="small">Small</option>
+        <option value="medium" selected>Medium</option>
+        <option value="large">Large</option>
+      </select>
+    </div>
+    <button id="hintBtn" title="Reveal one word briefly">Hint</button>
+    <button id="newBtn" class="primary" title="Generate a new puzzle">New</button>
+    <button id="helpBtn" aria-label="How to play">?</button>
+  </div>
+
+  <div id="instr">
+    Drag or tap letters to spell hidden words. Words hide in <b>all 8 directions</b>: across, down, diagonal, and <b>backwards</b>. Find every word on the list to win.
+  </div>
+
+  <div id="stage">
+    <div id="boardArea">
+      <div id="boardWrap"><div id="board" role="grid" aria-label="Word search grid"></div></div>
+      <div id="overlay" hidden>
+        <div class="card" role="dialog" aria-modal="true" aria-label="Puzzle solved">
+          <h2 class="cheer">SOLVED!</h2>
+          <p>You found all <b id="ovCount">0</b> words in<br><b id="ovTime">0:00</b>.</p>
+          <div class="row">
+            <button id="ovAgain" class="primary">New Puzzle</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="side">
+      <div id="stats">
+        <div class="stat">
+          <span class="k">Time</span>
+          <span class="v" id="timeV">0:00</span>
+        </div>
+        <div class="stat">
+          <span class="k">Found</span>
+          <span class="v"><span id="foundV">0</span><small> / <span id="totalV">0</span></small></span>
+        </div>
+      </div>
+      <div id="wordsBox">
+        <div id="wordsHead"><span>Word List</span><span class="theme" id="themeLabel">-</span></div>
+        <ul id="wordList" aria-label="Words to find"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help" hidden>
+  <div class="helpCard" role="dialog" aria-modal="true" aria-label="How to play">
+    <h2>HOW TO PLAY</h2>
+    <ul>
+      <li><b>Drag</b> across a straight line of letters (mouse or finger) to select a word, then release.</li>
+      <li><b>Or tap</b> the first letter, then the last letter of a word.</li>
+      <li><b>Keyboard:</b> arrow keys move the cursor, <b>Enter</b> marks the start, then <b>Enter</b> on the end letter.</li>
+      <li>Words run across, down, diagonally, and <b>backwards</b>, in any of 8 directions.</li>
+      <li>Find the whole list before the timer runs up. Stuck? Tap <b>Hint</b>.</li>
+    </ul>
+    <div class="row"><button id="helpClose" class="primary">Got it</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===================== themed word lists ===================== */
+  /* All original common nouns. Every entry is 3–9 letters so it fits the
+     smallest offered grid (11). Words are uppercased at selection time. */
+  var THEMES = {
+    ANIMALS: ["TIGER","PANDA","ZEBRA","KOALA","OTTER","MONKEY","RABBIT","DONKEY","LIZARD","FALCON","WALRUS","BEAVER","JAGUAR","GORILLA","DOLPHIN","PENGUIN","LEOPARD","GIRAFFE","HAMSTER","ELEPHANT","KANGAROO","CROCODILE"],
+    SPACE:   ["STAR","MARS","MOON","COMET","ORBIT","PLUTO","VENUS","SOLAR","GALAXY","PLANET","ROCKET","NEBULA","METEOR","COSMOS","SATURN","GRAVITY","ECLIPSE","STELLAR","ASTEROID","TELESCOPE","ASTRONAUT","SPACESUIT"],
+    OCEAN:   ["WAVE","REEF","TIDE","CORAL","SHARK","WHALE","SQUID","SHELL","PEARL","ANCHOR","HARBOR","LAGOON","CURRENT","SEAWEED","OCTOPUS","STINGRAY","PLANKTON","SEAHORSE","TREASURE","JELLYFISH","MACKEREL","BARNACLE"],
+    FOOD:    ["RICE","SOUP","BREAD","PASTA","MANGO","LEMON","HONEY","OLIVE","CHEESE","TOMATO","POTATO","PEPPER","WALNUT","PICKLE","MUFFIN","NOODLE","PANCAKE","PRETZEL","CUPCAKE","AVOCADO","SANDWICH","BROCCOLI"],
+    NATURE:  ["LEAF","FERN","ROCK","RIVER","CLOUD","STORM","MEADOW","FOREST","CANYON","VALLEY","DESERT","JUNGLE","FLOWER","SUNSET","THUNDER","BLOSSOM","PRAIRIE","GLACIER","VOLCANO","RAINBOW","MOUNTAIN","WATERFALL"],
+    MUSIC:   ["BEAT","TUNE","JAZZ","DRUM","PIANO","VIOLA","TEMPO","CHORD","LYRIC","OCTAVE","MELODY","RHYTHM","GUITAR","TRUMPET","CONCERT","HARMONY","MELODIC","SYMPHONY","KEYBOARD","ORCHESTRA","SAXOPHONE","CLARINET"],
+    SPORTS:  ["GOAL","TEAM","PUCK","RACE","MEDAL","SKATE","COURT","ARENA","HOCKEY","TENNIS","SOCCER","BOXING","RUNNER","SPRINT","REFEREE","OFFENSE","CRICKET","ARCHERY","JAVELIN","STADIUM","MARATHON","BASEBALL"],
+    TECH:    ["BYTE","CODE","DATA","WIFI","MOUSE","PIXEL","ROBOT","CLOUD","LOGIN","SERVER","LAPTOP","BINARY","CIRCUIT","NETWORK","PROGRAM","MONITOR","KEYBOARD","SOFTWARE","INTERNET","DATABASE","ALGORITHM","PROCESSOR"],
+    WEATHER: ["RAIN","SNOW","WIND","HAIL","FROST","CLOUD","STORM","SUNNY","HUMID","SLEET","BREEZE","THUNDER","DRIZZLE","RAINBOW","TORNADO","MONSOON","OVERCAST","BLIZZARD","FORECAST","LIGHTNING","HURRICANE","SNOWFLAKE"],
+    COLORS:  ["RED","GOLD","PINK","CYAN","LIME","PLUM","TEAL","GREEN","AMBER","CORAL","INDIGO","VIOLET","SALMON","MAROON","SCARLET","EMERALD","CRIMSON","MAGENTA","MUSTARD","LAVENDER","TURQUOISE","BURGUNDY"]
+  };
+
+  var SIZES = {
+    small:  { cols:11, count:8,  label:"11 x 11" },
+    medium: { cols:13, count:10, label:"13 x 13" },
+    large:  { cols:15, count:12, label:"15 x 15" }
+  };
+
+  var PALETTE = ["#ef3a3a","#f5a524","#38bdf8","#4ade80","#a78bfa","#fb7185","#facc15","#2dd4bf","#f97316","#c084fc","#60a5fa","#f472b6"];
+
+  var DIRS = [
+    [0,1],[0,-1],[1,0],[-1,0],
+    [1,1],[1,-1],[-1,1],[-1,-1]
+  ];
+  var ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  /* ===================== small utils ===================== */
+  function randInt(n){ return (Math.random()*n)|0; }
+  function shuffle(a){
+    for(var i=a.length-1;i>0;i--){ var j=randInt(i+1); var t=a[i]; a[i]=a[j]; a[j]=t; }
+    return a;
+  }
+  function fmtTime(sec){
+    sec=Math.max(0,sec|0);
+    var m=(sec/60)|0, s=sec%60;
+    return m+":"+(s<10?"0":"")+s;
+  }
+
+  /* ===================== generator ===================== */
+  // Choose a subset of words that fit the grid.
+  function pickWords(themeName, cols, count){
+    var pool = THEMES[themeName].filter(function(w){ return w.length>=3 && w.length<=cols; });
+    shuffle(pool);
+    // Prefer a spread of lengths but keep it simple + random.
+    var chosen = pool.slice(0, Math.min(count, pool.length));
+    // De-dup defensively.
+    var seen={}, out=[];
+    for(var i=0;i<chosen.length;i++){ if(!seen[chosen[i]]){ seen[chosen[i]]=1; out.push(chosen[i]); } }
+    return out;
+  }
+
+  function fits(grid, word, r, c, d, size){
+    var dr=d[0], dc=d[1];
+    for(var i=0;i<word.length;i++){
+      var rr=r+dr*i, cc=c+dc*i;
+      if(rr<0||cc<0||rr>=size||cc>=size) return false;
+      var cur=grid[rr][cc];
+      if(cur!==null && cur!==word.charAt(i)) return false;
+    }
+    return true;
+  }
+
+  function writeWord(grid, word, r, c, d){
+    var dr=d[0], dc=d[1], cells=[];
+    for(var i=0;i<word.length;i++){
+      var rr=r+dr*i, cc=c+dc*i;
+      grid[rr][cc]=word.charAt(i);
+      cells.push([rr,cc]);
+    }
+    return cells;
+  }
+
+  // Try to place ALL words on one square grid. Returns {grid, placed} or null.
+  function tryOneGrid(words, size){
+    var grid=[]; for(var r=0;r<size;r++){ var row=[]; for(var c=0;c<size;c++) row.push(null); grid.push(row); }
+    // longest first: hardest to place while the grid is emptiest
+    var order = words.slice().sort(function(a,b){ return b.length-a.length; });
+    var placed=[];
+    for(var w=0; w<order.length; w++){
+      var word=order[w];
+      var options=[];
+      for(var rr=0; rr<size; rr++){
+        for(var cc=0; cc<size; cc++){
+          for(var di=0; di<DIRS.length; di++){
+            if(fits(grid, word, rr, cc, DIRS[di], size)) options.push([rr,cc,DIRS[di]]);
+          }
+        }
+      }
+      if(options.length===0) return null;
+      var pick=options[randInt(options.length)];
+      var cells=writeWord(grid, word, pick[0], pick[1], pick[2]);
+      placed.push({ text:word, cells:cells });
+    }
+    // fill empties with random letters
+    for(var fr=0; fr<size; fr++){
+      for(var fc=0; fc<size; fc++){
+        if(grid[fr][fc]===null) grid[fr][fc]=ALPHA.charAt(randInt(26));
+      }
+    }
+    return { grid:grid, placed:placed };
+  }
+
+  // Guaranteed producer: retries whole grids; if the set is impossible,
+  // drop the longest word and retry so a puzzle is always returned.
+  function buildGrid(words, size){
+    var set = words.slice();
+    while(set.length >= 3){
+      for(var attempt=0; attempt<400; attempt++){
+        var res = tryOneGrid(set, size);
+        if(res) return { grid:res.grid, words:res.placed };
+      }
+      // couldn't fit them all: drop the longest and try again
+      set.sort(function(a,b){ return a.length-b.length; });
+      set.pop();
+    }
+    // extreme fallback (never expected): single-grid attempt with whatever remains
+    var last = tryOneGrid(set, size) || { grid:[], placed:[] };
+    return { grid:last.grid, words:last.placed };
+  }
+
+  /* ===================== state ===================== */
+  var state = {
+    cols: 13,
+    themeName: "ANIMALS",
+    grid: null,
+    words: [],        // {text, cells:[[r,c]...], found, colorIndex}
+    foundCount: 0,
+    cellEls: [],      // 2D array of DOM buttons
+    startTime: 0,
+    timerId: 0,
+    timerRunning: false,
+    won: false
+  };
+
+  // selection state
+  var pointerActive=false;
+  var dragStart=null;      // {r,c}
+  var currentSel=[];       // array of cell els
+  var pendingAnchor=null;  // cell el for two-click mode
+
+  /* ===================== DOM refs ===================== */
+  var board=document.getElementById("board");
+  var boardWrap=document.getElementById("boardWrap");
+  var themeSel=document.getElementById("themeSel");
+  var sizeSel=document.getElementById("sizeSel");
+  var wordListEl=document.getElementById("wordList");
+  var themeLabel=document.getElementById("themeLabel");
+  var timeV=document.getElementById("timeV");
+  var foundV=document.getElementById("foundV");
+  var totalV=document.getElementById("totalV");
+  var overlay=document.getElementById("overlay");
+  var ovCount=document.getElementById("ovCount");
+  var ovTime=document.getElementById("ovTime");
+
+  /* ===================== build UI ===================== */
+  // populate theme dropdown
+  Object.keys(THEMES).forEach(function(name){
+    var o=document.createElement("option");
+    o.value=name; o.textContent=name.charAt(0)+name.slice(1).toLowerCase();
+    themeSel.appendChild(o);
+  });
+
+  function cellAt(r,c){ return state.cellEls[r] && state.cellEls[r][c]; }
+
+  function renderBoard(){
+    board.innerHTML="";
+    state.cellEls=[];
+    var size=state.cols;
+    board.setAttribute("aria-rowcount", size);
+    board.setAttribute("aria-colcount", size);
+    for(var r=0;r<size;r++){
+      var rowArr=[];
+      for(var c=0;c<size;c++){
+        var b=document.createElement("button");
+        b.type="button";
+        b.className="cell";
+        b.textContent=state.grid[r][c];
+        b.dataset.r=r; b.dataset.c=c;
+        b.setAttribute("tabindex", (r===0&&c===0)?"0":"-1");
+        b.setAttribute("aria-label", state.grid[r][c]+" row "+(r+1)+" column "+(c+1));
+        board.appendChild(b);
+        rowArr.push(b);
+      }
+      state.cellEls.push(rowArr);
+    }
+    sizeBoard();
+  }
+
+  function renderWordList(){
+    wordListEl.innerHTML="";
+    // display alphabetically for tidy scanning
+    var display = state.words.slice().sort(function(a,b){ return a.text<b.text?-1:1; });
+    display.forEach(function(w){
+      var li=document.createElement("li");
+      li.dataset.word=w.text;
+      var sw=document.createElement("span"); sw.className="swatch";
+      var tx=document.createElement("span"); tx.className="txt"; tx.textContent=w.text;
+      li.appendChild(sw); li.appendChild(tx);
+      wordListEl.appendChild(li);
+      w._li=li; w._swatch=sw;
+    });
+  }
+
+  function updateStats(){
+    foundV.textContent=state.foundCount;
+    totalV.textContent=state.words.length;
+  }
+
+  /* ===================== sizing ===================== */
+  function sizeBoard(){
+    var size=state.cols;
+    var w=boardWrap.clientWidth, h=boardWrap.clientHeight;
+    if(!w||!h||!size) return;
+    var cell=Math.floor(Math.min(w,h)/size);
+    if(cell<14) cell=14;
+    board.style.gridTemplateColumns="repeat("+size+","+cell+"px)";
+    board.style.setProperty("--cell", cell+"px");
+    board.style.setProperty("--font", Math.max(9, Math.floor(cell*0.5))+"px");
+  }
+  if(window.ResizeObserver){
+    new ResizeObserver(sizeBoard).observe(boardWrap);
+  }
+  window.addEventListener("resize", sizeBoard);
+
+  /* ===================== timer ===================== */
+  function startTimerIfNeeded(){
+    if(state.timerRunning || state.won) return;
+    state.timerRunning=true;
+    state.startTime=Date.now();
+    tickTimer();
+    state.timerId=setInterval(tickTimer, 250);
+  }
+  function tickTimer(){
+    if(!state.timerRunning) return;
+    var sec=((Date.now()-state.startTime)/1000)|0;
+    timeV.textContent=fmtTime(sec);
+  }
+  function stopTimer(){
+    state.timerRunning=false;
+    if(state.timerId){ clearInterval(state.timerId); state.timerId=0; }
+  }
+
+  /* ===================== new puzzle ===================== */
+  function newPuzzle(){
+    stopTimer();
+    state.won=false;
+    overlay.hidden=true;
+    var size=state.cols;
+    var conf=null;
+    // find matching size key for count
+    Object.keys(SIZES).forEach(function(k){ if(SIZES[k].cols===size) conf=SIZES[k]; });
+    var count=conf?conf.count:10;
+
+    var picked=pickWords(state.themeName, size, count);
+    var built=buildGrid(picked, size);
+    state.grid=built.grid;
+
+    // map placed cells back; buildGrid may have dropped words: use what's placed
+    state.words = built.words.map(function(p, i){
+      return { text:p.text, cells:p.cells, found:false, colorIndex:i, _li:null, _swatch:null };
+    });
+    state.foundCount=0;
+
+    renderBoard();
+    renderWordList();
+    updateStats();
+    themeLabel.textContent = state.themeName.charAt(0)+state.themeName.slice(1).toLowerCase();
+    timeV.textContent="0:00";
+
+    // reset selection
+    pointerActive=false; dragStart=null; currentSel=[]; pendingAnchor=null;
+  }
+
+  /* ===================== selection helpers ===================== */
+  function coordsOf(cellEl){
+    return { r:parseInt(cellEl.dataset.r,10), c:parseInt(cellEl.dataset.c,10) };
+  }
+  // straight line from a to b (inclusive) if valid direction; else null
+  function lineCells(aEl, bEl){
+    var a=coordsOf(aEl), b=coordsOf(bEl);
+    var dr=b.r-a.r, dc=b.c-a.c;
+    if(dr===0 && dc===0) return [aEl];
+    var adr=Math.abs(dr), adc=Math.abs(dc);
+    var straight = (dr===0 || dc===0 || adr===adc);
+    if(!straight) return null;
+    var steps=Math.max(adr, adc);
+    var sr=dr===0?0:(dr>0?1:-1);
+    var sc=dc===0?0:(dc>0?1:-1);
+    var cells=[];
+    for(var i=0;i<=steps;i++){
+      var el=cellAt(a.r+sr*i, a.c+sc*i);
+      if(!el) return null;
+      cells.push(el);
+    }
+    return cells;
+  }
+  function lettersOf(cells){
+    var s=""; for(var i=0;i<cells.length;i++) s+=cells[i].textContent;
+    return s.toUpperCase();
+  }
+  function clearMarks(){
+    for(var i=0;i<currentSel.length;i++){ currentSel[i].classList.remove("selecting"); }
+    if(pendingAnchor) pendingAnchor.classList.remove("anchor");
+  }
+  function renderSelection(){
+    // clear all first (cheap; grids are small)
+    var marked=board.querySelectorAll(".cell.selecting,.cell.anchor");
+    for(var i=0;i<marked.length;i++) marked[i].classList.remove("selecting","anchor");
+    if(pendingAnchor) pendingAnchor.classList.add("anchor");
+    for(var j=0;j<currentSel.length;j++) currentSel[j].classList.add("selecting");
+  }
+
+  function matchWord(str){
+    var rev=str.split("").reverse().join("");
+    for(var i=0;i<state.words.length;i++){
+      var w=state.words[i];
+      if(w.found) continue;
+      if(w.text===str || w.text===rev) return w;
+    }
+    return null;
+  }
+
+  function markFound(word, cells){
+    word.found=true;
+    var color=PALETTE[state.foundCount % PALETTE.length];
+    for(var i=0;i<cells.length;i++){
+      cells[i].classList.add("found");
+      cells[i].style.setProperty("--fc", color);
+    }
+    if(word._li){
+      word._li.classList.add("done");
+      if(word._swatch){ word._swatch.style.background=color; }
+    }
+    state.foundCount++;
+    updateStats();
+    if(state.foundCount>=state.words.length && state.words.length>0){
+      winGame();
+    }
+  }
+
+  function winGame(){
+    state.won=true;
+    stopTimer();
+    var sec=((Date.now()-state.startTime)/1000)|0;
+    ovCount.textContent=state.words.length;
+    ovTime.textContent=fmtTime(sec);
+    overlay.hidden=false;
+    // NOTE: has_leaderboard = false → intentionally NO postMessage score is sent.
+  }
+
+  // resolve a completed selection (drag line OR two-click line)
+  function finalizeSelection(){
+    if(currentSel.length>=2){
+      var str=lettersOf(currentSel);
+      var w=matchWord(str);
+      if(w) markFound(w, currentSel.slice());
+      currentSel=[]; pendingAnchor=null; renderSelection();
+      return;
+    }
+    if(currentSel.length===1){
+      var cell=currentSel[0];
+      currentSel=[];
+      if(pendingAnchor && pendingAnchor===cell){
+        // tapped the same anchor again → cancel
+        pendingAnchor=null; renderSelection(); return;
+      }
+      if(pendingAnchor){
+        var line=lineCells(pendingAnchor, cell);
+        if(line && line.length>=2){
+          var s2=lettersOf(line);
+          var w2=matchWord(s2);
+          if(w2) markFound(w2, line);
+        }
+        pendingAnchor=null; renderSelection(); return;
+      }
+      // set new anchor
+      pendingAnchor=cell; renderSelection(); return;
+    }
+    renderSelection();
+  }
+
+  /* ===================== pointer input ===================== */
+  function cellFromEvent(e){
+    var el=document.elementFromPoint(e.clientX, e.clientY);
+    if(!el) return null;
+    if(el.classList && el.classList.contains("cell")) return el;
+    return el.closest ? el.closest(".cell") : null;
+  }
+
+  board.addEventListener("pointerdown", function(e){
+    var cell=e.target.closest ? e.target.closest(".cell") : null;
+    if(!cell) return;
+    e.preventDefault();
+    startTimerIfNeeded();
+    pointerActive=true;
+    dragStart=cell;
+    currentSel=[cell];
+    renderSelection();
+  });
+
+  window.addEventListener("pointermove", function(e){
+    if(!pointerActive) return;
+    var cell=cellFromEvent(e);
+    if(!cell){ return; } // stayed outside grid; keep last selection
+    if(cell===dragStart){
+      currentSel=[dragStart];
+      renderSelection();
+      return;
+    }
+    var line=lineCells(dragStart, cell);
+    if(line){ currentSel=line; }
+    else { currentSel=[dragStart]; }
+    renderSelection();
+  });
+
+  window.addEventListener("pointerup", function(e){
+    if(!pointerActive) return;
+    pointerActive=false;
+    finalizeSelection();
+    dragStart=null;
+  });
+
+  window.addEventListener("pointercancel", function(){
+    if(!pointerActive) return;
+    pointerActive=false;
+    currentSel=[]; dragStart=null;
+    renderSelection();
+  });
+
+  /* ===================== keyboard input ===================== */
+  board.addEventListener("keydown", function(e){
+    var cell=e.target.closest ? e.target.closest(".cell") : null;
+    if(!cell) return;
+    var p=coordsOf(cell), nr=p.r, nc=p.c, move=false;
+    if(e.key==="ArrowUp"){ nr--; move=true; }
+    else if(e.key==="ArrowDown"){ nr++; move=true; }
+    else if(e.key==="ArrowLeft"){ nc--; move=true; }
+    else if(e.key==="ArrowRight"){ nc++; move=true; }
+    else if(e.key==="Enter" || e.key===" "){
+      e.preventDefault();
+      startTimerIfNeeded();
+      // treat as a tap
+      currentSel=[cell];
+      finalizeSelection();
+      return;
+    } else if(e.key==="Escape"){
+      if(pendingAnchor){ pendingAnchor=null; currentSel=[]; renderSelection(); e.preventDefault(); }
+      return;
+    }
+    if(move){
+      e.preventDefault();
+      var size=state.cols;
+      if(nr<0) nr=0; if(nr>=size) nr=size-1;
+      if(nc<0) nc=0; if(nc>=size) nc=size-1;
+      var next=cellAt(nr,nc);
+      if(next){
+        cell.setAttribute("tabindex","-1");
+        next.setAttribute("tabindex","0");
+        next.focus();
+      }
+    }
+  });
+
+  /* ===================== hint ===================== */
+  var hintTimer=0;
+  document.getElementById("hintBtn").addEventListener("click", function(){
+    var remaining=state.words.filter(function(w){ return !w.found; });
+    if(!remaining.length) return;
+    startTimerIfNeeded();
+    var w=remaining[randInt(remaining.length)];
+    var cells=w.cells.map(function(rc){ return cellAt(rc[0], rc[1]); });
+    cells.forEach(function(c){ if(c) c.classList.add("hint"); });
+    if(hintTimer) clearTimeout(hintTimer);
+    hintTimer=setTimeout(function(){
+      cells.forEach(function(c){ if(c) c.classList.remove("hint"); });
+    }, 1500);
+  });
+
+  /* ===================== controls ===================== */
+  themeSel.addEventListener("change", function(){
+    state.themeName=themeSel.value;
+    newPuzzle();
+  });
+  sizeSel.addEventListener("change", function(){
+    var conf=SIZES[sizeSel.value] || SIZES.medium;
+    state.cols=conf.cols;
+    newPuzzle();
+  });
+  document.getElementById("newBtn").addEventListener("click", newPuzzle);
+  document.getElementById("ovAgain").addEventListener("click", newPuzzle);
+
+  var helpEl=document.getElementById("help");
+  document.getElementById("helpBtn").addEventListener("click", function(){ helpEl.hidden=false; });
+  document.getElementById("helpClose").addEventListener("click", function(){ helpEl.hidden=true; });
+  helpEl.addEventListener("click", function(e){ if(e.target===helpEl) helpEl.hidden=true; });
+
+  /* ===================== boot ===================== */
+  // sync selects with defaults
+  state.themeName = Object.keys(THEMES)[0];
+  themeSel.value = state.themeName;
+  sizeSel.value = "medium";
+  state.cols = SIZES.medium.cols;
+
+  newPuzzle();
+
+  // guard against a 0-size first paint (fonts/layout settle)
+  requestAnimationFrame(sizeBoard);
+  setTimeout(sizeBoard, 60);
+
+})();
+</script>
+<style data-mobile-hit-fit>
+  /* Touch fit: 29px selects/buttons -> 44px tap targets. Only the bar grows; #app is height:100% overflow:hidden and the board is ResizeObserver-fitted, so the document cannot outgrow the frame. */
+  @media (max-width: 900px), (pointer: coarse){
+    #bar select, #bar button{ min-height:44px; min-width:44px; touch-action:manipulation; }
+  }
+</style>
+</body>
+</html>

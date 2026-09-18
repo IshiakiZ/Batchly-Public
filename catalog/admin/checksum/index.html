@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Checksum: file hash verifier</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;padding:0}
+  body{
+    background:#10100e;color:#eee;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:14px;line-height:1.5;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px}
+
+  h1{font-size:22px;letter-spacing:.14em;margin:0;text-transform:uppercase}
+  .sub{color:#888;font-size:12px;margin:8px 0 0}
+  header{border-bottom:2px solid #eee;padding-bottom:16px;margin-bottom:20px}
+
+  .lbl{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;margin:0 0 8px}
+  .hint{font-size:11px;letter-spacing:.04em;color:#888;margin:8px 0 0}
+  .hint.warn{color:#ff3b30}
+  .hint.ok{color:#35d07f}
+
+  /* Focus must stay visible against both the red fills and the dark ground. */
+  a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
+  .chip:focus-within{outline:3px solid #fff;outline-offset:2px}
+
+  .btn{
+    display:block;width:100%;min-height:44px;padding:12px 16px;
+    background:#ff3b30;color:#10100e;border:2px solid #ff3b30;
+    font-family:inherit;font-size:13px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .btn:hover{background:#ff5347;border-color:#ff5347}
+  .btn:active{transform:translateY(1px)}
+  .btn.sec{background:transparent;color:#ff3b30}
+  .btn.sec:hover{background:rgba(255,59,48,.12)}
+  .btn.ghost{background:transparent;color:#eee;border-color:#eee}
+  .btn.ghost:hover{background:rgba(238,238,238,.1)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn.sm{width:auto;min-height:44px;padding:10px 14px;font-size:11px}
+
+  input[type=text],textarea{
+    width:100%;min-height:44px;padding:11px 12px;
+    background:#0a0a09;color:#eee;border:2px solid #eee;
+    font-family:inherit;font-size:13px;
+  }
+  textarea{resize:vertical;line-height:1.5}
+  /* #666 on the #0a0a09 field is 3.4:1, under AA. #7d7d7b is ~4.9:1. */
+  input[type=text]::placeholder,textarea::placeholder{color:#7d7d7b}
+
+  /* tabs */
+  .tabs{display:flex;gap:0;margin-bottom:20px}
+  .tabs button{
+    flex:1;min-height:44px;padding:10px;cursor:pointer;
+    font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    background:transparent;color:#888;border:2px solid #eee;
+  }
+  .tabs button+button{border-left-width:0}
+  .tabs button[aria-selected=true]{background:#ff3b30;border-color:#ff3b30;color:#10100e}
+
+  /* drop zone */
+  .drop{border:2px dashed #eee;padding:24px 16px;text-align:center}
+  .drop.over{border-color:#ff3b30;border-style:solid;background:rgba(255,59,48,.08)}
+  .drop p{margin:0 0 14px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#888}
+  .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+  /* algorithms */
+  fieldset{border:2px solid #eee;padding:14px;margin:20px 0 0;min-width:0}
+  legend{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;padding:0 6px}
+  .algos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .chip{
+    display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 10px;
+    border:2px solid #eee;cursor:pointer;font-size:12px;letter-spacing:.06em;user-select:none;
+  }
+  .chip .box{width:16px;height:16px;border:2px solid #eee;flex:0 0 auto;position:relative}
+  .chip input:checked ~ .box{background:#ff3b30;border-color:#ff3b30}
+  .chip input:checked ~ .box::after{
+    content:"";position:absolute;left:3px;top:0;width:5px;height:10px;
+    border:solid #10100e;border-width:0 2px 2px 0;transform:rotate(45deg)
+  }
+  .chip input:checked ~ .txt{color:#eee}
+  .chip .txt{color:#888}
+
+  .field{margin-top:20px}
+
+  /* progress */
+  .prog{margin-top:20px;border:2px solid #eee;padding:14px}
+  .bar{height:14px;border:2px solid #eee;margin:10px 0;overflow:hidden}
+  .bar>i{display:block;height:100%;background:#ff3b30;width:0%;transition:width .12s linear}
+  /* A long unbroken filename must wrap, not push the page sideways at 360px.
+     word-break:break-word alone is a legacy alias; anywhere is the real rule. */
+  .prog .meta{font-size:11px;color:#888;letter-spacing:.06em;word-break:break-word;overflow-wrap:anywhere}
+
+  /* results */
+  .res{margin-top:20px}
+  .card{border:2px solid #eee;padding:14px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0 0 6px;word-break:break-all;letter-spacing:.02em}
+  .card .meta{font-size:11px;color:#888;letter-spacing:.04em;margin:0 0 12px;word-break:break-word;overflow-wrap:anywhere}
+  /* The mismatch verdict carries a full 128-char expected digest inline. */
+  .verdict{
+    display:block;padding:10px 12px;margin:0 0 12px;font-size:13px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;color:#10100e;word-break:break-word;overflow-wrap:anywhere
+  }
+  .verdict.match{background:#35d07f}
+  .verdict.miss{background:#ff3b30}
+  .verdict.none{background:transparent;border:2px solid #888;color:#888;font-weight:400}
+  .verdict small{display:block;font-size:10px;font-weight:400;letter-spacing:.04em;margin-top:6px;text-transform:none}
+  .drow{border-top:2px solid #2a2a28;padding-top:10px;margin-top:10px}
+  .drow:first-of-type{border-top:0;padding-top:0;margin-top:0}
+  .drow .name{font-size:11px;letter-spacing:.1em;color:#888;text-transform:uppercase}
+  .hex{
+    font-size:12px;line-height:1.6;overflow-wrap:anywhere;word-break:break-all;
+    margin:6px 0 8px;user-select:all;color:#eee
+  }
+  .hex.is-match{color:#35d07f}
+  .hex.is-miss{color:#ff3b30}
+  .cardactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .err{border-color:#ff3b30}
+  .err h2{color:#ff3b30}
+
+  .empty{border:2px dashed #444;padding:18px;color:#888;font-size:12px;text-align:center;letter-spacing:.04em}
+
+  .foot{margin:24px 0 0;padding-top:14px;border-top:2px solid #2a2a28;font-size:10px;color:#888;letter-spacing:.06em;overflow-wrap:anywhere}
+  .foot.bad{color:#ff3b30}
+  .banner{border:2px solid #ff3b30;background:rgba(255,59,48,.1);padding:12px;font-size:12px;margin-bottom:20px;color:#eee}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Checksum</h1>
+    <p class="sub">Verify a download against its published hash. Files are read locally; nothing is uploaded, and this page makes no network requests at all.</p>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="tabs" role="tablist" aria-label="Input type">
+    <button type="button" role="tab" id="tab-file" aria-selected="true" aria-controls="panel-file">Files</button>
+    <button type="button" role="tab" id="tab-text" aria-selected="false" aria-controls="panel-text" tabindex="-1">Text</button>
+  </div>
+
+  <section id="panel-file" role="tabpanel" aria-labelledby="tab-file" tabindex="-1">
+    <div id="drop" class="drop">
+      <p>Drop files anywhere on this page</p>
+      <button type="button" id="pick" class="btn">Choose files</button>
+      <!-- tabindex=-1: the visible button drives this input, so leaving it in the
+           tab order gives keyboard users a second, invisible stop for one action. -->
+      <input id="fileinput" class="sr" type="file" multiple tabindex="-1" aria-hidden="true" aria-label="Choose files to hash">
+    </div>
+  </section>
+
+  <section id="panel-text" role="tabpanel" aria-labelledby="tab-text" tabindex="-1" hidden>
+    <label class="lbl" for="txt">Text to hash (UTF-8)</label>
+    <textarea id="txt" rows="4" spellcheck="false" aria-describedby="txtinfo" placeholder="type or paste anything&hellip;"></textarea>
+    <p class="hint" id="txtinfo">0 bytes</p>
+    <div style="margin-top:12px"><button type="button" id="hashtext" class="btn">Hash text</button></div>
+  </section>
+
+  <fieldset aria-describedby="algohint">
+    <legend>Algorithms</legend>
+    <div class="algos" id="algos"></div>
+    <p class="hint" id="algohint">Pick at least one. All selected algorithms are computed in a single pass over the file.</p>
+  </fieldset>
+
+  <div class="field">
+    <label class="lbl" for="expected">Expected hash (optional)</label>
+    <input id="expected" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"
+           aria-describedby="exphint" placeholder="paste the published hash&hellip;">
+    <p class="hint" id="exphint" aria-live="polite">Paste a published hash and the matching algorithm is selected automatically.</p>
+  </div>
+
+  <div id="prog" class="prog" hidden>
+    <p class="lbl" id="progtitle" style="margin:0">Hashing</p>
+    <div class="bar" role="progressbar" aria-labelledby="progtitle" aria-describedby="progmeta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progbar"></i></div>
+    <p class="meta" id="progmeta">Starting&hellip;</p>
+    <div style="margin-top:10px"><button type="button" id="cancel" class="btn sec">Cancel</button></div>
+  </div>
+
+  <p id="status" class="hint" role="status" aria-live="polite" style="margin-top:16px"></p>
+
+  <div id="results" class="res"></div>
+
+  <div id="clearwrap" hidden style="margin-top:4px">
+    <button type="button" id="clear" class="btn ghost">Clear results</button>
+  </div>
+
+  <p class="foot" id="engineline">Checking hash engine&hellip;</p>
+</div>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * checksum: single file, no network, no dependencies.
+ *
+ * WHY THERE IS A HAND-WRITTEN SHA IN HERE:
+ * SubtleCrypto has no progressive/streaming digest; crypto.subtle.digest()
+ * only takes a whole buffer, so hashing a 2 GB file with it means holding
+ * 2 GB in memory (and usually failing). So:
+ *   - files <= NATIVE_MAX  -> one-shot WebCrypto (native speed, trusted impl)
+ *   - anything larger      -> the SHA-1/256/384/512 implementations below,
+ *                             fed File.slice() chunks, constant memory.
+ * The JS implementations are self-tested against WebCrypto on load across
+ * every padding edge case; if they ever disagree the JS path is disabled
+ * rather than silently emitting a wrong digest.
+ * ------------------------------------------------------------------ */
+
+/*==HASHCORE-START==*/
+function HASHCORE(){
+  'use strict';
+
+  var HEXB = new Array(256);
+  for (var _i = 0; _i < 256; _i++) HEXB[_i] = (_i < 16 ? '0' : '') + _i.toString(16);
+
+  /* ---------------- constants ---------------- */
+
+  var K256 = new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ]);
+
+  // Written as 16-char hex strings: 160 loose numbers is far easier to typo.
+  var K512HEX = [
+    '428a2f98d728ae22','7137449123ef65cd','b5c0fbcfec4d3b2f','e9b5dba58189dbbc',
+    '3956c25bf348b538','59f111f1b605d019','923f82a4af194f9b','ab1c5ed5da6d8118',
+    'd807aa98a3030242','12835b0145706fbe','243185be4ee4b28c','550c7dc3d5ffb4e2',
+    '72be5d74f27b896f','80deb1fe3b1696b1','9bdc06a725c71235','c19bf174cf692694',
+    'e49b69c19ef14ad2','efbe4786384f25e3','0fc19dc68b8cd5b5','240ca1cc77ac9c65',
+    '2de92c6f592b0275','4a7484aa6ea6e483','5cb0a9dcbd41fbd4','76f988da831153b5',
+    '983e5152ee66dfab','a831c66d2db43210','b00327c898fb213f','bf597fc7beef0ee4',
+    'c6e00bf33da88fc2','d5a79147930aa725','06ca6351e003826f','142929670a0e6e70',
+    '27b70a8546d22ffc','2e1b21385c26c926','4d2c6dfc5ac42aed','53380d139d95b3df',
+    '650a73548baf63de','766a0abb3c77b2a8','81c2c92e47edaee6','92722c851482353b',
+    'a2bfe8a14cf10364','a81a664bbc423001','c24b8b70d0f89791','c76c51a30654be30',
+    'd192e819d6ef5218','d69906245565a910','f40e35855771202a','106aa07032bbd1b8',
+    '19a4c116b8d2d0c8','1e376c085141ab53','2748774cdf8eeb99','34b0bcb5e19b48a8',
+    '391c0cb3c5c95a63','4ed8aa4ae3418acb','5b9cca4f7763e373','682e6ff3d6b2b8a3',
+    '748f82ee5defb2fc','78a5636f43172f60','84c87814a1f0ab72','8cc702081a6439ec',
+    '90befffa23631e28','a4506cebde82bde9','bef9a3f7b2c67915','c67178f2e372532b',
+    'ca273eceea26619c','d186b8c721c0c207','eada7dd6cde0eb1e','f57d4f7fee6ed178',
+    '06f067aa72176fba','0a637dc5a2c898a6','113f9804bef90dae','1b710b35131c471b',
+    '28db77f523047d84','32caab7b40c72493','3c9ebe0a15c9bebc','431d67c49c100d4c',
+    '4cc5d4becb3e42b6','597f299cfc657e2a','5fcb6fab3ad6faec','6c44198c4a475817'
+  ];
+  var K512 = new Uint32Array(160);
+  for (var k = 0; k < 80; k++) {
+    K512[2 * k]     = parseInt(K512HEX[k].substring(0, 8), 16);
+    K512[2 * k + 1] = parseInt(K512HEX[k].substring(8), 16);
+  }
+
+  var IV512 = hexPairs([
+    '6a09e667f3bcc908','bb67ae8584caa73b','3c6ef372fe94f82b','a54ff53a5f1d36f1',
+    '510e527fade682d1','9b05688c2b3e6c1f','1f83d9abfb41bd6b','5be0cd19137e2179'
+  ]);
+  var IV384 = hexPairs([
+    'cbbb9d5dc1059ed8','629a292a367cd507','9159015a3070dd17','152fecd8f70e5939',
+    '67332667ffc00b31','8eb44a8768581511','db0c2e0d64f98fa7','47b5481dbefa4fa4'
+  ]);
+  function hexPairs(list){
+    var out = new Uint32Array(list.length * 2);
+    for (var i = 0; i < list.length; i++) {
+      out[2 * i]     = parseInt(list[i].substring(0, 8), 16);
+      out[2 * i + 1] = parseInt(list[i].substring(8), 16);
+    }
+    return out;
+  }
+
+  function hexWords(words, count){
+    var s = '';
+    for (var i = 0; i < count; i++) {
+      var v = words[i];
+      s += HEXB[(v >>> 24) & 255] + HEXB[(v >>> 16) & 255] + HEXB[(v >>> 8) & 255] + HEXB[v & 255];
+    }
+    return s;
+  }
+
+  /* ---------- shared 64-byte-block plumbing (SHA-1, SHA-256) ---------- */
+
+  function update64(p){
+    this.total += p.length;
+    var n = p.length, i = 0;
+    if (this.blkLen > 0) {
+      var need = 64 - this.blkLen;
+      if (n < need) { this.blk.set(p, this.blkLen); this.blkLen += n; return this; }
+      this.blk.set(p.subarray(0, need), this.blkLen);
+      this._c(this.blk, 0);
+      this.blkLen = 0; i = need;
+    }
+    for (; i + 64 <= n; i += 64) this._c(p, i);
+    if (i < n) { this.blk.set(p.subarray(i), 0); this.blkLen = n - i; }
+    return this;
+  }
+
+  function pad64(){
+    var t = this.total;
+    // 0x80, then zeros so the block ends 8 bytes short, then a 64-bit bit-count.
+    var padLen = this.blkLen < 56 ? (56 - this.blkLen) : (120 - this.blkLen);
+    var pad = new Uint8Array(padLen + 8);
+    pad[0] = 0x80;
+    // bitLength = t*8 can exceed 2^32. hi = t*8 / 2^32 = t / 2^29.
+    // ToUint32 on the exact double t*8 gives the low word correctly for t < 2^53.
+    var hi = Math.floor(t / 536870912), lo = (t * 8) >>> 0;
+    var o = padLen;
+    pad[o] = (hi >>> 24) & 255; pad[o+1] = (hi >>> 16) & 255; pad[o+2] = (hi >>> 8) & 255; pad[o+3] = hi & 255;
+    pad[o+4] = (lo >>> 24) & 255; pad[o+5] = (lo >>> 16) & 255; pad[o+6] = (lo >>> 8) & 255; pad[o+7] = lo & 255;
+    this.update(pad);
+  }
+
+  /* ---------------- SHA-256 ---------------- */
+
+  function Sha256(){
+    this.h = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+                              0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+    this.blk = new Uint8Array(64); this.blkLen = 0; this.total = 0;
+    this.W = new Uint32Array(64);
+  }
+  Sha256.prototype.update = update64;
+  Sha256.prototype._pad = pad64;
+  Sha256.prototype._c = function(p, off){
+    var W = this.W, h = this.h, i, x, y;
+    for (i = 0; i < 16; i++) {
+      var o = off + i * 4;
+      W[i] = (p[o] << 24) | (p[o+1] << 16) | (p[o+2] << 8) | p[o+3];
+    }
+    for (i = 16; i < 64; i++) {
+      x = W[i-15]; y = W[i-2];
+      var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0;
+    }
+    var a=h[0],b=h[1],c=h[2],d=h[3],e=h[4],f=h[5],g=h[6],hh=h[7];
+    for (i = 0; i < 64; i++) {
+      var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      var ch = (e & f) ^ (~e & g);
+      var t1 = (hh + S1 + ch + K256[i] + W[i]) | 0;
+      var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      var maj = (a & b) ^ (a & c) ^ (b & c);
+      var t2 = (S0 + maj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h[0] = h[0] + a; h[1] = h[1] + b; h[2] = h[2] + c; h[3] = h[3] + d;
+    h[4] = h[4] + e; h[5] = h[5] + f; h[6] = h[6] + g; h[7] = h[7] + hh;
+  };
+  Sha256.prototype.hex = function(){ this._pad(); return hexWords(this.h, 8); };
+
+  /* ---------------- SHA-1 ---------------- */
+
+  function Sha1(){
+    this.h = new Uint32Array([0x67452301,0xefcdab89,0x98badcfe,0x10325476,0xc3d2e1f0]);
+    this.blk = new Uint8Array(64); this.blkLen = 0; this.total = 0;
+    this.W = new Uint32Array(80);
+  }
+  Sha1.prototype.update = update64;
+  Sha1.prototype._pad = pad64;
+  Sha1.prototype._c = function(p, off){
+    var W = this.W, h = this.h, i;
+    for (i = 0; i < 16; i++) {
+      var o = off + i * 4;
+      W[i] = (p[o] << 24) | (p[o+1] << 16) | (p[o+2] << 8) | p[o+3];
+    }
+    for (i = 16; i < 80; i++) {
+      var v = W[i-3] ^ W[i-8] ^ W[i-14] ^ W[i-16];
+      W[i] = (v << 1) | (v >>> 31);
+    }
+    var a=h[0],b=h[1],c=h[2],d=h[3],e=h[4];
+    for (i = 0; i < 80; i++) {
+      var f, kk;
+      if (i < 20)      { f = (b & c) | (~b & d);            kk = 0x5a827999; }
+      else if (i < 40) { f = b ^ c ^ d;                      kk = 0x6ed9eba1; }
+      else if (i < 60) { f = (b & c) | (b & d) | (c & d);    kk = 0x8f1bbcdc; }
+      else             { f = b ^ c ^ d;                      kk = 0xca62c1d6; }
+      var t = (((a << 5) | (a >>> 27)) + f + e + kk + W[i]) | 0;
+      e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t;
+    }
+    h[0] = h[0] + a; h[1] = h[1] + b; h[2] = h[2] + c; h[3] = h[3] + d; h[4] = h[4] + e;
+  };
+  Sha1.prototype.hex = function(){ this._pad(); return hexWords(this.h, 5); };
+
+  /* ---------------- SHA-512 / SHA-384 ----------------
+   * 64-bit words are kept as (hi, lo) uint32 pairs in one Uint32Array.
+   * BigInt would be correct but roughly two orders of magnitude slower.
+   */
+
+  function Sha512(is384){
+    this.h = new Uint32Array(is384 ? IV384 : IV512);
+    this.out = is384 ? 12 : 16;          // 32-bit words emitted (384 = 12, 512 = 16)
+    this.blk = new Uint8Array(128); this.blkLen = 0; this.total = 0;
+    this.W = new Uint32Array(160);
+  }
+  Sha512.prototype.update = function(p){
+    this.total += p.length;
+    var n = p.length, i = 0;
+    if (this.blkLen > 0) {
+      var need = 128 - this.blkLen;
+      if (n < need) { this.blk.set(p, this.blkLen); this.blkLen += n; return this; }
+      this.blk.set(p.subarray(0, need), this.blkLen);
+      this._c(this.blk, 0);
+      this.blkLen = 0; i = need;
+    }
+    for (; i + 128 <= n; i += 128) this._c(p, i);
+    if (i < n) { this.blk.set(p.subarray(i), 0); this.blkLen = n - i; }
+    return this;
+  };
+  Sha512.prototype._pad = function(){
+    var t = this.total;
+    // Same shape as pad64 but the length field is 128 bits wide (top 8 bytes stay zero).
+    var padLen = this.blkLen < 112 ? (112 - this.blkLen) : (240 - this.blkLen);
+    var pad = new Uint8Array(padLen + 16);
+    pad[0] = 0x80;
+    var hi = Math.floor(t / 536870912), lo = (t * 8) >>> 0;
+    var o = padLen + 8;
+    pad[o] = (hi >>> 24) & 255; pad[o+1] = (hi >>> 16) & 255; pad[o+2] = (hi >>> 8) & 255; pad[o+3] = hi & 255;
+    pad[o+4] = (lo >>> 24) & 255; pad[o+5] = (lo >>> 16) & 255; pad[o+6] = (lo >>> 8) & 255; pad[o+7] = lo & 255;
+    this.update(pad);
+  };
+  Sha512.prototype._c = function(p, off){
+    var W = this.W, h = this.h, i;
+    for (i = 0; i < 16; i++) {
+      var o = off + i * 8;
+      W[2*i]   = (p[o]   << 24) | (p[o+1] << 16) | (p[o+2] << 8) | p[o+3];
+      W[2*i+1] = (p[o+4] << 24) | (p[o+5] << 16) | (p[o+6] << 8) | p[o+7];
+    }
+    for (i = 16; i < 80; i++) {
+      var xh = W[2*(i-15)], xl = W[2*(i-15)+1];
+      // s0 = rotr(x,1) ^ rotr(x,8) ^ shr(x,7)
+      var s0h = ((xh >>> 1) | (xl << 31)) ^ ((xh >>> 8) | (xl << 24)) ^ (xh >>> 7);
+      var s0l = ((xl >>> 1) | (xh << 31)) ^ ((xl >>> 8) | (xh << 24)) ^ ((xl >>> 7) | (xh << 25));
+      var yh = W[2*(i-2)], yl = W[2*(i-2)+1];
+      // s1 = rotr(y,19) ^ rotr(y,61) ^ shr(y,6);  rotr61 == rotl3
+      var s1h = ((yh >>> 19) | (yl << 13)) ^ ((yl >>> 29) | (yh << 3)) ^ (yh >>> 6);
+      var s1l = ((yl >>> 19) | (yh << 13)) ^ ((yh >>> 29) | (yl << 3)) ^ ((yl >>> 6) | (yh << 26));
+      var l = (W[2*(i-16)+1] >>> 0) + (s0l >>> 0) + (W[2*(i-7)+1] >>> 0) + (s1l >>> 0);
+      var hi = (W[2*(i-16)] >>> 0) + (s0h >>> 0) + (W[2*(i-7)] >>> 0) + (s1h >>> 0) + Math.floor(l / 4294967296);
+      W[2*i] = hi; W[2*i+1] = l;   // Uint32Array store does the mod-2^32 for us
+    }
+
+    var ah=h[0],al=h[1], bh=h[2],bl=h[3], chh=h[4],cll=h[5], dh=h[6],dl=h[7],
+        eh=h[8],el=h[9], fh=h[10],fl=h[11], gh=h[12],gl=h[13], hh=h[14],hl=h[15];
+
+    for (i = 0; i < 80; i++) {
+      // S1 = rotr(e,14) ^ rotr(e,18) ^ rotr(e,41)
+      var S1h = ((eh >>> 14) | (el << 18)) ^ ((eh >>> 18) | (el << 14)) ^ ((el >>> 9) | (eh << 23));
+      var S1l = ((el >>> 14) | (eh << 18)) ^ ((el >>> 18) | (eh << 14)) ^ ((eh >>> 9) | (el << 23));
+      var chH = (eh & fh) ^ (~eh & gh);
+      var chL = (el & fl) ^ (~el & gl);
+      var t1l = (hl >>> 0) + (S1l >>> 0) + (chL >>> 0) + K512[2*i+1] + W[2*i+1];
+      var t1h = ((hh >>> 0) + (S1h >>> 0) + (chH >>> 0) + K512[2*i] + W[2*i] + Math.floor(t1l / 4294967296)) >>> 0;
+      t1l = t1l >>> 0;
+      // S0 = rotr(a,28) ^ rotr(a,34) ^ rotr(a,39)
+      var S0h = ((ah >>> 28) | (al << 4)) ^ ((al >>> 2) | (ah << 30)) ^ ((al >>> 7) | (ah << 25));
+      var S0l = ((al >>> 28) | (ah << 4)) ^ ((ah >>> 2) | (al << 30)) ^ ((ah >>> 7) | (al << 25));
+      var mjH = (ah & bh) ^ (ah & chh) ^ (bh & chh);
+      var mjL = (al & bl) ^ (al & cll) ^ (bl & cll);
+      var t2l = (S0l >>> 0) + (mjL >>> 0);
+      var t2h = ((S0h >>> 0) + (mjH >>> 0) + Math.floor(t2l / 4294967296)) >>> 0;
+      t2l = t2l >>> 0;
+
+      hh = gh; hl = gl; gh = fh; gl = fl; fh = eh; fl = el;
+      var nel = (dl >>> 0) + t1l;
+      eh = ((dh >>> 0) + t1h + Math.floor(nel / 4294967296)) >>> 0;
+      el = nel >>> 0;
+      dh = chh; dl = cll; chh = bh; cll = bl; bh = ah; bl = al;
+      var nal = t1l + t2l;
+      ah = (t1h + t2h + Math.floor(nal / 4294967296)) >>> 0;
+      al = nal >>> 0;
+    }
+
+    addTo(h, 0, ah, al); addTo(h, 2, bh, bl); addTo(h, 4, chh, cll); addTo(h, 6, dh, dl);
+    addTo(h, 8, eh, el); addTo(h, 10, fh, fl); addTo(h, 12, gh, gl); addTo(h, 14, hh, hl);
+  };
+  function addTo(h, i, xh, xl){
+    var lo = (h[i+1] >>> 0) + (xl >>> 0);
+    h[i]   = (h[i] >>> 0) + (xh >>> 0) + Math.floor(lo / 4294967296);
+    h[i+1] = lo;
+  }
+  Sha512.prototype.hex = function(){ this._pad(); return hexWords(this.h, this.out); };
+
+  /* ---------------- public surface ---------------- */
+
+  var ALGOS = ['SHA-256','SHA-1','SHA-384','SHA-512'];
+
+  function create(algo){
+    if (algo === 'SHA-256') return new Sha256();
+    if (algo === 'SHA-1')   return new Sha1();
+    if (algo === 'SHA-384') return new Sha512(true);
+    if (algo === 'SHA-512') return new Sha512(false);
+    throw new Error('unknown algorithm: ' + algo);
+  }
+
+  function hashBytes(algo, u8){
+    var h = create(algo);
+    h.update(u8);
+    return h.hex();
+  }
+
+  function bufHex(buf){
+    var u8 = new Uint8Array(buf), s = '';
+    for (var i = 0; i < u8.length; i++) s += HEXB[u8[i]];
+    return s;
+  }
+
+  self.HC = { create: create, hashBytes: hashBytes, bufHex: bufHex, ALGOS: ALGOS };
+}
+/*==HASHCORE-END==*/
+
+/* ------------------------------------------------------------------ *
+ * RUNNER: the same code runs on the main thread and inside the worker.
+ * Stringified via Function.prototype.toString(), so it must not close
+ * over anything outside itself.
+ * ------------------------------------------------------------------ */
+function RUNNER(){
+  'use strict';
+
+  function now(){ return (self.performance && self.performance.now) ? self.performance.now() : Date.now(); }
+
+  function readBlob(blob){
+    if (blob.arrayBuffer) return blob.arrayBuffer();
+    return new Promise(function(resolve, reject){
+      var fr = new FileReader();
+      fr.onload = function(){ resolve(fr.result); };
+      fr.onerror = function(){ reject(fr.error || new Error('The file could not be read.')); };
+      fr.readAsArrayBuffer(blob);
+    });
+  }
+
+  // opts: {file, algos, chunkSize, nativeMax, allowNative, allowJs, onProgress, isCancelled}
+  self.HCRUN = function(opts){
+    return (function(){
+      var file = opts.file, algos = opts.algos, size = file.size;
+      var t0 = now();
+      // allowJs is false when the JS engine failed its self-test. It must gate
+      // EVERY route into jsPath, not just the size check. See the catch below.
+      var allowJs = opts.allowJs !== false;
+
+      function refuseJs(){
+        return Promise.reject(new Error(
+          'The built-in streaming hash engine failed its self-test on this browser, so it will not be used. ' +
+          'This input cannot be hashed here.'));
+      }
+
+      function jsPath(){
+        var hs = [], i;
+        for (i = 0; i < algos.length; i++) hs.push(self.HC.create(algos[i]));
+        var off = 0, chunk = opts.chunkSize || 4194304;
+        if (opts.onProgress) opts.onProgress(0, size);
+
+        function step(){
+          if (off >= size) {
+            var out = {};
+            for (var j = 0; j < algos.length; j++) out[algos[j]] = hs[j].hex();
+            return { hex: out, engine: 'js', ms: now() - t0, bytes: size, cancelled: false };
+          }
+          if (opts.isCancelled && opts.isCancelled()) return { cancelled: true };
+          var end = Math.min(off + chunk, size);
+          return readBlob(file.slice(off, end)).then(function(ab){
+            var u8 = new Uint8Array(ab);
+            for (var j = 0; j < hs.length; j++) hs[j].update(u8);
+            off = end;
+            if (opts.onProgress) opts.onProgress(off, size);
+            return step();
+          });
+        }
+        return Promise.resolve().then(step);
+      }
+
+      var canNative = opts.allowNative && self.crypto && self.crypto.subtle && size <= opts.nativeMax;
+      if (!canNative) return allowJs ? jsPath() : refuseJs();
+
+      // One-shot WebCrypto for anything that comfortably fits in memory.
+      return readBlob(file).then(function(buf){
+        if (opts.onProgress) opts.onProgress(Math.floor(size / 2), size);
+        var out = {}, chain = Promise.resolve();
+        algos.forEach(function(a){
+          chain = chain.then(function(){
+            return self.crypto.subtle.digest(a, buf).then(function(d){ out[a] = self.HC.bufHex(d); });
+          });
+        });
+        return chain.then(function(){
+          if (opts.onProgress) opts.onProgress(size, size);
+          return { hex: out, engine: 'webcrypto', ms: now() - t0, bytes: size, cancelled: false };
+        });
+      }).catch(function(err){
+        // Native path unavailable for this input (unsupported algo, OOM, read
+        // quirk): redo it with the streaming implementation rather than fail.
+        // But NOT when the streaming engine failed its self-test: silently
+        // downgrading to a known-bad engine would emit a wrong digest under a
+        // banner that promises exactly the opposite. Fail loudly instead.
+        if (!allowJs) throw err;
+        t0 = now();
+        return jsPath();
+      });
+    })();
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * WORKERMAIN: message glue, only ever evaluated inside the worker.
+ * ------------------------------------------------------------------ */
+function WORKERMAIN(){
+  'use strict';
+  var cancelled = false;
+  self.onmessage = function(e){
+    var m = e.data;
+    if (m.t === 'ping') { self.postMessage({ t: 'pong' }); return; }
+    if (m.t === 'cancel') { cancelled = true; return; }
+    if (m.t !== 'hash') return;
+    cancelled = false;
+    var last = 0;
+    self.HCRUN({
+      file: m.file, algos: m.algos, chunkSize: m.chunkSize,
+      nativeMax: m.nativeMax, allowNative: m.allowNative, allowJs: m.allowJs,
+      isCancelled: function(){ return cancelled; },
+      onProgress: function(done, total){
+        var t = Date.now();
+        if (done < total && t - last < 100) return;   // don't flood the main thread
+        last = t;
+        self.postMessage({ t: 'progress', id: m.id, done: done, total: total });
+      }
+    }).then(function(r){
+      if (r.cancelled) self.postMessage({ t: 'cancelled', id: m.id });
+      else self.postMessage({ t: 'done', id: m.id, hex: r.hex, engine: r.engine, ms: r.ms, bytes: r.bytes });
+    }).catch(function(err){
+      self.postMessage({ t: 'error', id: m.id, message: (err && err.message) ? err.message : String(err) });
+    });
+  };
+  self.postMessage({ t: 'ready' });
+}
+
+/* ================================================================== *
+ * APP
+ * ================================================================== */
+(function(){
+  'use strict';
+
+  HASHCORE();
+  RUNNER();
+  var HC = self.HC;
+
+  var ALGOS = ['SHA-256','SHA-1','SHA-384','SHA-512'];
+  var BY_LEN = { 40:'SHA-1', 64:'SHA-256', 96:'SHA-384', 128:'SHA-512' };
+  var NATIVE_MAX = 64 * 1024 * 1024;   // above this we stream instead of buffering
+  var CHUNK_WORKER = 8 * 1024 * 1024;
+  var CHUNK_MAIN   = 1024 * 1024;      // smaller on the main thread so frames still land
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  var els = {
+    banner:$('banner'), tabFile:$('tab-file'), tabText:$('tab-text'),
+    panelFile:$('panel-file'), panelText:$('panel-text'),
+    drop:$('drop'), pick:$('pick'), fileinput:$('fileinput'),
+    txt:$('txt'), txtinfo:$('txtinfo'), hashtext:$('hashtext'),
+    algos:$('algos'), algohint:$('algohint'),
+    expected:$('expected'), exphint:$('exphint'),
+    prog:$('prog'), progbar:$('progbar'), progmeta:$('progmeta'),
+    bar:document.querySelector('.bar'), cancel:$('cancel'),
+    status:$('status'), results:$('results'),
+    clearwrap:$('clearwrap'), clear:$('clear'), engineline:$('engineline')
+  };
+
+  /* ---------- storage (may be a hard throw on opaque origins) ---------- */
+  function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+
+  /* ---------- state ---------- */
+  var state = {
+    selected: {},         // algo -> bool
+    jobs: [],             // finished/failed result cards, newest first
+    expected: null,       // {hex, algo} | null
+    busy: false,
+    cancelled: false,
+    jsOk: null,           // null = self-test running, true/false = verdict
+    engineNote: '',
+    seq: 0
+  };
+
+  (function initSelection(){
+    var saved = lsGet('checksum.algos');
+    var list = null;
+    if (saved) {
+      try {
+        var p = JSON.parse(saved);
+        if (Object.prototype.toString.call(p) === '[object Array]') list = p;
+      } catch (e) {}
+    }
+    if (!list || !list.length) list = ['SHA-256'];
+    ALGOS.forEach(function(a){ state.selected[a] = list.indexOf(a) !== -1; });
+    if (!ALGOS.some(function(a){ return state.selected[a]; })) state.selected['SHA-256'] = true;
+  })();
+
+  function selectedAlgos(){ return ALGOS.filter(function(a){ return state.selected[a]; }); }
+  function saveSelection(){ lsSet('checksum.algos', JSON.stringify(selectedAlgos())); }
+
+  /* ---------- formatting ---------- */
+  function fmtBytes(n){
+    if (n < 1024) return n + ' B';
+    var u = ['KB','MB','GB','TB'], i = -1, v = n;
+    do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+    return (v >= 100 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2)) + ' ' + u[i];
+  }
+  function fmtNum(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function fmtMs(ms){
+    if (ms < 1000) return Math.round(ms) + ' ms';
+    var s = ms / 1000;
+    if (s < 60) return s.toFixed(s < 10 ? 2 : 1) + ' s';
+    return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+  }
+  // Estimates get whole units; "~6.62 s left" implies precision that isn't there.
+  function fmtEta(ms){
+    var s = Math.max(1, Math.round(ms / 1000));
+    if (s < 60) return s + ' s';
+    var m = Math.round(s / 60);
+    if (m < 60) return m + ' min';
+    return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+  }
+  function fmtRate(bytes, ms){
+    // ms is absent on error cards (nothing was timed). Without this guard a
+    // failed >=1 MB file rendered "NaN MB/s" in its meta line.
+    if (typeof bytes !== 'number' || typeof ms !== 'number') return null;
+    // Below a megabyte the number is all fixed overhead and means nothing.
+    if (!bytes || ms <= 0 || bytes < 1048576) return null;
+    return (bytes / 1048576 / (ms / 1000)).toFixed(1) + ' MB/s';
+  }
+
+  function el(tag, attrs, kids){
+    var n = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      if (!Object.prototype.hasOwnProperty.call(attrs, k)) continue;
+      if (k === 'class') n.className = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
+    if (kids) kids.forEach(function(c){ if (c) n.appendChild(c); });
+    return n;
+  }
+  function say(msg){ els.status.textContent = msg || ''; }
+
+  /* ---------- algorithm chips ---------- */
+  ALGOS.forEach(function(a){
+    var input = el('input', { type:'checkbox', class:'sr' });
+    input.checked = !!state.selected[a];
+    input.addEventListener('change', function(){
+      state.selected[a] = input.checked;
+      if (!selectedAlgos().length) {
+        // Never allow an empty selection; the hash button would do nothing.
+        state.selected[a] = true; input.checked = true;
+        els.algohint.textContent = 'At least one algorithm has to stay selected.';
+        els.algohint.className = 'hint warn';
+        return;
+      }
+      els.algohint.textContent = 'Pick at least one. All selected algorithms are computed in a single pass over the file.';
+      els.algohint.className = 'hint';
+      saveSelection();
+      renderResults();
+    });
+    var label = el('label', { class:'chip' }, [
+      input, el('span', { class:'box', 'aria-hidden':'true' }), el('span', { class:'txt', text:a })
+    ]);
+    els.algos.appendChild(label);
+  });
+  function setAlgo(a, on){
+    var i = ALGOS.indexOf(a);
+    if (i < 0) return;
+    state.selected[a] = on;
+    els.algos.children[i].querySelector('input').checked = on;
+    saveSelection();
+  }
+
+  /* ---------- expected-hash parsing ----------
+   * Real-world pastes look like:
+   *   d2b3...f1          (bare)
+   *   d2b3...f1  ubuntu.iso           (sha256sum output, two spaces)
+   *   SHA256 (ubuntu.iso) = d2b3...   (BSD style)
+   *   sha256:d2b3...f1                (container digests)
+   *   D2 B3 ... F1                    (grouped / uppercase)
+   */
+  function parseExpected(raw){
+    if (!raw) return null;
+    var s = String(raw).trim().toLowerCase();
+    if (!s) return null;
+
+    var runs = s.match(/[0-9a-f]+/g) || [];
+    var best = null, i;
+    for (i = 0; i < runs.length; i++) {
+      if (BY_LEN[runs[i].length] && (!best || runs[i].length > best.length)) best = runs[i];
+    }
+    if (best) return { hex: best, algo: BY_LEN[best.length] };
+
+    // Nothing contiguous matched, so the digest is probably grouped by spaces or
+    // dashes. Try it twice: first with everything up to the last ":" or "="
+    // dropped (kills "sha256:" and "SHA256 (file) =" labels, whose letters would
+    // otherwise be counted as hex), then the whole string squeezed.
+    var cand = [
+      s.replace(/^[\s\S]*[:=]\s*/, '').replace(/[^0-9a-f]/g, ''),
+      s.replace(/[^0-9a-f]/g, '')
+    ];
+    for (i = 0; i < cand.length; i++) {
+      if (BY_LEN[cand[i].length]) return { hex: cand[i], algo: BY_LEN[cand[i].length] };
+    }
+
+    for (i = 0; i < runs.length; i++) if (runs[i].length === 32) return { md5: true };
+    for (i = 0; i < cand.length; i++) if (cand[i].length === 32) return { md5: true };
+    return { bad: true };
+  }
+
+  function onExpectedInput(){
+    var parsed = parseExpected(els.expected.value);
+    if (!els.expected.value.trim()) {
+      state.expected = null;
+      els.exphint.className = 'hint';
+      els.exphint.textContent = 'Paste a published hash and the matching algorithm is selected automatically.';
+    } else if (parsed && parsed.md5) {
+      state.expected = null;
+      els.exphint.className = 'hint warn';
+      els.exphint.textContent = 'That is 32 hex characters, an MD5 hash. This tool does not do MD5: it is broken for verification and WebCrypto does not provide it.';
+    } else if (!parsed || parsed.bad) {
+      state.expected = null;
+      els.exphint.className = 'hint warn';
+      els.exphint.textContent = 'Not a recognised hash. Expected 40 (SHA-1), 64 (SHA-256), 96 (SHA-384) or 128 (SHA-512) hex characters.';
+    } else {
+      state.expected = parsed;
+      var note = 'Detected ' + parsed.algo + ' (' + parsed.hex.length + ' hex chars).';
+      if (!state.selected[parsed.algo]) { setAlgo(parsed.algo, true); note += ' ' + parsed.algo + ' switched on.'; }
+      els.exphint.className = 'hint ok';
+      els.exphint.textContent = note;
+    }
+    renderResults();
+    if (!state.busy) announceNewestVerdict();
+  }
+  els.expected.addEventListener('input', onExpectedInput);
+
+  /* ---------- tabs ---------- */
+  function showTab(which){
+    var isFile = which === 'file';
+    els.tabFile.setAttribute('aria-selected', isFile ? 'true' : 'false');
+    els.tabText.setAttribute('aria-selected', isFile ? 'false' : 'true');
+    els.tabFile.tabIndex = isFile ? 0 : -1;
+    els.tabText.tabIndex = isFile ? -1 : 0;
+    els.panelFile.hidden = !isFile;
+    els.panelText.hidden = isFile;
+    lsSet('checksum.tab', which);
+  }
+  els.tabFile.addEventListener('click', function(){ showTab('file'); });
+  els.tabText.addEventListener('click', function(){ showTab('text'); });
+  [els.tabFile, els.tabText].forEach(function(t){
+    t.addEventListener('keydown', function(e){
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        var other = t === els.tabFile ? els.tabText : els.tabFile;
+        showTab(other === els.tabFile ? 'file' : 'text');
+        other.focus();
+      }
+    });
+  });
+  showTab(lsGet('checksum.tab') === 'text' ? 'text' : 'file');
+
+  /* ---------- text byte counter ---------- */
+  var encoder = (typeof TextEncoder !== 'undefined') ? new TextEncoder() : null;
+  function encodeText(str){
+    if (encoder) return encoder.encode(str);
+    // Manual UTF-8 fallback (very old engines).
+    var out = [], i, c;
+    for (i = 0; i < str.length; i++) {
+      c = str.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); }
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+        var c2 = str.charCodeAt(i + 1);
+        var cp = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00); i++;
+        out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+      } else { out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63)); }
+    }
+    return new Uint8Array(out);
+  }
+  function updateTextInfo(){
+    var n = encodeText(els.txt.value).length;
+    els.txtinfo.textContent = fmtNum(n) + (n === 1 ? ' byte' : ' bytes') + ' UTF-8';
+    return n;
+  }
+  els.txt.addEventListener('input', updateTextInfo);
+
+  /* ---------- worker ---------- */
+  var worker = null, workerReady = false, workerJobs = {};
+
+  function buildWorker(){
+    return new Promise(function(resolve){
+      var url = null;
+      try {
+        var src = '(' + HASHCORE.toString() + ')();\n(' + RUNNER.toString() + ')();\n(' + WORKERMAIN.toString() + ')();';
+        var blob = new Blob([src], { type: 'text/javascript' });
+        url = URL.createObjectURL(blob);
+        var w = new Worker(url);
+        var settled = false;
+        var timer = setTimeout(function(){ finish(false, w); }, 2500);
+
+        function finish(ok, ww){
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          if (url) { try { URL.revokeObjectURL(url); } catch (e) {} }
+          if (!ok) { try { ww.terminate(); } catch (e) {} resolve(null); }
+          else resolve(ww);
+        }
+        w.onerror = function(){ finish(false, w); };
+        w.onmessage = function(e){
+          if (!settled) {
+            if (e.data && (e.data.t === 'ready' || e.data.t === 'pong')) { finish(true, w); return; }
+          }
+          handleWorkerMessage(e);
+        };
+        w.postMessage({ t: 'ping' });
+      } catch (e) {
+        // Blocked by CSP (worker-src / blob:), or Worker unavailable.
+        if (url) { try { URL.revokeObjectURL(url); } catch (e2) {} }
+        resolve(null);
+      }
+    });
+  }
+
+  function handleWorkerMessage(e){
+    var m = e.data, job = m && workerJobs[m.id];
+    if (!job) return;
+    if (m.t === 'progress') job.onProgress(m.done, m.total);
+    else if (m.t === 'done') { delete workerJobs[m.id]; job.resolve({ hex:m.hex, engine:m.engine, ms:m.ms, bytes:m.bytes, cancelled:false }); }
+    else if (m.t === 'cancelled') { delete workerJobs[m.id]; job.resolve({ cancelled:true }); }
+    else if (m.t === 'error') { delete workerJobs[m.id]; job.reject(new Error(m.message || 'Hashing failed.')); }
+  }
+
+  // Settle every in-flight worker job. Late messages for these ids find no
+  // entry in workerJobs and are ignored, so a job can never settle twice.
+  function drainWorkerJobs(how, arg){
+    var ids = Object.keys(workerJobs), i, job;
+    for (i = 0; i < ids.length; i++) {
+      job = workerJobs[ids[i]];
+      delete workerJobs[ids[i]];
+      if (how === 'reject') job.reject(new Error(arg));
+      else job.resolve({ cancelled: true });
+    }
+  }
+
+  var workerInit = buildWorker().then(function(w){
+    worker = w; workerReady = !!w;
+    if (w) {
+      w.onmessage = handleWorkerMessage;
+      // buildWorker's own onerror goes inert once startup has settled. Without
+      // a live one, a worker that dies mid-run (OOM on a chunk, internal fault)
+      // posts nothing at all: the job promise never settles, so the progress
+      // bar stays up forever and Cancel is a dead control. Fail the pending
+      // jobs and demote to the main thread for whatever comes next.
+      w.onerror = w.onmessageerror = function(){
+        workerReady = false; worker = null;
+        try { w.terminate(); } catch (e) {}
+        drainWorkerJobs('reject', 'The background hashing worker stopped responding. Retrying on the main thread.');
+      };
+    }
+    return w;
+  });
+
+  /* ---------- self-test ----------
+   * The streaming implementations only get used if they reproduce WebCrypto
+   * exactly, including at every padding boundary. Known-answer vectors cover
+   * the case where WebCrypto is missing (insecure context).
+   */
+  var KAT = {
+    'SHA-1':   { 'abc':'a9993e364706816aba3e25717850c26c9cd0d89d',
+                 '':'da39a3ee5e6b4b0d3255bfef95601890afd80709' },
+    'SHA-256': { 'abc':'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+                 '':'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
+    'SHA-384': { 'abc':'cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7',
+                 '':'38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b' },
+    'SHA-512': { 'abc':'ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f',
+                 '':'cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e' }
+  };
+
+  function selfTest(){
+    // Lengths that sit on either side of both block sizes and both padding
+    // thresholds, where a naive implementation breaks.
+    var lens = [0,1,3,55,56,57,63,64,65,111,112,113,119,120,127,128,129,1000,4096];
+    var vectors = lens.map(function(n){
+      var u = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u[i] = (i * 167 + 13) & 255;  // deterministic, not all-zero
+      return u;
+    });
+
+    // Known answers first: they need no WebCrypto at all.
+    var katOk = true;
+    for (var a in KAT) {
+      if (!Object.prototype.hasOwnProperty.call(KAT, a)) continue;
+      for (var msg in KAT[a]) {
+        if (!Object.prototype.hasOwnProperty.call(KAT[a], msg)) continue;
+        if (HC.hashBytes(a, encodeText(msg)) !== KAT[a][msg]) katOk = false;
+      }
+    }
+    // Also verify chunked feeding matches one-shot feeding.
+    var big = vectors[vectors.length - 1];
+    ALGOS.forEach(function(a){
+      var h = HC.create(a);
+      for (var o = 0; o < big.length; o += 37) h.update(big.subarray(o, Math.min(o + 37, big.length)));
+      if (h.hex() !== HC.hashBytes(a, big)) katOk = false;
+    });
+    if (!katOk) return Promise.resolve({ ok:false, checked:0, why:'known-answer vectors failed' });
+
+    if (!(self.crypto && self.crypto.subtle)) {
+      return Promise.resolve({ ok:true, checked:10, native:false });
+    }
+    var chain = Promise.resolve(), checked = 0, ok = true;
+    ALGOS.forEach(function(a){
+      vectors.forEach(function(v){
+        chain = chain.then(function(){
+          return self.crypto.subtle.digest(a, v).then(function(d){
+            checked++;
+            if (HC.bufHex(d) !== HC.hashBytes(a, v)) ok = false;
+          });
+        });
+      });
+    });
+    return chain.then(function(){ return { ok:ok, checked:checked, native:true }; })
+                .catch(function(){ return { ok:true, checked:0, native:false }; });
+  }
+
+  var ready = Promise.all([selfTest(), workerInit]).then(function(r){
+    var t = r[0];
+    state.jsOk = t.ok;
+    var where = workerReady ? 'worker thread' : 'main thread';
+    if (t.ok) {
+      state.engineNote = 'Engine: WebCrypto for files up to ' + fmtBytes(NATIVE_MAX) +
+        ', chunked JS SHA for anything larger (SubtleCrypto has no streaming digest). Runs on the ' + where + '. ' +
+        (t.native ? 'Self-test passed: ' + t.checked + ' digests matched WebCrypto exactly.'
+                  : 'WebCrypto unavailable here; JS engine passed its known-answer vectors.');
+      els.engineline.className = 'foot';
+    } else {
+      state.engineNote = 'Engine self-test FAILED (' + (t.why || 'digest mismatch') + '). Streaming is disabled: files over ' +
+        fmtBytes(NATIVE_MAX) + ' cannot be hashed. Do not trust results from this build.';
+      els.engineline.className = 'foot bad';
+      els.banner.hidden = false;
+      els.banner.textContent = 'The built-in hash engine failed its self-test on this browser. Text hashing and files over ' +
+        fmtBytes(NATIVE_MAX) + ' have been disabled so it cannot report a wrong digest. Smaller files still use WebCrypto.';
+    }
+    els.engineline.textContent = state.engineNote;
+  }).catch(function(){
+    // Nothing here should throw, but if it does the app must not be left
+    // permanently "checking", which would wedge every hash behind the gate.
+    if (state.jsOk === null) state.jsOk = false;
+    els.engineline.className = 'foot bad';
+    els.engineline.textContent = 'The hash engine self-test could not complete. Only WebCrypto-sized files (up to ' +
+      fmtBytes(NATIVE_MAX) + ') can be hashed.';
+  });
+
+  /* ---------- hashing jobs ---------- */
+  function runOne(file, algos, onProgress){
+    var id = ++state.seq;
+    // hashFiles never calls this while jsOk is still null, so this is a real
+    // verdict rather than "not decided yet".
+    var allowJs = state.jsOk !== false;
+
+    if (workerReady && worker) {
+      return new Promise(function(resolve, reject){
+        workerJobs[id] = { resolve:resolve, reject:reject, onProgress:onProgress };
+        worker.postMessage({
+          t:'hash', id:id, file:file, algos:algos,
+          chunkSize:CHUNK_WORKER, nativeMax:NATIVE_MAX, allowNative:true, allowJs:allowJs
+        });
+      });
+    }
+    return self.HCRUN({
+      file:file, algos:algos, chunkSize:CHUNK_MAIN, nativeMax:NATIVE_MAX, allowNative:true, allowJs:allowJs,
+      isCancelled:function(){ return state.cancelled; },
+      onProgress:onProgress
+    });
+  }
+
+  function cancelCurrent(){
+    state.cancelled = true;
+    if (workerReady && worker) worker.postMessage({ t:'cancel' });
+    // Don't wait on the worker to acknowledge: a one-shot WebCrypto digest is
+    // not interruptible, so Cancel would sit at "Cancelling…" for seconds and
+    // then hand back a result the user already rejected. Settle here instead.
+    drainWorkerJobs('cancel');
+    els.cancel.disabled = true;
+    els.cancel.textContent = 'Cancelling…';
+  }
+  els.cancel.addEventListener('click', cancelCurrent);
+
+  function setProgress(done, total, label, startedAt){
+    var pct = total > 0 ? Math.round(done / total * 100) : 100;
+    els.progbar.style.width = pct + '%';
+    if (els.bar) els.bar.setAttribute('aria-valuenow', String(pct));
+    var line = label + ' · ' + pct + '% · ' + fmtBytes(done) + ' / ' + fmtBytes(total);
+    // Estimate from the rate observed so far: a 2 GB file takes minutes and a
+    // bare percentage doesn't tell anyone whether to wait or cancel.
+    var elapsed = startedAt ? Date.now() - startedAt : 0;
+    if (done > 0 && done < total && elapsed > 750) {
+      var rate = done / elapsed;                    // bytes per ms
+      line += ' · ' + fmtBytes(Math.round(rate * 1000)) + '/s · ~' + fmtEta((total - done) / rate) + ' left';
+    }
+    els.progmeta.textContent = line;
+  }
+
+  function hashFiles(files){
+    if (state.busy) { say('Already hashing. Wait for the current run to finish or cancel it.'); return; }
+    var list = [];
+    for (var i = 0; i < files.length; i++) list.push(files[i]);
+    if (!list.length) { say('No files were selected.'); return; }
+
+    // The self-test and the worker handshake are still in flight. Waiting the
+    // few hundred ms is strictly better than the alternatives: hashing on an
+    // engine that has not been verified yet, and sending a multi-gigabyte file
+    // down the main-thread path because the worker was 200 ms from ready.
+    if (state.jsOk === null) {
+      say('Checking the hash engine…');
+      ready.then(function(){ hashFiles(list); });
+      return;
+    }
+
+    var tooBig = list.filter(function(f){ return f.size > NATIVE_MAX; });
+    if (state.jsOk === false) {
+      if (!(self.crypto && self.crypto.subtle)) {
+        say('Cannot hash anything on this browser: WebCrypto is unavailable and the built-in engine failed its self-test.');
+        return;
+      }
+      if (tooBig.length) {
+        say('Cannot hash files over ' + fmtBytes(NATIVE_MAX) + ' on this browser: the streaming engine failed its self-test.');
+        return;
+      }
+    }
+
+    // Snapshot the selection so every file in one batch reports the same set,
+    // even if the chips are toggled while the batch is running.
+    var algos = selectedAlgos();
+
+    state.busy = true; state.cancelled = false;
+    els.prog.hidden = false;
+    els.cancel.disabled = false;
+    els.cancel.textContent = 'Cancel';
+    var totalBytes = list.reduce(function(s, f){ return s + f.size; }, 0);
+    if (totalBytes > 256 * 1024 * 1024) {
+      say('Large input (' + fmtBytes(totalBytes) + '). This runs entirely in your browser, so it can take a while; you can cancel at any time.');
+    } else say('');
+
+    var idx = 0, okCount = 0, errCount = 0;
+    function next(){
+      if (state.cancelled || idx >= list.length) return Promise.resolve();
+      var f = list[idx];
+      var label = 'File ' + (idx + 1) + ' of ' + list.length + ': ' + f.name;
+      var started = Date.now();
+      setProgress(0, f.size || 1, label, started);
+
+      return runOne(f, algos, function(done, total){ setProgress(done, total || 1, label, started); }).then(function(r){
+        if (r.cancelled) { state.cancelled = true; return; }
+        addJob({
+          kind:'file', name:f.name, size:f.size, hex:r.hex,
+          engine:r.engine, ms:(typeof r.ms === 'number' ? r.ms : Date.now() - started),
+          worker:workerReady
+        });
+        okCount++;
+        idx++;
+        return next();
+      }).catch(function(err){
+        addJob({ kind:'file', name:f.name, size:f.size, error:
+          (err && err.message ? err.message : 'Unknown error') +
+          ' (if you dropped a folder, drop the files inside it instead).' });
+        errCount++;
+        idx++;
+        return next();
+      });
+    }
+
+    // settle() runs on both paths: whatever happens, busy clears and the
+    // progress bar comes down. A stuck spinner is worse than a wrong answer.
+    function settle(err){
+      state.busy = false;
+      els.prog.hidden = true;
+      if (err) {
+        say('Hashing stopped unexpectedly: ' + ((err && err.message) ? err.message : String(err)));
+        return;
+      }
+      if (state.cancelled) {
+        say('Cancelled. ' + (idx ? idx + ' file(s) finished before you stopped it.' : 'Nothing was hashed.'));
+        return;
+      }
+      if (!els.status.textContent || els.status.textContent.indexOf('Large input') === 0) {
+        // Reporting "Done: 3 file(s) hashed" when all three failed to read is
+        // a lie to exactly the person who cannot see the red cards.
+        var done;
+        if (errCount && okCount) done = 'Done: ' + okCount + ' file(s) hashed, ' + errCount + ' could not be read (see the cards below).';
+        else if (errCount) done = errCount === 1 ? 'That file could not be read. See the card below.'
+                                                 : 'None of the ' + errCount + ' files could be read. See the cards below.';
+        else done = 'Done: ' + okCount + ' file(s) hashed.';
+        // The verdict is the answer the user actually came for, so it belongs
+        // in the one live region that persists across re-renders.
+        var v = state.jobs.length ? verdictFor(state.jobs[0]) : null;
+        say(v ? done + ' ' + v.announce : done);
+      }
+    }
+    next().then(function(){ settle(null); }, settle);
+  }
+
+  /* ---------- results model / render ---------- */
+  function addJob(job){
+    state.jobs.unshift(job);
+    renderResults();
+    // During a file batch settle() does the announcing, once, at the end.
+    if (!state.busy) announceNewestVerdict();
+  }
+
+  function copyText(text, btn, what){
+    function ok(){
+      var old = btn.getAttribute('data-label') || btn.textContent;
+      btn.setAttribute('data-label', old);
+      btn.textContent = 'Copied';
+      say(what + ' copied to clipboard.');
+      setTimeout(function(){ btn.textContent = old; }, 1400);
+    }
+    function fallback(){
+      // execCommand path for iframes without clipboard-write permission.
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      if (done) ok();
+      else {
+        // Last resort: select the digest so the user can copy it manually.
+        var node = btn.getAttribute('data-for') ? document.getElementById(btn.getAttribute('data-for')) : null;
+        if (node && window.getSelection) {
+          var range = document.createRange();
+          range.selectNodeContents(node);
+          var sel = window.getSelection();
+          sel.removeAllRanges(); sel.addRange(range);
+          say('Clipboard access is blocked here. The digest is selected; press Ctrl+C (or Cmd+C) to copy it.');
+        } else {
+          say('Clipboard access is blocked here. Select the digest text and copy it manually.');
+        }
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    } else fallback();
+  }
+
+  var rowSeq = 0;
+
+  function verdictFor(job){
+    var exp = state.expected;
+    if (!exp || !exp.hex || !job.hex) return null;
+    var what = job.kind === 'text' ? 'the typed text' : job.name;
+    var mine = job.hex[exp.algo];
+    if (!mine) return { kind:'none', text:exp.algo + ' not computed for this file',
+                        sub:'Switch on ' + exp.algo + ' above and hash it again to compare.',
+                        announce:exp.algo + ' was not computed for ' + what + ', so there is nothing to compare.' };
+    if (mine === exp.hex) return { kind:'match', text:'✓ Match: ' + exp.algo,
+                                   sub:'This file is byte-for-byte what the publisher hashed.',
+                                   announce:'Match: ' + what + ' matches the expected ' + exp.algo + ' hash.' };
+    // Truncated previews are useless when the difference is at the tail (they
+    // look identical). Give the whole expected value and point at the first
+    // differing character; the computed digest is shown in full just below.
+    var i = 0;
+    while (i < mine.length && i < exp.hex.length && mine.charAt(i) === exp.hex.charAt(i)) i++;
+    return { kind:'miss', text:'✗ Mismatch: ' + exp.algo,
+             sub:'Do not trust this file. First difference at character ' + (i + 1) + ' of ' +
+                 exp.hex.length + '. Expected: ' + exp.hex,
+             announce:'Mismatch: ' + what + ' does NOT match the expected ' + exp.algo +
+                      ' hash. Do not trust it.' };
+  }
+
+  // A role="status" node that is inserted with its text already in place is
+  // usually not announced: live regions have to exist before they change. The
+  // verdict is re-rendered from scratch on every edit, so it is routed through
+  // the one live region that stays put instead.
+  function announceNewestVerdict(){
+    if (!state.jobs.length) return;
+    var v = verdictFor(state.jobs[0]);
+    if (v) say(v.announce);
+  }
+
+  function renderResults(){
+    els.results.textContent = '';
+    els.clearwrap.hidden = state.jobs.length === 0;
+
+    if (!state.jobs.length) {
+      els.results.appendChild(el('div', { class:'empty', text:
+        'No hashes yet. Drop a file above (or switch to the Text tab). Paste the published hash first and the right algorithm gets picked for you.' }));
+      return;
+    }
+
+    state.jobs.forEach(function(job){
+      var card = el('div', { class:'card' + (job.error ? ' err' : '') });
+      card.appendChild(el('h2', { text: job.kind === 'text' ? 'Typed text' : job.name }));
+
+      var bits = [];
+      if (typeof job.size === 'number') {
+        bits.push(job.size < 1024
+          ? fmtNum(job.size) + (job.size === 1 ? ' byte' : ' bytes')
+          : fmtBytes(job.size) + ' (' + fmtNum(job.size) + ' bytes)');
+      }
+      if (typeof job.ms === 'number') bits.push(fmtMs(job.ms));
+      var rate = fmtRate(job.size, job.ms);
+      if (rate) bits.push(rate);
+      if (job.engine) bits.push(job.engine === 'webcrypto' ? 'WebCrypto' : 'streamed JS' + (job.worker ? ' / worker' : ''));
+      card.appendChild(el('p', { class:'meta', text: bits.join(' · ') }));
+
+      if (job.error) {
+        card.appendChild(el('p', { class:'hint warn', text: job.error }));
+        els.results.appendChild(card);
+        return;
+      }
+
+      var v = verdictFor(job);
+      if (v) {
+        var vd = el('div', { class:'verdict ' + v.kind });
+        vd.appendChild(document.createTextNode(v.text));
+        vd.appendChild(el('small', { text: v.sub }));
+        card.appendChild(vd);
+      }
+
+      var lines = [];
+      ALGOS.forEach(function(a){
+        var hexv = job.hex[a];
+        if (!hexv) return;
+        lines.push(a.toLowerCase().replace('-', '') + '  ' + hexv + '  ' + (job.kind === 'text' ? '(text)' : job.name));
+        var id = 'hex' + (++rowSeq);
+        var row = el('div', { class:'drow' });
+        row.appendChild(el('div', { class:'name', text:a }));
+        var cls = 'hex';
+        if (state.expected && state.expected.hex && state.expected.algo === a) {
+          cls += state.expected.hex === hexv ? ' is-match' : ' is-miss';
+        }
+        row.appendChild(el('div', { class:cls, id:id, text:hexv }));
+        var b = el('button', { type:'button', class:'btn sec sm',
+                               'aria-label':'Copy ' + a + ' digest for ' + (job.kind === 'text' ? 'typed text' : job.name),
+                               'data-for':id, text:'Copy ' + a });
+        b.addEventListener('click', function(){ copyText(hexv, b, a + ' digest'); });
+        row.appendChild(b);
+        card.appendChild(row);
+      });
+
+      if (lines.length > 1) {
+        var all = el('button', { type:'button', class:'btn ghost sm', text:'Copy all' });
+        all.addEventListener('click', function(){ copyText(lines.join('\n'), all, 'All digests'); });
+        card.appendChild(el('div', { class:'cardactions' }, [all]));
+      }
+
+      els.results.appendChild(card);
+    });
+  }
+
+  els.clear.addEventListener('click', function(){
+    state.jobs = [];
+    renderResults();
+    say('Results cleared.');
+  });
+
+  /* ---------- file input + drag & drop ---------- */
+  els.pick.addEventListener('click', function(){ els.fileinput.click(); });
+  els.fileinput.addEventListener('change', function(){
+    var f = els.fileinput.files;
+    if (f && f.length) hashFiles(f);
+    els.fileinput.value = '';   // so re-picking the same file fires change again
+  });
+
+  // Without these the browser would navigate the frame to a dropped file.
+  ['dragenter','dragover','dragleave','drop'].forEach(function(evt){
+    document.addEventListener(evt, function(e){ e.preventDefault(); }, false);
+  });
+  // The preventDefault above swallows drops that miss the dashed box, so the
+  // drop handler is on the document: a file dropped an inch off target used to
+  // disappear with no card, no message and no browser fallback. The whole page
+  // is the target now, and the box just shows where to aim.
+  ['dragenter','dragover'].forEach(function(evt){
+    document.addEventListener(evt, function(){ els.drop.classList.add('over'); });
+  });
+  document.addEventListener('dragleave', function(e){
+    // Only clear when the pointer actually leaves the window; moving between
+    // child elements fires dragleave constantly and would strobe the border.
+    if (!e.relatedTarget) els.drop.classList.remove('over');
+  });
+  document.addEventListener('dragend', function(){ els.drop.classList.remove('over'); });
+  document.addEventListener('drop', function(e){
+    els.drop.classList.remove('over');
+    var dt = e.dataTransfer;
+    if (!dt) { say('Your browser did not hand over the dropped item.'); return; }
+
+    // Folders arrive as zero-byte entries that fail to read, so name them up front.
+    var folders = [];
+    if (dt.items && dt.items.length) {
+      for (var i = 0; i < dt.items.length; i++) {
+        var it = dt.items[i];
+        if (it.kind !== 'file' || !it.webkitGetAsEntry) continue;
+        var entry = null;
+        try { entry = it.webkitGetAsEntry(); } catch (err) {}
+        if (entry && entry.isDirectory) folders.push(entry.name);
+      }
+    }
+    var files = dt.files;
+    if (folders.length) {
+      say('Folders cannot be hashed (' + folders.join(', ') + '). Open the folder and drop the files inside it.');
+      if (!files || files.length <= folders.length) return;
+    }
+    // The blanket preventDefault above also stops the browser inserting a TEXT
+    // drag into the textarea, so a perfectly reasonable drop there vanished and
+    // was answered with "drag a file, not selected text". Do the insert here.
+    if ((!files || !files.length) && !folders.length && e.target === els.txt) {
+      var dropped = '';
+      try { dropped = dt.getData('text/plain') || ''; } catch (err2) {}
+      if (dropped) {
+        var ta = els.txt;
+        var a = (typeof ta.selectionStart === 'number') ? ta.selectionStart : ta.value.length;
+        var b = (typeof ta.selectionEnd === 'number') ? ta.selectionEnd : a;
+        ta.value = ta.value.slice(0, a) + dropped + ta.value.slice(b);
+        try { ta.selectionStart = ta.selectionEnd = a + dropped.length; } catch (err3) {}
+        ta.focus();
+        say('Dropped text inserted (' + fmtNum(updateTextInfo()) + ' bytes UTF-8). Press "Hash text" or Ctrl+Enter.');
+        return;
+      }
+    }
+    if (!files || !files.length) {
+      if (!folders.length) say('That drop contained no files. Drag a file from your file manager, not a link or selected text.');
+      return;
+    }
+    showTab('file');   // a drop that lands while the Text tab is up shouldn't hide its own drop zone
+    hashFiles(files);
+  });
+
+  /* ---------- text hashing ---------- */
+  els.hashtext.addEventListener('click', function(){
+    if (state.busy) { say('Busy hashing files. Wait for that to finish.'); return; }
+    // Text always runs on the JS engine (there is no file to hand WebCrypto a
+    // stream of), so a failed self-test has to block it too; otherwise the
+    // banner claims large files are disabled while this tab quietly serves
+    // digests from the very engine that failed.
+    if (state.jsOk === false) {
+      say('Text hashing is disabled: the built-in hash engine failed its self-test on this browser, so any digest it produced could be wrong.');
+      return;
+    }
+    if (state.jsOk === null) {
+      say('Checking the hash engine…');
+      ready.then(function(){ els.hashtext.click(); });
+      return;
+    }
+    var value = els.txt.value;
+    var bytes = encodeText(value);
+    if (!value.length) {
+      // Hashing the empty string is legitimate and useful, but say what happened.
+      say('Hashed the empty string (0 bytes). That is a valid, well-known digest.');
+    } else say('');
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var out = {};
+    try {
+      selectedAlgos().forEach(function(a){ out[a] = HC.hashBytes(a, bytes); });
+    } catch (err) {
+      addJob({ kind:'text', size:bytes.length, error:'Hashing failed: ' + (err && err.message ? err.message : String(err)) });
+      return;
+    }
+    var t1 = (window.performance && performance.now) ? performance.now() : Date.now();
+    addJob({ kind:'text', size:bytes.length, hex:out, engine:'js', ms:t1 - t0, worker:false });
+  });
+
+  // Ctrl/Cmd+Enter hashes the textarea without reaching for the mouse.
+  els.txt.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); els.hashtext.click(); }
+  });
+
+  renderResults();
+  onExpectedInput();
+})();
+</script>
+</body>
+</html>

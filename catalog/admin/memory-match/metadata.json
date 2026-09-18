@@ -1,0 +1,20 @@
+{
+  "folder": "admin/memory-match",
+  "title": "Memory Match",
+  "description": "Flip cards two at a time and find every matching pair from memory. Two grid sizes, smooth flips, and a move counter.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/memory-match",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 40173,
+      "sha256": "c81c616af60115051731847f5992716a68f2b79464241655a471fbb0b2e96772",
+      "source": "published catalog HTML"
+    }
+  ]
+}

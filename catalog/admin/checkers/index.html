@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Checkers: classic 8x8 draughts vs a minimax computer opponent. Forced captures, multi-jumps, kings, three difficulty levels. Mouse and touch. No leaderboard." />
+<title>CHECKERS</title>
+<!--
+  CHECKERS (DRAUGHTS): original 8x8 checkers vs a real AI, for Batchly.
+  =====================================================================
+  RULES (standard American / English draughts)
+    - 8x8 board, pieces live only on the dark squares. 12 per side.
+    - Men move one square diagonally FORWARD (you move up, CPU moves down).
+    - A capture is a diagonal jump over an adjacent enemy into the empty
+      square beyond it. Captures are MANDATORY: if any capture exists you
+      must play a capture; simple moves are locked out that turn.
+    - MULTI-JUMPS: after a jump, if the same piece can jump again it MUST
+      keep jumping (chained) until no more jumps remain.
+    - A man that reaches the far row is CROWNED a KING. Kings move and jump
+      diagonally in all four directions. Per standard rules, crowning ENDS
+      the turn even if the newly-made king could jump again.
+    - You win by capturing all of the opponent's pieces, or by leaving the
+      opponent with no legal move. A long stretch with no capture and no
+      crowning is declared a draw.
+    - This is a solo match vs the computer, so there is NO leaderboard and
+      deliberately NO `batchly-score` message is ever posted to the parent.
+
+  THE AI
+    A negamax/minimax search with alpha-beta pruning over fully-legal moves
+    (it only ever chooses from the same forced-capture-aware move generator
+    the human is bound by, so it can never make an illegal move). Leaf
+    positions are scored by material (kings worth ~1.7 men) + man advancement
+    + back-rank defence + centre/edge structure + king activity. A quiescence
+    extension keeps searching live capture chains past the horizon so it does
+    not misjudge a position with a pending exchange. EASY searches shallow and
+    blunders often (very beatable); MEDIUM is a solid club player; HARD searches
+    deep and never blunders. A per-move time budget guarantees it always
+    answers promptly on a phone.
+
+  RENDERING / INPUT
+    Everything is generated in code onto a single <canvas> (no images, fonts,
+    or network of any kind). Pointer events drive selection and moves for both
+    mouse and touch; the CPU's move is animated hop-by-hop so it is easy to
+    follow. Undo takes back your last move and the CPU's reply together.
+  =====================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --inset:#0c0c0f;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --red:#ef3a3a;
+    --cyan:#2ee6c8;
+    --amber:#f5b23a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-size-adjust:100%;
+  }
+
+  #app{
+    height:100%;
+    display:flex; flex-direction:column; gap:8px;
+    padding:8px;
+  }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    position:relative; z-index:30;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px;
+  }
+  #brand{
+    display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:700; letter-spacing:.16em;
+    padding:0 4px 0 2px; white-space:nowrap;
+  }
+  #brand i{ width:11px; height:11px; background:var(--red); display:block; }
+  .group{ display:flex; align-items:center; gap:6px; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+  .seg{ display:flex; align-items:center; gap:0; border:2px solid var(--line2); background:var(--inset); }
+  .seg span.lbl{ font-size:9px; letter-spacing:.14em; color:var(--mute); padding:0 8px 0 9px; white-space:nowrap; }
+  .seg button{ border:0; border-left:2px solid var(--line2); box-shadow:none; margin:0; padding:6px 9px; }
+  .seg button:first-of-type{ border-left:2px solid var(--line2); }
+
+  button{
+    font-family:var(--mono);
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    background:#22222a; color:var(--bone);
+    border:2px solid var(--bone); border-radius:0;
+    padding:6px 10px; margin:0; cursor:pointer;
+    box-shadow:3px 3px 0 0 #000;
+    transition:transform .06s ease, box-shadow .06s ease, background .1s ease;
+    white-space:nowrap;
+  }
+  button:hover{ background:#2f2f3a; }
+  button:active{ transform:translate(3px,3px); box-shadow:0 0 0 0 #000; }
+  button[aria-pressed="true"]{ background:var(--red); color:#10100e; }
+  button[aria-pressed="true"]:hover{ background:#ff4a4a; }
+  button:disabled{ opacity:.4; cursor:not-allowed; box-shadow:2px 2px 0 0 #000; }
+  button:disabled:hover{ background:#22222a; }
+  button:focus-visible{ outline:2px solid var(--red); outline-offset:3px; }
+  .seg button:focus-visible{ outline-offset:-2px; }
+
+  /* stat chips */
+  .count{
+    display:flex; align-items:center; gap:7px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:4px 9px; white-space:nowrap;
+  }
+  .count span{ font-size:9px; letter-spacing:.14em; color:var(--mute); }
+  .count b{
+    font-size:16px; font-weight:700; letter-spacing:.06em;
+    font-variant-numeric:tabular-nums; min-width:1.2ch; text-align:right;
+  }
+  .count.you b{ color:var(--bone); }
+  .count.cpu b{ color:var(--red); }
+  .count .dot{ width:12px; height:12px; border:2px solid; border-radius:50%; display:block; }
+  .count.you .dot{ background:var(--bone); border-color:#b9b5a6; }
+  .count.cpu .dot{ background:var(--red); border-color:#a11f1f; }
+
+  /* ---------- board ---------- */
+  #wrap{
+    flex:1 1 auto; min-height:0;
+    display:flex;
+    background:#08080b; border:2px solid var(--line);
+    padding:8px;
+    overflow:hidden;
+  }
+  canvas{
+    display:block; margin:auto;
+    background:#111117;
+    border:2px solid var(--line2);
+    touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    outline:none;
+    cursor:pointer;
+  }
+
+  /* ---------- footer ---------- */
+  #foot{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:7px 9px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  #turn{
+    font-size:12px; font-weight:700; letter-spacing:.1em;
+    display:flex; align-items:center; gap:9px; white-space:nowrap;
+  }
+  #turn .lamp{ width:11px; height:11px; display:block; background:var(--mute); }
+  #turn.you .lamp{ background:var(--cyan); }
+  #turn.cpu .lamp{ background:var(--amber); animation:blink 1s steps(2,end) infinite; }
+  #turn.over .lamp{ background:var(--red); }
+  @keyframes blink{ 50%{ opacity:.25; } }
+  #turn .t{ color:var(--bone); }
+  #turn.you .t{ color:var(--cyan); }
+  #turn.cpu .t{ color:var(--amber); }
+  #warn{
+    font-size:10px; font-weight:700; letter-spacing:.12em; color:var(--amber);
+    border:2px solid var(--amber); padding:3px 7px; display:none;
+  }
+  #warn.on{ display:inline-block; }
+  #foot .spacer{ flex:1 1 auto; }
+  #help{
+    flex:1 1 260px; min-width:0;
+    font-size:10px; line-height:1.55; color:var(--mute); letter-spacing:.02em;
+  }
+  #help b{ color:var(--bone); font-weight:700; }
+  #help .cy{ color:var(--cyan); font-weight:700; }
+  #help .am{ color:var(--amber); font-weight:700; }
+
+  /* ---------- overlay ---------- */
+  #over{
+    position:fixed; inset:0; z-index:40;
+    display:none; place-items:center;
+    background:rgba(8,8,10,.84);
+    padding:16px;
+  }
+  #over.show{ display:grid; }
+  #card{
+    width:100%; max-width:420px;
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 #000;
+    padding:20px 18px 18px;
+    text-align:center;
+  }
+  #ovTitle{ font-size:30px; font-weight:700; letter-spacing:.14em; margin:0 0 3px; line-height:1.05; }
+  #ovTitle.win{ color:var(--cyan); }
+  #ovTitle.lose{ color:var(--red); }
+  #ovTitle.draw{ color:var(--amber); }
+  #ovSub{ font-size:10px; letter-spacing:.16em; color:var(--mute); margin-bottom:15px; }
+  .rows{ border:2px solid var(--line2); background:var(--inset); margin-bottom:14px; text-align:left; }
+  .row{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 12px; }
+  .row + .row{ border-top:2px solid var(--line2); }
+  .row .k{ font-size:9px; letter-spacing:.16em; color:var(--mute); }
+  .row .v{ font-size:16px; font-weight:700; letter-spacing:.06em; font-variant-numeric:tabular-nums; }
+  .row .v.you{ color:var(--bone); }
+  .row .v.cpu{ color:var(--red); }
+  #ovBtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  #ovBtns button{ font-size:12px; padding:10px 18px; }
+  #ovPrimary{ background:var(--red); color:#10100e; border-color:var(--bone); }
+  #ovPrimary:hover{ background:#ff4a4a; }
+
+  @media (max-width:560px){
+    #brand span{ display:none; }
+    .seg span.lbl{ display:none; }
+    #help{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    button{ transition:none; }
+    #turn.cpu .lamp{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="bar">
+    <div id="brand"><i></i><span>CHECKERS</span></div>
+
+    <div class="seg" role="group" aria-label="Difficulty">
+      <span class="lbl">CPU</span>
+      <button id="dEasy"   aria-pressed="false">EASY</button>
+      <button id="dMed"    aria-pressed="true">MED</button>
+      <button id="dHard"   aria-pressed="false">HARD</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="group">
+      <button id="undo" title="Take back your last move (and the CPU reply)" disabled>UNDO</button>
+      <button id="restart" title="Start a new game">NEW GAME</button>
+    </div>
+
+    <div class="count you" title="Enemy pieces you have captured">
+      <span class="dot" aria-hidden="true"></span><span>YOU TOOK</span><b id="capYou">0</b>
+    </div>
+    <div class="count cpu" title="Your pieces the CPU has captured">
+      <span class="dot" aria-hidden="true"></span><span>CPU TOOK</span><b id="capCpu">0</b>
+    </div>
+  </header>
+
+  <main id="wrap">
+    <canvas id="board" width="480" height="480" aria-label="Checkers board"></canvas>
+  </main>
+
+  <footer id="foot">
+    <div id="turn" class="you"><span class="lamp" aria-hidden="true"></span><span class="t" id="turnText">YOUR MOVE</span></div>
+    <div id="warn">CAPTURE REQUIRED</div>
+    <div class="spacer"></div>
+    <div id="help">
+      <b>You</b> are the <span class="cy">cream</span> discs (bottom). Move diagonally toward the top row to crown a <b>KING</b>.
+      <span class="am">Amber</span> dots = a move, <span class="cy">cyan</span> rings = a capture. Captures are forced. Take all 12 red discs to win.
+    </div>
+  </footer>
+</div>
+
+<div id="over" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+  <div id="card">
+    <h1 id="ovTitle">CHECKERS</h1>
+    <div id="ovSub">8×8 DRAUGHTS · VS COMPUTER</div>
+    <div class="rows">
+      <div class="row"><span class="k">YOU CAPTURED</span><span class="v you" id="ovYou">0</span></div>
+      <div class="row"><span class="k">CPU CAPTURED</span><span class="v cpu" id="ovCpu">0</span></div>
+      <div class="row"><span class="k">DIFFICULTY</span><span class="v" id="ovDiff">MEDIUM</span></div>
+    </div>
+    <div id="ovBtns">
+      <button id="ovPrimary">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // ===================================================================
+  // ENGINE  (pure logic; no DOM references in this section)
+  // ===================================================================
+  var HUMAN = 'y';   // you  : start at the bottom, move UP (row decreasing), crown at row 0
+  var AI    = 'c';   // cpu  : start at the top,    move DOWN (row increasing), crown at row 7
+
+  var UP   = [[-1,-1],[-1,1]];
+  var DOWN = [[1,-1],[1,1]];
+  var ALL  = [[-1,-1],[-1,1],[1,-1],[1,1]];
+
+  function promoRow(color){ return color === HUMAN ? 0 : 7; }
+  function opponent(color){ return color === HUMAN ? AI : HUMAN; }
+  function pieceDirs(p){ return p.king ? ALL : (p.color === HUMAN ? UP : DOWN); }
+
+  function setupBoard(){
+    var b = [];
+    for(var r=0;r<8;r++){ b[r] = [null,null,null,null,null,null,null,null]; }
+    for(var r2=0;r2<3;r2++){
+      for(var c=0;c<8;c++){ if((r2+c)%2===1) b[r2][c] = {color:AI, king:false}; }
+    }
+    for(var r3=5;r3<8;r3++){
+      for(var c2=0;c2<8;c2++){ if((r3+c2)%2===1) b[r3][c2] = {color:HUMAN, king:false}; }
+    }
+    return b;
+  }
+
+  function cloneBoard(b){
+    var n = new Array(8);
+    for(var r=0;r<8;r++){
+      n[r] = new Array(8);
+      for(var c=0;c<8;c++){ var p=b[r][c]; n[r][c] = p ? {color:p.color, king:p.king} : null; }
+    }
+    return n;
+  }
+
+  function countPieces(b, color){
+    var n=0;
+    for(var r=0;r<8;r++) for(var c=0;c<8;c++){ var p=b[r][c]; if(p && p.color===color) n++; }
+    return n;
+  }
+
+  function inb(r,c){ return r>=0 && r<8 && c>=0 && c<8; }
+
+  // Single immediate jumps available from (r0,c0) on the given board.
+  function singleJumps(b, r0, c0){
+    var p = b[r0][c0]; if(!p) return [];
+    var dirs = pieceDirs(p), res = [];
+    for(var i=0;i<dirs.length;i++){
+      var mr=r0+dirs[i][0], mc=c0+dirs[i][1], lr=r0+2*dirs[i][0], lc=c0+2*dirs[i][1];
+      if(!inb(lr,lc)) continue;
+      if(b[lr][lc]!==null) continue;
+      var mid = b[mr][mc];
+      if(mid && mid.color!==p.color) res.push({to:[lr,lc], capture:[mr,mc]});
+    }
+    return res;
+  }
+
+  // Simple (non-capturing) one-square moves, wrapped as full-move objects.
+  function simpleFullMoves(b, r0, c0){
+    var p = b[r0][c0]; if(!p) return [];
+    var dirs = pieceDirs(p), res = [];
+    for(var i=0;i<dirs.length;i++){
+      var tr=r0+dirs[i][0], tc=c0+dirs[i][1];
+      if(!inb(tr,tc) || b[tr][tc]!==null) continue;
+      res.push({ from:[r0,c0], steps:[{to:[tr,tc], capture:null}], promote:(tr===promoRow(p.color) && !p.king) });
+    }
+    return res;
+  }
+
+  // All maximal capture sequences for the piece at (r0,c0). Enforces chained
+  // multi-jumps and the "crowning ends the turn" rule.
+  function captureFullMoves(b, r0, c0){
+    var lifted = b[r0][c0];
+    if(!lifted) return [];
+    var color = lifted.color;
+    var results = [];
+    b[r0][c0] = null;                 // lift the piece so it can't block its own path
+    (function rec(r, c, king, steps, captured){
+      var dirs = king ? ALL : (color === HUMAN ? UP : DOWN);
+      var jumps = [];
+      for(var i=0;i<dirs.length;i++){
+        var mr=r+dirs[i][0], mc=c+dirs[i][1], lr=r+2*dirs[i][0], lc=c+2*dirs[i][1];
+        if(!inb(lr,lc) || b[lr][lc]!==null) continue;
+        var mid = b[mr][mc];
+        if(!mid || mid.color===color) continue;
+        if(captured.indexOf(mr*8+mc) !== -1) continue;   // can't jump the same piece twice
+        jumps.push([mr,mc,lr,lc]);
+      }
+      if(jumps.length===0){
+        if(steps.length>0) results.push({ from:[r0,c0], steps:steps.slice(), promote:(king && !lifted.king) });
+        return;
+      }
+      for(var j=0;j<jumps.length;j++){
+        var mr2=jumps[j][0], mc2=jumps[j][1], lr2=jumps[j][2], lc2=jumps[j][3];
+        var nowKing = king || (lr2 === promoRow(color));
+        var ns = steps.concat([{to:[lr2,lc2], capture:[mr2,mc2]}]);
+        var nc = captured.concat([mr2*8+mc2]);
+        if(nowKing && !king){
+          results.push({ from:[r0,c0], steps:ns, promote:true });   // crowned -> turn ends here
+        } else {
+          rec(lr2, lc2, nowKing, ns, nc);
+        }
+      }
+    })(r0, c0, lifted.king, [], []);
+    b[r0][c0] = lifted;               // restore
+    return results;
+  }
+
+  // Every legal full move for a side, with forced-capture applied.
+  function legalMoves(b, color){
+    var caps = [];
+    for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+      var p=b[r][c];
+      if(p && p.color===color){ var s=captureFullMoves(b,r,c); for(var k=0;k<s.length;k++) caps.push(s[k]); }
+    }
+    if(caps.length) return caps;
+    var simp = [];
+    for(var r2=0;r2<8;r2++) for(var c2=0;c2<8;c2++){
+      var p2=b[r2][c2];
+      if(p2 && p2.color===color){ var s2=simpleFullMoves(b,r2,c2); for(var m=0;m<s2.length;m++) simp.push(s2[m]); }
+    }
+    return simp;
+  }
+
+  function sideHasCapture(b, color){
+    for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+      var p=b[r][c];
+      if(p && p.color===color && singleJumps(b,r,c).length>0) return true;
+    }
+    return false;
+  }
+
+  // Apply a full move to a COPY and return it.
+  function applyFull(b, move){
+    var nb = cloneBoard(b);
+    var fr=move.from[0], fc=move.from[1];
+    var piece = nb[fr][fc];
+    nb[fr][fc] = null;
+    for(var i=0;i<move.steps.length;i++){
+      var cap = move.steps[i].capture;
+      if(cap) nb[cap[0]][cap[1]] = null;
+    }
+    var last = move.steps[move.steps.length-1].to;
+    nb[last[0]][last[1]] = { color:piece.color, king:(piece.king || move.promote) };
+    return nb;
+  }
+
+  // ---------- AI ----------
+  var WIN = 1000000, QMAX = 6;
+  var deadline = 0;
+
+  function evaluate(b){
+    var s = 0;
+    for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+      var p=b[r][c]; if(!p) continue;
+      var v;
+      if(p.king){
+        v = 170;
+        // reward active, centralised kings
+        v += (7 - (Math.abs(3.5-r) + Math.abs(3.5-c))) * 1.6;
+      } else {
+        v = 100;
+        var adv = (p.color===AI) ? r : (7-r);   // squares advanced from home row
+        v += adv * 6;
+        // back-rank guard: a man held on the home row blocks enemy promotion
+        if((p.color===AI && r===0) || (p.color===HUMAN && r===7)) v += 7;
+      }
+      if(c>=2 && c<=5) v += 3;        // central files
+      if(c===0 || c===7) v += 4;      // edge men can't be captured
+      s += (p.color===AI) ? v : -v;
+    }
+    return s;
+  }
+
+  function orderMoves(moves){
+    // captures with the longest chains first: better alpha-beta pruning
+    moves.sort(function(a,b){ return b.steps.length - a.steps.length; });
+    return moves;
+  }
+
+  function search(b, depth, alpha, beta, side){
+    var moves = legalMoves(b, side);
+    if(moves.length===0){
+      // side to move is stalemated / wiped out => it loses
+      return (side===AI) ? -(WIN + depth) : (WIN + depth);
+    }
+    var noisy = moves[0].steps[0].capture !== null;    // captures are forced, so this flags them
+    if((depth<=0 && !noisy) || depth<=-QMAX) return evaluate(b);
+    if(performance.now() > deadline) return evaluate(b);
+    if(depth>0) orderMoves(moves);
+
+    var i, v;
+    if(side===AI){
+      var best = -Infinity;
+      for(i=0;i<moves.length;i++){
+        v = search(applyFull(b,moves[i]), depth-1, alpha, beta, HUMAN);
+        if(v>best) best=v;
+        if(best>alpha) alpha=best;
+        if(alpha>=beta) break;
+      }
+      return best;
+    } else {
+      var best2 = Infinity;
+      for(i=0;i<moves.length;i++){
+        v = search(applyFull(b,moves[i]), depth-1, alpha, beta, AI);
+        if(v<best2) best2=v;
+        if(best2<beta) beta=best2;
+        if(alpha>=beta) break;
+      }
+      return best2;
+    }
+  }
+
+  var DIFF = {
+    easy:   { depth:2, budget:250,  blunder:0.34, label:'EASY'   },
+    medium: { depth:4, budget:900,  blunder:0.05, label:'MEDIUM' },
+    hard:   { depth:6, budget:1700, blunder:0.00, label:'HARD'   }
+  };
+
+  function chooseAiMove(b, diff){
+    var moves = legalMoves(b, AI);
+    if(moves.length===0) return null;
+    if(moves.length===1) return moves[0];
+    var cfg = DIFF[diff];
+    orderMoves(moves);
+    deadline = performance.now() + cfg.budget;
+    var best = [], bestScore = -Infinity;
+    for(var i=0;i<moves.length;i++){
+      var sc = search(applyFull(b, moves[i]), cfg.depth-1, -Infinity, Infinity, HUMAN);
+      if(sc > bestScore + 1){ bestScore = sc; best = [moves[i]]; }
+      else if(sc >= bestScore - 1){ best.push(moves[i]); if(sc>bestScore) bestScore=sc; }
+    }
+    var chosen = best[(Math.random()*best.length)|0];
+    if(Math.random() < cfg.blunder) chosen = moves[(Math.random()*moves.length)|0]; // human-like slip
+    return chosen;
+  }
+
+  // ===================================================================
+  // Expose engine for offline self-test (used only outside the browser)
+  // ===================================================================
+  if(typeof module !== 'undefined' && module.exports){
+    module.exports = { setupBoard:setupBoard, cloneBoard:cloneBoard, legalMoves:legalMoves,
+      applyFull:applyFull, chooseAiMove:chooseAiMove, countPieces:countPieces,
+      sideHasCapture:sideHasCapture, singleJumps:singleJumps, HUMAN:HUMAN, AI:AI, evaluate:evaluate };
+    return;
+  }
+
+  // ===================================================================
+  // GAME + UI
+  // ===================================================================
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var wrap = document.getElementById('wrap');
+
+  var board, difficulty = 'medium';
+  var state = 'player';            // player | jumping | ai | anim | over
+  var selected = null;             // [r,c] of the piece the player picked
+  var mustCont = null;             // [r,c] of a piece mid multi-jump (must keep jumping)
+  var legalDests = [];             // {to,capture} for the selected piece
+  var forced = false;              // does the player have a mandatory capture this turn?
+  var capturePieces = {};          // set of "r,c" that can capture (for highlighting)
+  var lastMove = null;             // {sq:[[r,c],...]} for the faint trail highlight
+  var turnHadProgress = false;     // did the player's turn include a capture/crowning?
+  var noProgress = 0;              // plies since the last capture or crowning
+  var result = null;               // 'you' | 'cpu' | 'draw'
+  var undoStack = [];
+  var DRAW_PLIES = 60;
+
+  var anim = null;                 // active animation state
+  var hover = null;                // [r,c] under the pointer (desktop)
+  var boardPx = 480, cell = 60, dpr = 1;
+
+  // ---------- sizing ----------
+  function resize(){
+    var avail = Math.min(wrap.clientWidth, wrap.clientHeight);
+    if(!avail || avail < 40) avail = 160;
+    boardPx = Math.max(160, Math.floor(avail));
+    boardPx -= boardPx % 8;                 // keep squares pixel-crisp
+    cell = boardPx / 8;
+    dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    canvas.style.width = boardPx + 'px';
+    canvas.style.height = boardPx + 'px';
+    canvas.width = Math.round(boardPx * dpr);
+    canvas.height = Math.round(boardPx * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    // Paint immediately so there is no blank frame before the first animation
+    // frame, and so a resize repaints even if rAF is momentarily throttled.
+    if(board) draw(performance.now());
+  }
+
+  // ---------- helpers ----------
+  function key(r,c){ return r + ',' + c; }
+
+  function legalStepList(r,c){
+    // step-level options for the player's currently-selectable piece
+    if(forced) return singleJumps(board, r, c);
+    var fm = simpleFullMoves(board, r, c), out = [];
+    for(var i=0;i<fm.length;i++) out.push(fm[i].steps[0]);
+    return out;
+  }
+  function isSelectable(r,c){
+    var p = board[r][c];
+    if(!p || p.color!==HUMAN) return false;
+    return legalStepList(r,c).length > 0;
+  }
+
+  function pushUndo(){ undoStack.push({ board:cloneBoard(board), noProgress:noProgress }); }
+
+  function refreshForced(){
+    forced = sideHasCapture(board, HUMAN);
+    capturePieces = {};
+    if(forced){
+      for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+        var p=board[r][c];
+        if(p && p.color===HUMAN && singleJumps(board,r,c).length>0) capturePieces[key(r,c)] = true;
+      }
+    }
+  }
+
+  // ---------- game flow ----------
+  function newGame(){
+    board = setupBoard();
+    state = 'player'; selected = null; mustCont = null; legalDests = [];
+    lastMove = null; turnHadProgress = false; noProgress = 0; result = null;
+    anim = null; undoStack = [];
+    hideOverlay();
+    pushUndo();
+    refreshForced();
+    updateHud();
+  }
+
+  function beginPlayerTurn(){
+    pushUndo();
+    state = 'player'; selected = null; mustCont = null; legalDests = [];
+    turnHadProgress = false;
+    refreshForced();
+    updateHud();
+  }
+
+  // Returns 'over' if the game finished, otherwise 'continue'.
+  function concludeMove(mover){
+    var other = opponent(mover);
+    if(countPieces(board, other)===0 || legalMoves(board, other).length===0){
+      gameOver(mover); return 'over';
+    }
+    if(noProgress >= DRAW_PLIES){ gameOver('draw'); return 'over'; }
+    return 'continue';
+  }
+
+  function endPlayerTurn(){
+    selected = null; mustCont = null; legalDests = [];
+    noProgress = turnHadProgress ? 0 : (noProgress + 1);
+    state = 'ai';
+    updateHud();
+    if(concludeMove('you') === 'continue') startAiTurn();
+  }
+
+  function executePlayerStep(from, step){
+    var piece = board[from[0]][from[1]];
+    board[from[0]][from[1]] = null;
+    if(step.capture){ board[step.capture[0]][step.capture[1]] = null; turnHadProgress = true; }
+    var king = piece.king, promoted = false;
+    if(!king && step.to[0] === promoRow(HUMAN)){ king = true; promoted = true; turnHadProgress = true; }
+    board[step.to[0]][step.to[1]] = { color:HUMAN, king:king };
+
+    if(lastMove && mustCont){ lastMove.sq.push([step.to[0], step.to[1]]); }
+    else { lastMove = { sq:[[from[0],from[1]], [step.to[0],step.to[1]]] }; }
+
+    // continue a multi-jump if the same piece can still capture (unless just crowned)
+    if(step.capture && !promoted){
+      var more = singleJumps(board, step.to[0], step.to[1]);
+      if(more.length > 0){
+        mustCont = [step.to[0], step.to[1]];
+        selected = [step.to[0], step.to[1]];
+        legalDests = more;
+        state = 'jumping';
+        updateHud();
+        return;
+      }
+    }
+    endPlayerTurn();
+  }
+
+  function startAiTurn(){
+    state = 'ai';
+    updateHud();
+    setTimeout(function(){
+      if(state !== 'ai') return;
+      var move = chooseAiMove(board, difficulty);
+      if(!move){ gameOver('you'); return; }
+      var hadCapture = false;
+      for(var i=0;i<move.steps.length;i++){ if(move.steps[i].capture){ hadCapture = true; break; } }
+      var progress = hadCapture || move.promote;
+      animateMove(move, function(){
+        board = applyFull(board, move);
+        lastMove = { sq:[[move.from[0],move.from[1]]].concat(move.steps.map(function(s){ return [s.to[0],s.to[1]]; })) };
+        noProgress = progress ? 0 : (noProgress + 1);
+        anim = null;
+        updateHud();
+        if(concludeMove('cpu') === 'continue') beginPlayerTurn();
+      });
+    }, 300);
+  }
+
+  function gameOver(who){
+    state = 'over'; result = who;
+    selected = null; mustCont = null; legalDests = [];
+    updateHud();
+    showOverlay();
+  }
+
+  function doUndo(){
+    if(!(state==='player' || state==='over')) return;
+    if(undoStack.length < 2) return;
+    undoStack.pop();                                  // drop the current turn's snapshot
+    var s = undoStack[undoStack.length-1];
+    board = cloneBoard(s.board); noProgress = s.noProgress;
+    result = null; anim = null;
+    state = 'player'; selected = null; mustCont = null; legalDests = []; turnHadProgress = false;
+    hideOverlay();
+    refreshForced();
+    updateHud();
+  }
+
+  // ---------- input ----------
+  function cellFromEvent(e){
+    var rect = canvas.getBoundingClientRect();
+    var x = e.clientX - rect.left, y = e.clientY - rect.top;
+    if(x<0 || y<0 || x>=boardPx || y>=boardPx) return null;
+    return [Math.floor(y/cell), Math.floor(x/cell)];
+  }
+
+  function handleClick(r,c){
+    if(state==='jumping'){
+      var d = findDest(r,c);
+      if(d) executePlayerStep(mustCont, d);
+      return;
+    }
+    if(state!=='player') return;
+    var p = board[r][c];
+    if(selected){
+      var dd = findDest(r,c);
+      if(dd){ executePlayerStep(selected, dd); return; }
+      if(p && p.color===HUMAN && isSelectable(r,c)){ selectPiece(r,c); return; }
+      selected = null; legalDests = [];
+      return;
+    }
+    if(p && p.color===HUMAN && isSelectable(r,c)) selectPiece(r,c);
+  }
+
+  function findDest(r,c){
+    for(var i=0;i<legalDests.length;i++){ if(legalDests[i].to[0]===r && legalDests[i].to[1]===c) return legalDests[i]; }
+    return null;
+  }
+  function selectPiece(r,c){ selected = [r,c]; legalDests = legalStepList(r,c); }
+
+  canvas.addEventListener('pointerdown', function(e){
+    e.preventDefault();
+    var cellPos = cellFromEvent(e);
+    if(cellPos) handleClick(cellPos[0], cellPos[1]);
+  });
+  canvas.addEventListener('pointermove', function(e){
+    var cellPos = cellFromEvent(e);
+    hover = cellPos;
+  });
+  canvas.addEventListener('pointerleave', function(){ hover = null; });
+  canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // ---------- animation ----------
+  function animateMove(move, done){
+    var segs = [];
+    var prev = [move.from[0], move.from[1]];
+    for(var i=0;i<move.steps.length;i++){
+      segs.push({ from:prev, to:move.steps[i].to, capture:move.steps[i].capture });
+      prev = move.steps[i].to;
+    }
+    var piece = board[move.from[0]][move.from[1]];
+    anim = {
+      segs:segs, idx:0, t0:performance.now(),
+      dur: (move.steps[0].capture ? 210 : 240),
+      color:piece.color, king:piece.king,
+      origin:[move.from[0], move.from[1]],
+      removed:{}, pos:[move.from[0], move.from[1]],
+      done:done
+    };
+    state = 'anim';
+  }
+
+  function updateAnim(ts){
+    if(!anim) return;
+    var seg = anim.segs[anim.idx];
+    var t = (ts - anim.t0) / anim.dur;
+    if(t >= 1){
+      if(seg.capture) anim.removed[key(seg.capture[0], seg.capture[1])] = true;
+      anim.pos = [seg.to[0], seg.to[1]];
+      anim.idx++;
+      if(anim.idx >= anim.segs.length){
+        var cb = anim.done;
+        // finalize on next tick; keep anim non-null until board applied
+        anim.done = null;
+        if(cb) cb();
+        return;
+      }
+      anim.t0 = ts;
+      seg = anim.segs[anim.idx];
+      anim.dur = seg.capture ? 210 : 240;
+      anim.pos = [seg.from[0], seg.from[1]];
+    } else {
+      var e = t<0.5 ? 2*t*t : -1+(4-2*t)*t;   // easeInOut
+      anim.pos = [ seg.from[0] + (seg.to[0]-seg.from[0])*e, seg.from[1] + (seg.to[1]-seg.from[1])*e ];
+    }
+  }
+
+  // ---------- drawing ----------
+  var LIGHT = '#33333d', DARK = '#161620';
+  var YOU_FILL='#f5f2e8', YOU_EDGE='#b9b5a6', YOU_CROWN='#141420';
+  var CPU_FILL='#ef3a3a', CPU_EDGE='#911d1d', CPU_CROWN='#f5f2e8';
+
+  function cx(c){ return (c+0.5)*cell; }
+  function cy(r){ return (r+0.5)*cell; }
+
+  function drawCrown(px,py,s,color){
+    ctx.fillStyle = color;
+    var w=s, h=s*0.72;
+    ctx.beginPath();
+    ctx.moveTo(px-w/2, py+h*0.34);
+    ctx.lineTo(px+w/2, py+h*0.34);
+    ctx.lineTo(px+w/2, py+h*0.02);
+    ctx.lineTo(px+w*0.27, py-h*0.16);
+    ctx.lineTo(px+w*0.13, py+h*0.02);
+    ctx.lineTo(px, py-h*0.52);
+    ctx.lineTo(px-w*0.13, py+h*0.02);
+    ctx.lineTo(px-w*0.27, py-h*0.16);
+    ctx.lineTo(px-w/2, py+h*0.02);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawPiece(px,py,color,king){
+    var rad = cell*0.36;
+    var fill = color===HUMAN?YOU_FILL:CPU_FILL;
+    var edge = color===HUMAN?YOU_EDGE:CPU_EDGE;
+    // drop shadow slab (neo-brutalist)
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath(); ctx.arc(px+cell*0.045, py+cell*0.05, rad, 0, Math.PI*2); ctx.fill();
+    // body
+    ctx.fillStyle = fill;
+    ctx.beginPath(); ctx.arc(px,py,rad,0,Math.PI*2); ctx.fill();
+    ctx.lineWidth = Math.max(2, cell*0.045); ctx.strokeStyle = edge;
+    ctx.beginPath(); ctx.arc(px,py,rad,0,Math.PI*2); ctx.stroke();
+    // inner ring detail
+    ctx.lineWidth = Math.max(1.5, cell*0.03); ctx.strokeStyle = edge;
+    ctx.beginPath(); ctx.arc(px,py,rad*0.66,0,Math.PI*2); ctx.stroke();
+    if(king) drawCrown(px,py, cell*0.34, color===HUMAN?YOU_CROWN:CPU_CROWN);
+  }
+
+  function draw(ts){
+    ctx.clearRect(0,0,boardPx,boardPx);
+    var pulse = 0.5 + 0.5*Math.sin(ts/280);
+
+    // squares
+    for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+      ctx.fillStyle = ((r+c)%2===1) ? DARK : LIGHT;
+      ctx.fillRect(c*cell, r*cell, cell+0.5, cell+0.5);
+    }
+
+    // last-move trail
+    if(lastMove){
+      ctx.fillStyle = 'rgba(245,178,58,0.16)';
+      for(var i=0;i<lastMove.sq.length;i++){
+        var sq=lastMove.sq[i]; ctx.fillRect(sq[1]*cell, sq[0]*cell, cell, cell);
+      }
+    }
+
+    // forced-capture pieces (help the player see why simple moves are locked)
+    if(state==='player' && forced){
+      ctx.lineWidth = Math.max(2, cell*0.05);
+      ctx.strokeStyle = 'rgba(245,178,58,' + (0.45 + 0.45*pulse) + ')';
+      for(var kk in capturePieces){
+        var pr = capturePieces[kk] ? kk.split(',') : null; if(!pr) continue;
+        var fr=+pr[0], fc=+pr[1];
+        if(selected && selected[0]===fr && selected[1]===fc) continue;
+        ctx.strokeRect(fc*cell+cell*0.1, fr*cell+cell*0.1, cell*0.8, cell*0.8);
+      }
+    }
+
+    // hover hint
+    if(hover && (state==='player') && !anim){
+      var hr=hover[0], hc=hover[1];
+      if(isSelectable(hr,hc) || findDest(hr,hc)){
+        ctx.fillStyle = 'rgba(46,230,200,0.10)';
+        ctx.fillRect(hc*cell, hr*cell, cell, cell);
+      }
+    }
+
+    // selected square
+    if(selected){
+      ctx.lineWidth = Math.max(2.5, cell*0.06);
+      ctx.strokeStyle = '#2ee6c8';
+      ctx.strokeRect(selected[1]*cell+cell*0.06, selected[0]*cell+cell*0.06, cell*0.88, cell*0.88);
+    }
+
+    // destination markers + capture targets
+    for(var d=0; d<legalDests.length; d++){
+      var dt = legalDests[d];
+      var px = cx(dt.to[1]), py = cy(dt.to[0]);
+      if(dt.capture){
+        ctx.lineWidth = Math.max(3, cell*0.06);
+        ctx.strokeStyle = '#2ee6c8';
+        ctx.beginPath(); ctx.arc(px,py, cell*0.30, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = 'rgba(46,230,200,0.16)';
+        ctx.beginPath(); ctx.arc(px,py, cell*0.30, 0, Math.PI*2); ctx.fill();
+        // ring the enemy being jumped
+        var er=dt.capture[0], ec=dt.capture[1];
+        ctx.lineWidth = Math.max(2.5, cell*0.055);
+        ctx.strokeStyle = 'rgba(239,58,58,' + (0.55 + 0.4*pulse) + ')';
+        ctx.strokeRect(ec*cell+cell*0.08, er*cell+cell*0.08, cell*0.84, cell*0.84);
+      } else {
+        ctx.fillStyle = '#f5b23a';
+        ctx.beginPath(); ctx.arc(px,py, cell*0.13, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // pieces (skip the animating piece's origin + already-captured squares)
+    for(var rr=0; rr<8; rr++) for(var cc=0; cc<8; cc++){
+      var p = board[rr][cc]; if(!p) continue;
+      if(anim){
+        if(anim.origin[0]===rr && anim.origin[1]===cc) continue;
+        if(anim.removed[key(rr,cc)]) continue;
+      }
+      drawPiece(cx(cc), cy(rr), p.color, p.king);
+    }
+
+    // animating piece on top
+    if(anim){
+      drawPiece(cx(anim.pos[1]), cy(anim.pos[0]), anim.color, anim.king);
+    }
+  }
+
+  function frame(ts){
+    updateAnim(ts);
+    draw(ts);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- HUD ----------
+  var elCapYou=document.getElementById('capYou'), elCapCpu=document.getElementById('capCpu');
+  var elTurn=document.getElementById('turn'), elTurnText=document.getElementById('turnText');
+  var elWarn=document.getElementById('warn'), elUndo=document.getElementById('undo');
+
+  function updateHud(){
+    elCapYou.textContent = 12 - countPieces(board, AI);
+    elCapCpu.textContent = 12 - countPieces(board, HUMAN);
+
+    elTurn.className = '';
+    if(state==='over'){
+      elTurn.classList.add('over');
+      elTurnText.textContent = result==='you' ? 'YOU WIN' : (result==='cpu' ? 'CPU WINS' : 'DRAW');
+    } else if(state==='ai' || state==='anim'){
+      elTurn.classList.add('cpu');
+      elTurnText.textContent = 'CPU THINKING…';
+    } else {
+      elTurn.classList.add('you');
+      elTurnText.textContent = (state==='jumping') ? 'JUMP AGAIN' : 'YOUR MOVE';
+    }
+
+    var showWarn = (state==='player' && forced) || state==='jumping';
+    elWarn.classList.toggle('on', showWarn);
+    elWarn.textContent = (state==='jumping') ? 'MUST CONTINUE JUMP' : 'CAPTURE REQUIRED';
+
+    elUndo.disabled = !((state==='player' || state==='over') && undoStack.length >= 2);
+  }
+
+  // ---------- overlay ----------
+  var over=document.getElementById('over');
+  var ovTitle=document.getElementById('ovTitle'), ovSub=document.getElementById('ovSub');
+  var ovYou=document.getElementById('ovYou'), ovCpu=document.getElementById('ovCpu'), ovDiff=document.getElementById('ovDiff');
+
+  function showOverlay(){
+    ovYou.textContent = 12 - countPieces(board, AI);
+    ovCpu.textContent = 12 - countPieces(board, HUMAN);
+    ovDiff.textContent = DIFF[difficulty].label;
+    ovTitle.className = '';
+    if(result==='you'){ ovTitle.textContent='YOU WIN'; ovTitle.classList.add('win'); ovSub.textContent='EVERY RED DISC TAKEN'; }
+    else if(result==='cpu'){ ovTitle.textContent='CPU WINS'; ovTitle.classList.add('lose'); ovSub.textContent='NO MOVES LEFT FOR YOU'; }
+    else { ovTitle.textContent='DRAW'; ovTitle.classList.add('draw'); ovSub.textContent='NO PROGRESS: STALEMATE'; }
+    over.classList.add('show');
+  }
+  function hideOverlay(){ over.classList.remove('show'); }
+
+  // ---------- controls ----------
+  var dBtns = { easy:document.getElementById('dEasy'), medium:document.getElementById('dMed'), hard:document.getElementById('dHard') };
+  function setDifficulty(d){
+    difficulty = d;
+    for(var k in dBtns) dBtns[k].setAttribute('aria-pressed', k===d ? 'true' : 'false');
+  }
+  dBtns.easy.addEventListener('click', function(){ setDifficulty('easy'); });
+  dBtns.medium.addEventListener('click', function(){ setDifficulty('medium'); });
+  dBtns.hard.addEventListener('click', function(){ setDifficulty('hard'); });
+
+  document.getElementById('restart').addEventListener('click', newGame);
+  document.getElementById('ovPrimary').addEventListener('click', newGame);
+  elUndo.addEventListener('click', doUndo);
+
+  window.addEventListener('keydown', function(e){
+    if(e.key==='n' || e.key==='N'){ newGame(); }
+    else if(e.key==='u' || e.key==='U'){ doUndo(); }
+    else if(e.key==='Escape'){ if(over.classList.contains('show')) newGame(); else if(selected && state==='player'){ selected=null; legalDests=[]; } }
+  });
+
+  window.addEventListener('resize', resize);
+  if(window.ResizeObserver){ new ResizeObserver(resize).observe(wrap); }
+
+  // ---------- boot ----------
+  setDifficulty('medium');
+  resize();
+  newGame();
+  draw(performance.now());          // paint the opening position at once
+  requestAnimationFrame(frame);
+})();
+</script>
+
+<style data-batchly="hit-targets">/* Batchly mobile hit-target shim: >=44px tappables on phones/touch only */
+@media (max-width: 900px), (pointer: coarse){
+  #bar button,.seg button{min-height:44px;min-width:44px;touch-action:manipulation}
+  #ovBtns button{min-height:44px;touch-action:manipulation}
+}
+</style>
+</body>
+</html>

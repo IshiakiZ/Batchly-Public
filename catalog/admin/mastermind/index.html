@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Mastermind</title>
+<!--
+================================================================================
+MASTERMIND: Batchly seed game
+================================================================================
+The classic code-breaking game. A hidden code of four pegs is drawn from six
+colours; you have ten guesses to crack it. After each guess the board reports:
+
+    EXACT   (solid)  right colour AND right position
+    COLOUR  (hollow)  right colour, WRONG position
+
+--------------------------------------------------------------------------------
+THE SCORING: the one thing everybody gets wrong
+--------------------------------------------------------------------------------
+The subtlety is NON-DOUBLE-COUNTING: a single peg in the code can satisfy at
+most one peg in the guess, and vice versa. The correct, unambiguous algorithm:
+
+  1. EXACT  = number of positions i where guess[i] === code[i].
+  2. Remove those matched pegs from consideration entirely.
+  3. For every colour, the number of still-matchable pairs is
+        min( count of that colour left in the code,
+             count of that colour left in the guess ).
+     COLOUR = the sum of those minima over all six colours.
+
+Because exact matches are struck out first (step 2), no code peg is ever counted
+both as an exact and as a colour, and duplicated colours in either the code or
+the guess can never inflate the tally beyond the pegs that actually exist. This
+is provably order-independent and total EXACT+COLOUR <= 4 always. See
+scoreGuess() below: it is the whole game, and it is worth reading twice.
+
+Worked example (illustrates the trap):
+    code  = R R G B
+    guess = R G R R
+    EXACT  = 1  (position 0, R)
+    leftover code  = { R:1, G:1, B:1 }   guess = { G:1, R:2 }
+    COLOUR = min(R:1,2)+min(G:1,1)+min(B:1,0) = 1 + 1 + 0 = 2
+    -> 1 exact, 2 colour. A naive "count every guess peg that appears somewhere
+       in the code" would wrongly return 3+ here.
+
+--------------------------------------------------------------------------------
+DUPLICATES TOGGLE
+--------------------------------------------------------------------------------
+DUPES ON  : the code may repeat colours (6^4 = 1296 possible codes).
+DUPES OFF : the code is four DISTINCT colours (6*5*4*3 = 360 possible codes),
+            the friendlier classic ruleset. Your guesses are never restricted:
+            you may always repeat colours while probing. Toggling starts a fresh
+            code because it changes the search space. BEST is tracked per mode.
+
+--------------------------------------------------------------------------------
+CONTRACT
+--------------------------------------------------------------------------------
+Single self-contained file. No network of any kind: no CDN, no webfonts, no
+fetch/XHR/WebSocket, no external images. Colours are CSS; the six pegs also
+carry a distinct SHAPE (circle / triangle / square / diamond / star / hexagon)
+via clip-path so the game is fully playable without colour vision. Every sound
+is synthesised with WebAudio on demand. Runs in a sandboxed, possibly
+opaque-origin iframe, so localStorage is feature-detected and falls back to
+memory rather than throwing.
+
+NO LEADERBOARD, BY DESIGN. The natural score here is "fewest guesses", which is
+lower-is-better; the host keeps each player's HIGHEST score and would rank it
+exactly backwards. Nothing is ever posted to the parent frame: there is no
+postMessage call anywhere in this file, and that absence is deliberate. BEST and
+STREAK are kept locally for the player's own satisfaction only.
+
+Mouse, touch and keyboard are all first-class. Tap a colour to fill the row
+left-to-right, tap a slot to edit it, then CHECK. Keys 1-6 place colours,
+Backspace deletes, arrows move the cursor, Enter checks, N starts a new game.
+================================================================================
+-->
+<style>
+:root{
+  --bg:#10100e;
+  --panel:#18181d;
+  --panel-2:#20202a;
+  --well:#0b0b09;
+  --line:#33333d;
+  --bone:#f5f2e8;
+  --muted:#9a978c;
+  --red:#ef3a3a;
+  --red-hi:#ff7a5e;
+  /* the six code colours */
+  --p0:#ef3a3a; --p1:#ff9e2c; --p2:#f4e04d; --p3:#46c46a; --p4:#35b6e6; --p5:#a56bff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  font-size:14px;
+  line-height:1.3;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  touch-action:manipulation;
+}
+#app{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px clamp(8px,2vw,16px) 8px;
+  max-width:560px;
+  margin:0 auto;
+}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:0 0 auto;}
+h1{
+  margin:0;
+  font-size:clamp(15px,4.4vw,22px);
+  font-weight:800;
+  letter-spacing:.14em;
+  line-height:1;
+  white-space:nowrap;
+}
+h1 .o{color:var(--red);}
+.spacer{flex:1 1 auto;min-width:0;}
+.stats{display:flex;gap:6px;flex:0 0 auto;}
+.stat{
+  border:2px solid var(--line);
+  background:var(--panel);
+  padding:3px 8px;
+  min-width:52px;
+  text-align:center;
+}
+.stat .k{
+  display:block;
+  font-size:10px;
+  letter-spacing:.1em;
+  color:var(--muted);
+  font-weight:700;
+}
+.stat .v{
+  display:block;
+  font-size:15px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  line-height:1.2;
+}
+.stat.hot{border-color:var(--red);}
+.stat.hot .v{color:var(--red-hi);}
+
+/* ---------- controls ---------- */
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.btn{
+  appearance:none;
+  border:2px solid var(--bone);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  cursor:pointer;
+  border-radius:0;
+  box-shadow:3px 3px 0 0 var(--bone);
+  transition:transform .06s ease,box-shadow .06s ease,background-color .12s ease;
+}
+.btn:hover:not(:disabled){background:var(--panel-2);}
+.btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 0 var(--bone);}
+.btn:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+  box-shadow:3px 3px 0 0 var(--line);
+  border-color:var(--line);
+  color:var(--muted);
+}
+.btn.on{background:var(--red);border-color:var(--red);color:#fff;box-shadow:3px 3px 0 0 var(--red-hi);}
+.btn.on:hover:not(:disabled){background:var(--red-hi);border-color:var(--red-hi);}
+.btn:focus-visible{outline:2px solid var(--red-hi);outline-offset:3px;}
+.btn.icon{padding:6px 9px;font-size:13px;line-height:1;}
+
+/* ---------- status ---------- */
+#status{
+  flex:0 0 auto;
+  font-size:11px;
+  color:var(--muted);
+  border-left:3px solid var(--line);
+  padding:2px 0 2px 8px;
+  min-height:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#status.hi{color:var(--bone);border-left-color:var(--red);}
+#status.good{color:var(--bone);border-left-color:#46c46a;}
+
+/* ---------- board ---------- */
+#boardWrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;}
+#board{
+  --peg:40px;
+  display:flex;
+  flex-direction:column;
+  gap:calc(var(--peg)*0.26);
+  padding:calc(var(--peg)*0.28);
+  background:var(--well);
+  border:2px solid var(--bone);
+  box-shadow:5px 5px 0 0 var(--bone);
+}
+.row{
+  display:flex;
+  align-items:center;
+  gap:calc(var(--peg)*0.34);
+}
+.rownum{
+  width:calc(var(--peg)*0.92);
+  text-align:right;
+  font-size:clamp(9px,calc(var(--peg)*0.3),15px);
+  font-weight:800;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.02em;
+  flex:0 0 auto;
+}
+.slots{display:flex;gap:calc(var(--peg)*0.16);flex:0 0 auto;}
+.slot{
+  position:relative;
+  width:var(--peg);
+  height:var(--peg);
+  border:2px solid var(--line);
+  background:var(--panel);
+  border-radius:0;
+  padding:0;
+  margin:0;
+  display:grid;
+  place-items:center;
+}
+button.slot{appearance:none;font:inherit;color:inherit;}
+.slot.empty{background:#131318;}
+.peg{
+  width:76%;
+  height:76%;
+  border-radius:0;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.30), inset 0 3px 6px rgba(255,255,255,.20);
+}
+.peg.c0{background:var(--p0);border-radius:50%;}
+.peg.c1{background:var(--p1);clip-path:polygon(50% 3%,97% 93%,3% 93%);}
+.peg.c2{background:var(--p2);}
+.peg.c3{background:var(--p3);clip-path:polygon(50% 2%,98% 50%,50% 98%,2% 50%);}
+.peg.c4{background:var(--p4);clip-path:polygon(50% 2%,61% 37%,98% 37%,68% 59%,79% 96%,50% 74%,21% 96%,32% 59%,2% 37%,39% 37%);}
+.peg.c5{background:var(--p5);clip-path:polygon(25% 4%,75% 4%,99% 50%,75% 96%,25% 96%,1% 50%);}
+.peg.mystery{
+  background:repeating-linear-gradient(45deg,#26262e 0 6px,#1c1c22 6px 12px);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.35);
+  display:grid;place-items:center;
+}
+.peg.mystery::after{content:"?";color:var(--muted);font-size:calc(var(--peg)*0.38);font-weight:800;}
+
+/* active row */
+.row.active .rownum{color:var(--red-hi);}
+.row.active .slot{cursor:pointer;}
+.row.active .slot.empty{border-color:#4a4a56;border-style:dashed;}
+.row.active .slot.cursor{outline:3px solid var(--red);outline-offset:-3px;border-color:var(--red);}
+@media (hover:hover) and (pointer:fine){
+  .row.active .slot:hover{border-color:var(--bone);}
+}
+.row.future{opacity:.5;}
+.row.future .slot{background:#101014;}
+
+/* placed-peg pop */
+.slot.pop .peg{animation:pop .18s ease-out;}
+@keyframes pop{0%{transform:scale(1);}42%{transform:scale(.82);}100%{transform:scale(1);}}
+
+/* invalid-submit shake */
+.row.shake{animation:shake .34s ease;}
+@keyframes shake{
+  0%,100%{transform:translateX(0);}
+  20%{transform:translateX(-6px);} 40%{transform:translateX(6px);}
+  60%{transform:translateX(-4px);} 80%{transform:translateX(4px);}
+}
+
+/* winning row emphasis */
+.row.solved .slot{border-color:#46c46a;box-shadow:0 0 12px rgba(70,196,106,.35);}
+
+/* ---------- feedback pegs ---------- */
+.fb{
+  width:var(--peg);
+  height:var(--peg);
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  gap:calc(var(--peg)*0.08);
+  place-items:center;
+  padding:calc(var(--peg)*0.08);
+}
+.fpeg{
+  width:80%;
+  height:80%;
+  max-width:calc(var(--peg)*0.30);
+  max-height:calc(var(--peg)*0.30);
+  border-radius:50%;
+  border:2px solid #2a2a32;
+  background:transparent;
+  box-sizing:border-box;
+}
+.fpeg.exact{
+  background:var(--red);
+  border-color:var(--red-hi);
+  box-shadow:0 0 6px rgba(239,58,58,.6);
+}
+.fpeg.color{
+  background:transparent;
+  border-color:var(--bone);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.4);
+}
+.fpeg.spawn{animation:fbpop .26s ease-out both;}
+@keyframes fbpop{0%{transform:scale(.1);opacity:0;}100%{transform:scale(1);opacity:1;}}
+.fb.qmark{font-size:calc(var(--peg)*0.5);font-weight:800;color:var(--muted);display:flex;align-items:center;justify-content:center;}
+
+/* ---------- answer / key row ---------- */
+.row.answer{
+  padding-bottom:calc(var(--peg)*0.2);
+  margin-bottom:calc(var(--peg)*0.04);
+  border-bottom:2px solid var(--line);
+}
+.row.answer .rownum{color:var(--red);font-size:clamp(8px,calc(var(--peg)*0.24),12px);letter-spacing:.02em;}
+.row.answer .slot{border-color:var(--red);}
+.row.answer.reveal .slot .peg{animation:flip .5s ease-out both;}
+@keyframes flip{0%{transform:rotateX(90deg);opacity:0;}60%{transform:rotateX(-12deg);}100%{transform:rotateX(0);opacity:1;}}
+
+/* ---------- palette ---------- */
+.tray{
+  flex:0 0 auto;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+.swatches{display:flex;gap:7px;}
+.swatch{
+  position:relative;
+  appearance:none;
+  width:clamp(34px,10vw,46px);
+  height:clamp(34px,10vw,46px);
+  border:2px solid var(--bone);
+  background:var(--panel);
+  border-radius:0;
+  padding:0;
+  cursor:pointer;
+  display:grid;
+  place-items:center;
+  box-shadow:3px 3px 0 0 var(--bone);
+  transition:transform .06s ease,box-shadow .06s ease;
+}
+.swatch .peg{width:66%;height:66%;pointer-events:none;}
+.swatch .kk{
+  position:absolute;
+  bottom:-1px;right:0px;
+  font-size:9px;
+  font-weight:800;
+  color:var(--muted);
+  background:var(--well);
+  padding:0 2px;
+  line-height:1.2;
+}
+.swatch:hover:not(:disabled){background:var(--panel-2);}
+.swatch:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 0 var(--bone);}
+.swatch:focus-visible{outline:2px solid var(--red-hi);outline-offset:3px;}
+.swatch:disabled{opacity:.4;cursor:not-allowed;box-shadow:3px 3px 0 0 var(--line);border-color:var(--line);}
+.tray .actions{display:flex;gap:7px;}
+
+/* ---------- footer ---------- */
+footer{
+  flex:0 0 auto;
+  font-size:10px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  white-space:nowrap;
+  overflow:hidden;
+}
+footer .keys{overflow:hidden;text-overflow:ellipsis;}
+kbd{
+  display:inline-block;
+  border:1px solid var(--line);
+  background:var(--well);
+  color:var(--bone);
+  padding:0 4px;
+  font:inherit;
+  font-size:10px;
+  font-weight:700;
+}
+
+/* ---------- overlays ---------- */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(8,8,7,.88);
+  display:none;
+  place-items:center;
+  padding:14px;
+  z-index:30;
+}
+.overlay.show{display:grid;}
+/* NOTE: no hover transform on modals: a shifting transform fights centering. */
+.modal{
+  background:var(--panel);
+  border:2px solid var(--bone);
+  box-shadow:8px 8px 0 0 var(--red);
+  padding:16px;
+  width:min(440px,94vw);
+  max-height:88vh;
+  overflow:auto;
+}
+.modal h2{margin:0 0 4px;font-size:17px;letter-spacing:.1em;font-weight:800;}
+.modal .verdict{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--red-hi);margin-bottom:10px;}
+.modal .verdict.win{color:#5fe08a;}
+.modal p{margin:0 0 8px;font-size:12px;color:var(--muted);line-height:1.55;}
+.modal p b{color:var(--bone);font-weight:700;}
+.modal ul{margin:0 0 10px;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.6;}
+.modal ul b{color:var(--bone);}
+.modal hr{border:0;border-top:2px solid var(--line);margin:12px 0;}
+.tally{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.tally .stat{flex:1 1 0;min-width:64px;}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+.codeRow{display:flex;gap:8px;align-items:center;margin:6px 0 2px;}
+.codeRow .cpeg{width:30px;height:30px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3),inset 0 3px 6px rgba(255,255,255,.2);}
+.codeRow .lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;}
+/* colour legend in help */
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:6px 0 12px;}
+.legend .li{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);}
+.legend .li .peg{width:20px;height:20px;flex:0 0 auto;box-shadow:inset 0 0 0 2px rgba(0,0,0,.3);}
+.fbkey{display:flex;gap:16px;margin:6px 0 12px;flex-wrap:wrap;}
+.fbkey .li{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);}
+.fbkey .fpeg{width:16px;height:16px;max-width:none;max-height:none;}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::after,*::before{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+@media (max-width:430px){
+  .stat{min-width:42px;padding:3px 5px;}
+  .stat .v{font-size:13px;}
+  footer .keys{display:none;}
+}
+@media (max-height:560px){
+  footer{display:none;}
+}
+@media (max-height:470px){
+  h1{font-size:14px;}
+  .controls .btn.wide{display:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>MASTER<span class="o">/</span>MIND</h1>
+    <div class="spacer"></div>
+    <div class="stats">
+      <div class="stat" title="Guesses used out of 10"><span class="k">GUESS</span><span class="v" id="sTry">1/10</span></div>
+      <div class="stat" title="Consecutive codes cracked"><span class="k">STREAK</span><span class="v" id="sStreak">0</span></div>
+      <div class="stat" title="Fewest guesses to crack a code in this mode"><span class="k">BEST</span><span class="v" id="sBest">-</span></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button type="button" class="btn on" id="bNew">New game</button>
+    <button type="button" class="btn wide" id="bDupes" aria-pressed="true">Dupes: On</button>
+    <div class="spacer"></div>
+    <button type="button" class="btn icon" id="bSound" aria-pressed="true" aria-label="Sound on" title="Sound">&#9835;</button>
+    <button type="button" class="btn icon" id="bHelp" aria-label="How to play" title="How to play">?</button>
+  </div>
+
+  <div id="status" aria-live="polite">Pick 4 colours, then CHECK. Crack the code in 10 guesses.</div>
+
+  <div id="boardWrap">
+    <div id="board" role="group" aria-label="Mastermind board"></div>
+  </div>
+
+  <div class="tray">
+    <div class="swatches" id="swatches" role="group" aria-label="Colour palette"></div>
+    <div class="actions">
+      <button type="button" class="btn" id="bBack" title="Delete a peg (Backspace)">&#9003;</button>
+      <button type="button" class="btn on" id="bCheck" disabled title="Score this guess (Enter)">Check</button>
+    </div>
+  </div>
+
+  <footer>
+    <span>Tap a colour to fill &middot; tap a slot to edit</span>
+    <span class="keys"><kbd>1</kbd>&ndash;<kbd>6</kbd> colour <kbd>&larr;&rarr;</kbd> move <kbd>&#9003;</kbd> del <kbd>&crarr;</kbd> check <kbd>N</kbd> new</span>
+  </footer>
+</div>
+
+<!-- game over -->
+<div class="overlay" id="endOverlay" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="modal">
+    <h2 id="endTitle">MASTERMIND</h2>
+    <div class="verdict" id="endVerdict"></div>
+    <div class="codeRow"><span class="lbl">CODE</span><span id="endCode" style="display:flex;gap:8px;"></span></div>
+    <div class="tally">
+      <div class="stat"><span class="k">GUESSES</span><span class="v" id="eTry">0</span></div>
+      <div class="stat"><span class="k">STREAK</span><span class="v" id="eStreak">0</span></div>
+      <div class="stat"><span class="k">BEST</span><span class="v" id="eBest">-</span></div>
+    </div>
+    <p id="endNote"></p>
+    <div class="row">
+      <button type="button" class="btn on" id="eNew">New game</button>
+      <button type="button" class="btn" id="eClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- help -->
+<div class="overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modal">
+    <h2 id="helpTitle">HOW TO PLAY</h2>
+    <div class="verdict">CRACK THE HIDDEN CODE</div>
+    <p>A secret code of <b>4 pegs</b> is hidden behind the top row. Build a guess from the six colours below and press <b>CHECK</b>. You have <b>10 guesses</b>.</p>
+    <p>Each colour also has its own <b>shape</b> so the game is fully playable without colour vision:</p>
+    <div class="legend" id="helpLegend"></div>
+    <p>After every guess the small pegs on the right report how close you were, but <b>not which</b> peg is which:</p>
+    <div class="fbkey">
+      <div class="li"><span class="fpeg exact"></span> <span><b style="color:var(--bone)">Exact</b>: right colour &amp; right spot</span></div>
+      <div class="li"><span class="fpeg color"></span> <span><b style="color:var(--bone)">Colour</b>: right colour, wrong spot</span></div>
+    </div>
+    <ul>
+      <li>A peg is only ever counted <b>once</b>. Two exact/colour pegs never point at the same secret peg, so the feedback total is never more than 4.</li>
+      <li><b>Dupes: On</b> lets the code repeat colours. <b>Off</b> makes the code four distinct colours. Your own guesses may always repeat.</li>
+      <li>No luck, pure deduction: the code never changes once dealt.</li>
+    </ul>
+    <hr>
+    <p><b>Keyboard:</b> <kbd>1</kbd>&ndash;<kbd>6</kbd> place a colour &middot; <kbd>&larr;</kbd><kbd>&rarr;</kbd> move cursor &middot; <kbd>&#9003;</kbd> delete &middot; <kbd>Enter</kbd> check &middot; <kbd>N</kbd> new &middot; <kbd>Esc</kbd> close</p>
+    <div class="row"><button type="button" class="btn on" id="hClose">Got it</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   Storage: an opaque-origin iframe throws on localStorage. Detect once,
+   fall back to memory so preferences still work for the session.
+   ====================================================================== */
+var mem = Object.create(null), lsOK = false;
+try{
+  var probe = "__mm_probe";
+  window.localStorage.setItem(probe,"1");
+  window.localStorage.removeItem(probe);
+  lsOK = true;
+}catch(e){ lsOK = false; }
+function stGet(k){
+  try{ return lsOK ? window.localStorage.getItem(k) : (k in mem ? mem[k] : null); }
+  catch(e){ return (k in mem) ? mem[k] : null; }
+}
+function stSet(k,v){
+  try{ if(lsOK) window.localStorage.setItem(k,v); else mem[k]=v; }
+  catch(e){ mem[k]=v; }
+}
+
+/* ======================================================================
+   Constants
+   ====================================================================== */
+var COLORS = 6, SLOTS = 4, MAX_GUESS = 10;
+var COLOR_META = [
+  {name:"Red",    shape:"circle"},
+  {name:"Orange", shape:"triangle"},
+  {name:"Yellow", shape:"square"},
+  {name:"Green",  shape:"diamond"},
+  {name:"Blue",   shape:"star"},
+  {name:"Violet", shape:"hexagon"}
+];
+
+/* ======================================================================
+   THE SCORING. Non-double-counting, provably order-independent.
+   (See the header comment for the full argument + worked example.)
+   ====================================================================== */
+function scoreGuess(guess, code){
+  var exact = 0, i;
+  var codeLeft = [0,0,0,0,0,0], guessLeft = [0,0,0,0,0,0];
+  for(i=0;i<SLOTS;i++){
+    if(guess[i] === code[i]){
+      exact++;                       /* struck out: never re-counted below */
+    }else{
+      codeLeft[code[i]]++;
+      guessLeft[guess[i]]++;
+    }
+  }
+  var color = 0;
+  for(i=0;i<COLORS;i++) color += Math.min(codeLeft[i], guessLeft[i]);
+  return {exact:exact, color:color};
+}
+
+/* ======================================================================
+   Code generation. DUPES ON -> uniform over 6^4. DUPES OFF -> a shuffled
+   prefix of the six colours (four distinct), the friendlier classic set.
+   ====================================================================== */
+function makeCode(allowDup){
+  var i, j, t;
+  if(allowDup){
+    var c = [];
+    for(i=0;i<SLOTS;i++) c.push((Math.random()*COLORS)|0);
+    return c;
+  }
+  var pool = [0,1,2,3,4,5];
+  for(i=pool.length-1;i>0;i--){          /* Fisher–Yates */
+    j = (Math.random()*(i+1))|0;
+    t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+  }
+  return pool.slice(0,SLOTS);
+}
+
+/* ======================================================================
+   Audio: synthesised, no assets. Context created lazily on first gesture
+   so autoplay policy can't produce a console error.
+   ====================================================================== */
+var actx=null, sound = stGet("mm.sound") !== "0";
+function ac(){
+  if(!sound) return null;
+  try{
+    var C = window.AudioContext || window.webkitAudioContext;
+    if(!C) return null;
+    if(!actx) actx = new C();
+    if(actx.state === "suspended" && actx.resume) actx.resume();
+    return actx;
+  }catch(e){ return null; }
+}
+function blip(freq,dur,type,vol,delay){
+  var a=ac(); if(!a) return;
+  try{
+    var o=a.createOscillator(), g=a.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    o.connect(g); g.connect(a.destination);
+    var t=a.currentTime+(delay||0);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.05,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }catch(e){}
+}
+
+/* ======================================================================
+   State
+   ====================================================================== */
+var allowDup = stGet("mm.dup") !== "0";      /* default: dupes on */
+var secret = [];
+var guesses = [];                            /* [{pegs:[..], exact, color}] */
+var cur = [-1,-1,-1,-1];                     /* the in-progress guess */
+var cursor = 0;
+var over = false, won = false;
+var justScored = -1;                         /* row whose feedback should pop in; consumed by one render */
+var endTimer = null;                         /* deferred reveal->modal */
+var streak = 0, best = {dup:null, nodup:null};
+
+try{
+  var rawBest = stGet("mm.best");
+  if(rawBest){ var pb = JSON.parse(rawBest); if(pb && typeof pb==="object") best = {dup:pb.dup==null?null:pb.dup, nodup:pb.nodup==null?null:pb.nodup}; }
+}catch(e){ best = {dup:null,nodup:null}; }
+var rawStreak = parseInt(stGet("mm.streak"),10);
+if(rawStreak>0 && isFinite(rawStreak)) streak = rawStreak;
+
+var $ = function(id){ return document.getElementById(id); };
+var board=$("board"), statusEl=$("status");
+
+/* cached DOM */
+var answerRow=null, answerSlots=[], answerFb=null, rows=[];
+
+/* ======================================================================
+   DOM builders
+   ====================================================================== */
+function pegEl(color){
+  var p=document.createElement("div");
+  p.className = "peg c"+color;
+  return p;
+}
+function mysteryEl(){
+  var p=document.createElement("div");
+  p.className="peg mystery";
+  return p;
+}
+
+function buildBoard(){
+  board.textContent="";
+  var r,s;
+
+  /* KEY / answer row (always present so the layout reserves its space) */
+  answerRow=document.createElement("div");
+  answerRow.className="row answer";
+  var an=document.createElement("div");
+  an.className="rownum"; an.textContent="KEY";
+  answerRow.appendChild(an);
+  var asl=document.createElement("div");
+  asl.className="slots"; answerSlots=[];
+  for(s=0;s<SLOTS;s++){
+    var sd=document.createElement("div");
+    sd.className="slot"; sd.appendChild(mysteryEl());
+    asl.appendChild(sd); answerSlots.push(sd);
+  }
+  answerRow.appendChild(asl);
+  answerFb=document.createElement("div");
+  answerFb.className="fb qmark"; answerFb.textContent="?";
+  answerRow.appendChild(answerFb);
+  board.appendChild(answerRow);
+
+  /* the ten guess rows */
+  rows=[];
+  for(r=0;r<MAX_GUESS;r++){
+    var row=document.createElement("div");
+    row.className="row future";
+    var rn=document.createElement("div");
+    rn.className="rownum"; rn.textContent=String(r+1);
+    row.appendChild(rn);
+    var slotsWrap=document.createElement("div");
+    slotsWrap.className="slots";
+    var slots=[];
+    for(s=0;s<SLOTS;s++){
+      var b=document.createElement("button");
+      b.type="button"; b.className="slot empty";
+      b.dataset.r=String(r); b.dataset.s=String(s);
+      slotsWrap.appendChild(b); slots.push(b);
+    }
+    row.appendChild(slotsWrap);
+    var fb=document.createElement("div");
+    fb.className="fb";
+    row.appendChild(fb);
+    board.appendChild(row);
+    rows.push({el:row, rn:rn, slots:slots, fb:fb});
+  }
+  layout();
+}
+
+function buildSwatches(){
+  var wrap=$("swatches");
+  wrap.textContent="";
+  for(var c=0;c<COLORS;c++){
+    var b=document.createElement("button");
+    b.type="button"; b.className="swatch";
+    b.dataset.c=String(c);
+    b.setAttribute("aria-label", COLOR_META[c].name+" ("+COLOR_META[c].shape+"), key "+(c+1));
+    b.title=COLOR_META[c].name;
+    b.appendChild(pegEl(c));
+    var kk=document.createElement("span");
+    kk.className="kk"; kk.textContent=String(c+1);
+    b.appendChild(kk);
+    wrap.appendChild(b);
+  }
+}
+
+/* ======================================================================
+   Layout: size a single --peg unit so 11 rows (KEY + 10) fit the frame.
+   ====================================================================== */
+function layout(){
+  var wrap=$("boardWrap");
+  var w=wrap.clientWidth, h=wrap.clientHeight;
+  if(!w||!h) return;
+  /* row width  ~= rownum(.92) + gap(.34) + slots(4 + 3*.16) + gap(.34) + fb(1)
+                 = 7.02 peg, plus 2*.28 padding. Height ~= 11 peg + 10*.26 gaps
+                 + 2*.28 padding + answer border/margins (~.24). Use safe divisors. */
+  var pegW = (w - 8) / 7.35;
+  var pegH = (h - 8) / 14.1;
+  var peg = Math.floor(Math.min(pegW, pegH));
+  peg = Math.max(20, Math.min(52, peg));
+  board.style.setProperty("--peg", peg+"px");
+}
+
+/* ======================================================================
+   Rendering
+   ====================================================================== */
+function paintSlot(slotEl, color){
+  slotEl.textContent="";
+  if(color==null || color<0){
+    slotEl.classList.add("empty");
+  }else{
+    slotEl.classList.remove("empty");
+    slotEl.appendChild(pegEl(color));
+  }
+}
+
+function paintFeedback(fbEl, exact, color, animate){
+  fbEl.textContent="";
+  var kinds=[], i;
+  for(i=0;i<exact;i++) kinds.push("exact");
+  for(i=0;i<color;i++) kinds.push("color");
+  while(kinds.length<SLOTS) kinds.push("");
+  for(i=0;i<SLOTS;i++){
+    var sp=document.createElement("span");
+    sp.className="fpeg"+(kinds[i]?" "+kinds[i]:"");
+    if(animate && kinds[i]) sp.classList.add("spawn");
+    fbEl.appendChild(sp);
+  }
+}
+
+function render(){
+  var r,s;
+  var activeRow = over ? -1 : guesses.length;
+
+  for(r=0;r<MAX_GUESS;r++){
+    var row=rows[r];
+    row.el.classList.remove("active","future","solved");
+    if(r < guesses.length){
+      /* completed guess */
+      var g=guesses[r];
+      for(s=0;s<SLOTS;s++){
+        row.slots[s].classList.remove("cursor");
+        paintSlot(row.slots[s], g.pegs[s]);
+      }
+      paintFeedback(row.fb, g.exact, g.color, r===justScored);
+      if(won && r===guesses.length-1) row.el.classList.add("solved");
+    }else if(r === activeRow){
+      /* the row you're building */
+      row.el.classList.add("active");
+      for(s=0;s<SLOTS;s++){
+        paintSlot(row.slots[s], cur[s]);
+        row.slots[s].classList.toggle("cursor", s===cursor);
+      }
+      row.fb.textContent="";
+      for(s=0;s<SLOTS;s++){ var e=document.createElement("span"); e.className="fpeg"; row.fb.appendChild(e); }
+    }else{
+      /* untouched future row */
+      row.el.classList.add("future");
+      for(s=0;s<SLOTS;s++){
+        row.slots[s].classList.remove("cursor");
+        paintSlot(row.slots[s], -1);
+      }
+      row.fb.textContent="";
+      for(s=0;s<SLOTS;s++){ var e2=document.createElement("span"); e2.className="fpeg"; row.fb.appendChild(e2); }
+    }
+  }
+  justScored = -1;                 /* the pop animation is one-shot */
+
+  /* stats */
+  var used = guesses.length;
+  var shown = over ? used : Math.min(used+1, MAX_GUESS);
+  $("sTry").textContent = shown+"/"+MAX_GUESS;
+  $("sStreak").textContent = String(streak);
+  var b = best[allowDup?"dup":"nodup"];
+  $("sBest").textContent = (b==null) ? "-" : String(b);
+  var tryStat=$("sTry").parentNode;
+  tryStat.classList.toggle("hot", !over && used>=7);
+
+  /* palette + check enable state */
+  var full = (leftmostEmpty()<0);
+  var swWrap=$("swatches");
+  for(var i=0;i<swWrap.children.length;i++) swWrap.children[i].disabled = over;
+  $("bBack").disabled = over || isEmptyGuess();
+  $("bCheck").disabled = over || !full;
+}
+
+function leftmostEmpty(){
+  for(var i=0;i<SLOTS;i++) if(cur[i]<0) return i;
+  return -1;
+}
+function isEmptyGuess(){
+  for(var i=0;i<SLOTS;i++) if(cur[i]>=0) return false;
+  return true;
+}
+
+function say(msg, cls){
+  statusEl.textContent = msg;
+  statusEl.classList.remove("hi","good");
+  if(cls) statusEl.classList.add(cls);
+}
+
+/* ======================================================================
+   Input actions
+   ====================================================================== */
+function placeColor(c){
+  if(over || c<0 || c>=COLORS) return;
+  cur[cursor] = c;
+  /* animate the peg that just landed */
+  var row = rows[guesses.length];
+  if(row){
+    var slot = row.slots[cursor];
+    slot.classList.remove("pop"); void slot.offsetWidth; slot.classList.add("pop");
+  }
+  /* advance to the next empty slot (fills holes left-to-right) */
+  var nxt = leftmostEmpty();
+  cursor = (nxt<0) ? SLOTS-1 : nxt;
+  blip(360 + c*44, 0.045, "square", 0.04);
+  render();
+}
+
+function backspace(){
+  if(over) return;
+  if(cur[cursor]>=0){
+    cur[cursor] = -1;                 /* clear the slot under the cursor */
+  }else{
+    for(var i=SLOTS-1;i>=0;i--){       /* else clear the rightmost filled */
+      if(cur[i]>=0){ cur[i]=-1; cursor=i; break; }
+    }
+  }
+  blip(240,0.05,"triangle",0.045);
+  render();
+}
+
+function moveCursor(d){
+  if(over) return;
+  cursor = (cursor + d + SLOTS) % SLOTS;
+  render();
+}
+
+function setCursor(i){
+  if(over || i<0 || i>=SLOTS) return;
+  cursor = i;
+  render();
+}
+
+function submit(){
+  if(over) return;
+  if(leftmostEmpty()>=0){
+    var row=rows[guesses.length];
+    if(row){ row.el.classList.remove("shake"); void row.el.offsetWidth; row.el.classList.add("shake"); }
+    say("Fill all four slots before checking.", "hi");
+    blip(160,0.09,"sawtooth",0.05);
+    return;
+  }
+  var g = cur.slice();
+  var sc = scoreGuess(g, secret);
+  var idx = guesses.length;
+  guesses.push({pegs:g, exact:sc.exact, color:sc.color});
+  justScored = idx;                /* pop this row's feedback in on the next render (survives it) */
+
+  cur = [-1,-1,-1,-1];
+  cursor = 0;
+
+  if(sc.exact === SLOTS){ win(idx+1); return; }
+  if(guesses.length >= MAX_GUESS){ lose(); return; }
+
+  /* per-guess feedback tone: rising with exacts */
+  blip(300 + sc.exact*90, 0.06, "square", 0.05);
+  if(sc.color>0) blip(300 + sc.exact*90 + 60, 0.05, "sine", 0.035, 0.05);
+
+  render();
+  var msg = sc.exact+" exact, "+sc.color+" colour";
+  var left = MAX_GUESS - guesses.length;
+  say("Guess "+guesses.length+": "+msg+". "+left+" guess"+(left===1?"":"es")+" left.", sc.exact>=2 ? "good" : "hi");
+}
+
+/* ======================================================================
+   Reveal + end states
+   ====================================================================== */
+function revealCode(){
+  for(var s=0;s<SLOTS;s++){
+    answerSlots[s].textContent="";
+    answerSlots[s].appendChild(pegEl(secret[s]));
+  }
+  answerFb.textContent="";
+  answerRow.classList.add("reveal");
+}
+
+function win(tries){
+  over=true; won=true;
+  streak++;
+  var mode = allowDup?"dup":"nodup";
+  var prev = best[mode];
+  var isBest = (prev==null || tries<prev);
+  if(isBest) best[mode]=tries;
+  stSet("mm.best", JSON.stringify(best));
+  stSet("mm.streak", String(streak));
+
+  revealCode();
+  render();
+  say("Cracked in "+tries+" guess"+(tries===1?"":"es")+"!", "good");
+
+  blip(523.25,0.10,"square",0.05,0);
+  blip(659.25,0.10,"square",0.05,0.09);
+  blip(783.99,0.10,"square",0.05,0.18);
+  blip(1046.5,0.24,"square",0.055,0.27);
+
+  var verdict, note;
+  if(tries<=2) verdict="UNCANNY READ";
+  else if(tries<=4) verdict="SHARP DEDUCTION";
+  else if(tries<=6) verdict="CODE CRACKED";
+  else verdict="CRACKED: JUST IN TIME";
+  note = "You broke the "+(allowDup?"":"no-duplicates ")+"code in <b>"+tries+"</b> of "+MAX_GUESS+" guesses.";
+  if(isBest) note = "<b>New personal best for this mode.</b> " + note;
+  if(streak>=2) note += " Win streak: <b>"+streak+"</b>.";
+
+  showEnd("MASTERMIND", verdict, true, note, tries);
+}
+
+function lose(){
+  over=true; won=false;
+  streak=0;
+  stSet("mm.streak","0");
+  revealCode();
+  render();
+  say("Out of guesses: the code is revealed above.", "hi");
+
+  blip(392,0.12,"square",0.05,0);
+  blip(330,0.12,"square",0.05,0.11);
+  blip(262,0.28,"square",0.05,0.22);
+
+  var note = "The code is shown above. It never changed; the answer was always in reach. Start a new game and hunt it down.";
+  showEnd("MASTERMIND", "OUT OF GUESSES", false, note, MAX_GUESS);
+}
+
+function showEnd(title, verdict, isWin, note, tries){
+  $("endTitle").textContent = title;
+  var v=$("endVerdict");
+  v.textContent = verdict;
+  v.classList.toggle("win", !!isWin);
+  var cr=$("endCode");
+  cr.textContent="";
+  for(var s=0;s<SLOTS;s++){
+    var p=pegEl(secret[s]); p.classList.add("cpeg"); cr.appendChild(p);
+  }
+  $("eTry").textContent = isWin ? String(tries) : "-";
+  $("eStreak").textContent = String(streak);
+  var b = best[allowDup?"dup":"nodup"];
+  $("eBest").textContent = (b==null) ? "-" : String(b);
+  $("endNote").innerHTML = note;
+
+  if(endTimer!==null) clearTimeout(endTimer);
+  endTimer = setTimeout(function(){ endTimer=null; show($("endOverlay")); }, 780);
+}
+
+/* ======================================================================
+   Game control
+   ====================================================================== */
+function newGame(){
+  closeEnd();
+  secret = makeCode(allowDup);
+  guesses = [];
+  cur = [-1,-1,-1,-1];
+  cursor = 0;
+  over = false; won = false;
+  answerRow.classList.remove("reveal");
+  for(var s=0;s<SLOTS;s++){ answerSlots[s].textContent=""; answerSlots[s].appendChild(mysteryEl()); }
+  answerFb.textContent="?";
+  render();
+  say("New "+(allowDup?"":"no-duplicates ")+"code. Pick 4 colours, then CHECK.");
+}
+
+function setDupes(v){
+  if(v===allowDup){ newGame(); return; }
+  allowDup=v;
+  stSet("mm.dup", allowDup?"1":"0");
+  var b=$("bDupes");
+  b.textContent = "Dupes: "+(allowDup?"On":"Off");
+  b.setAttribute("aria-pressed", allowDup?"true":"false");
+  newGame();
+}
+
+/* ======================================================================
+   Overlays
+   ====================================================================== */
+function show(el){ el.classList.add("show"); }
+function hide(el){ el.classList.remove("show"); }
+function closeEnd(){
+  if(endTimer!==null){ clearTimeout(endTimer); endTimer=null; }
+  hide($("endOverlay"));
+}
+function anyOverlayOpen(){
+  return $("endOverlay").classList.contains("show") || $("helpOverlay").classList.contains("show");
+}
+function closeOverlays(){ closeEnd(); hide($("helpOverlay")); }
+function toggleHelp(){
+  var h=$("helpOverlay");
+  if(h.classList.contains("show")) hide(h); else show(h);
+}
+
+/* ======================================================================
+   Help legend (built from the same colour metadata)
+   ====================================================================== */
+function buildLegend(){
+  var wrap=$("helpLegend");
+  wrap.textContent="";
+  for(var c=0;c<COLORS;c++){
+    var li=document.createElement("div");
+    li.className="li";
+    li.appendChild(pegEl(c));
+    var t=document.createElement("span");
+    t.textContent = COLOR_META[c].name+" · "+COLOR_META[c].shape;
+    li.appendChild(t);
+    wrap.appendChild(li);
+  }
+}
+
+/* ======================================================================
+   Events
+   ====================================================================== */
+board.addEventListener("click", function(e){
+  var t = e.target.closest ? e.target.closest("button.slot") : null;
+  if(!t || !board.contains(t)) return;
+  if(over) return;
+  if(parseInt(t.dataset.r,10) !== guesses.length) return;   /* active row only */
+  setCursor(parseInt(t.dataset.s,10));
+});
+
+$("swatches").addEventListener("click", function(e){
+  var t = e.target.closest ? e.target.closest(".swatch") : null;
+  if(!t) return;
+  placeColor(parseInt(t.dataset.c,10));
+});
+
+$("bBack").addEventListener("click", backspace);
+$("bCheck").addEventListener("click", submit);
+$("bNew").addEventListener("click", newGame);
+$("bDupes").addEventListener("click", function(){ setDupes(!allowDup); });
+$("eNew").addEventListener("click", newGame);
+$("eClose").addEventListener("click", closeEnd);
+$("bHelp").addEventListener("click", toggleHelp);
+$("hClose").addEventListener("click", function(){ hide($("helpOverlay")); });
+
+$("endOverlay").addEventListener("click", function(e){ if(e.target===this) closeEnd(); });
+$("helpOverlay").addEventListener("click", function(e){ if(e.target===this) hide(this); });
+
+$("bSound").addEventListener("click", function(){
+  sound=!sound;
+  stSet("mm.sound", sound?"1":"0");
+  this.setAttribute("aria-pressed", sound?"true":"false");
+  this.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  this.style.opacity = sound ? "1" : ".45";
+  if(sound) blip(660,0.06,"sine",0.05);
+});
+
+window.addEventListener("keydown", function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  var k=e.key;
+  if(k==="Escape"){ if(anyOverlayOpen()){ e.preventDefault(); closeOverlays(); } return; }
+  if(anyOverlayOpen()){
+    /* let Enter activate a focused button inside the modal */
+    return;
+  }
+  if(k>="1" && k<="6"){ e.preventDefault(); placeColor((+k)-1); return; }
+  if(k==="Backspace" || k==="Delete"){ e.preventDefault(); backspace(); return; }
+  if(k==="ArrowLeft"){ e.preventDefault(); moveCursor(-1); return; }
+  if(k==="ArrowRight"){ e.preventDefault(); moveCursor(1); return; }
+  if(k==="Enter"){
+    var ae=document.activeElement;
+    if(ae && ae.tagName==="BUTTON") return;   /* let the focused button handle it */
+    e.preventDefault(); submit(); return;
+  }
+  var low=(k||"").toLowerCase();
+  if(low==="n"){ e.preventDefault(); newGame(); return; }
+  if(low==="h" || k==="?"){ e.preventDefault(); toggleHelp(); return; }
+});
+
+board.addEventListener("animationend", function(e){
+  if(e.animationName==="pop" && e.target.classList) e.target.classList.remove("pop");
+  if(e.animationName==="shake" && e.target.classList) e.target.classList.remove("shake");
+});
+
+window.addEventListener("resize", layout);
+try{
+  if(window.ResizeObserver) new ResizeObserver(layout).observe($("boardWrap"));
+}catch(e){}
+
+/* ======================================================================
+   Boot
+   ====================================================================== */
+(function boot(){
+  var db=$("bDupes");
+  db.textContent = "Dupes: "+(allowDup?"On":"Off");
+  db.setAttribute("aria-pressed", allowDup?"true":"false");
+  var sb=$("bSound");
+  sb.setAttribute("aria-pressed", sound?"true":"false");
+  sb.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  sb.style.opacity = sound ? "1" : ".45";
+
+  buildBoard();
+  buildSwatches();
+  buildLegend();
+  newGame();
+  requestAnimationFrame(layout);
+})();
+
+})();
+</script>
+</body>
+</html>
+
+<style id="hit-target-patch">
+/* --- hit targets (2026-09-04): control buttons to 44 tall, icon buttons 44 wide.
+   Swatches go 39->40 (not 44) with tighter gaps so the palette row still fits 374px on
+   one line: wrapping it would cost the 10-row board ~70px and shrink every slot 36->30. --- */
+@media (max-width: 900px), (pointer: coarse){
+  .btn{min-height:44px;touch-action:manipulation}
+  .btn.icon{min-width:44px}
+  #bBack{min-width:40px}
+  .swatch{width:40px;height:40px;touch-action:manipulation}
+  .swatches{gap:4px}
+  .tray{gap:6px}
+  .tray .actions{gap:4px}
+}
+</style>

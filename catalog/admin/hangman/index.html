@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Hangman: an endless word-guessing streak. Reveal the hidden word letter by letter before the gallows completes. Category hints, 1100+ words, on-screen + physical keyboard. Score = longest win streak." />
+<title>HANGMAN</title>
+<!--
+  HANGMAN: original endless-streak word game for Batchly.
+  ==========================================================================
+  DESIGN NOTES
+
+  The endless streak
+    One word at a time is drawn from a shuffled bag of 1100+ real words spread
+    across 24 hinted categories (ANIMALS, SCIENCE, SPACE, ...). Solve it and the
+    streak ticks up and the next word loads. Miss it (six wrong letters and the
+    gallows figure is complete) and the run ends. Because it is a shuffle-bag,
+    no word repeats until the whole pool has been seen, so a run is always fresh.
+
+  Fairness / no impossible puzzles
+    Every embedded word is sanitised at load: upper-cased and kept only if it is
+    3+ letters and A-Z only (no spaces, digits or punctuation), and de-duplicated
+    across categories. Anything that fails is silently dropped, so the board can
+    never present an unspellable or malformed puzzle. A category label is always
+    shown as the hint, and six wrong guesses is the classic forgiving budget, so
+    every word on offer is genuinely solvable: losing is skill, not a rigged deal.
+
+  Input
+    Guess with the on-screen A-Z keyboard (mouse + touch) or a physical keyboard.
+    Once a letter is used its key is disabled and colour-coded (green hit / struck
+    red miss) so it can never be double-counted. Nothing traps focus.
+
+  The drawing
+    A single canvas renders the gallows in a fixed 170x245 logical space, scaled
+    to fit whatever the iframe gives it (any aspect, any DPR). The scaffold is
+    always present; each wrong guess adds one body part (head, torso, two arms,
+    two legs). The sixth completes the figure and ends the run.
+
+  Leaderboard contract (host keeps each player's BEST; higher is better)
+    score = the win streak reached this run. It is posted EXACTLY once, only on a
+    genuine game over (a word finally missed), and only when the streak is > 0.
+    Winning a word never posts (the run isn't over); nothing is posted on load,
+    on restart, or on a 0-streak run. score is always a positive finite integer.
+  ==========================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --panel2:#1f1f26;
+    --bone:#f5f2e8;
+    --red:#ef3a3a;
+    --dim:#8a8778;
+    --line:#2c2c34;
+    --good:#6cd07a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);}
+  body{-webkit-tap-highlight-color:transparent;}
+  #app{
+    height:100%;display:flex;flex-direction:column;
+    color:var(--bone);
+    font-family:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  }
+
+  /* ---- HUD ---- */
+  #hud{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:8px 12px;border-bottom:2px solid var(--line);background:var(--panel);
+  }
+  .brand{font-weight:800;letter-spacing:3px;color:var(--red);font-size:clamp(15px,3.6vw,22px);white-space:nowrap;}
+  .stats{display:flex;gap:6px;}
+  .stat{
+    border:2px solid var(--line);background:var(--panel2);padding:3px 7px;
+    font-size:clamp(8px,2.2vw,11px);letter-spacing:1px;color:var(--dim);white-space:nowrap;
+  }
+  .stat b{color:var(--bone);font-size:clamp(12px,3vw,16px);margin-left:5px;}
+  .stat.lives b{color:var(--red);}
+
+  /* ---- Stage ---- */
+  #stage{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  #gallowsWrap{
+    flex:1 1 auto;min-height:0;position:relative;
+    display:flex;align-items:center;justify-content:center;padding:6px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(239,58,58,.05), transparent 60%),
+      repeating-linear-gradient(45deg, rgba(255,255,255,.012) 0 12px, transparent 12px 24px);
+  }
+  canvas#gallows{width:100%;height:100%;display:block;}
+
+  #playWrap{
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:7px;
+    padding:8px 10px 10px;border-top:2px solid var(--line);background:var(--panel);
+  }
+
+  #catRow{display:flex;align-items:center;gap:8px;font-size:clamp(9px,2.5vw,12px);letter-spacing:1px;}
+  .catlabel{color:var(--dim);}
+  #category{background:var(--bone);color:var(--bg);padding:2px 9px;font-weight:800;letter-spacing:1px;}
+
+  #wordRow{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 8px;max-width:100%;}
+  .tile{
+    width:clamp(20px,5.6vw,38px);height:clamp(28px,7.5vw,50px);
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;
+    border-bottom:3px solid var(--bone);
+    font-size:clamp(17px,4.6vw,30px);font-weight:800;line-height:1;
+  }
+  .tile.reveal{color:var(--red);border-color:var(--red);}
+  #wordRow.win .tile{color:var(--good);border-color:var(--good);}
+
+  #wrongRow{min-height:14px;font-size:clamp(8px,2.3vw,11px);letter-spacing:2px;color:var(--dim);text-align:center;}
+  #wrongRow b{color:#cc6a6a;font-weight:700;}
+  #message{min-height:16px;font-size:clamp(11px,3vw,15px);font-weight:800;letter-spacing:1px;text-align:center;}
+  #message.good{color:var(--good);}
+  #message.bad{color:var(--red);}
+
+  /* ---- Keyboard ---- */
+  #keyboard{width:100%;max-width:560px;display:flex;flex-direction:column;gap:5px;}
+  .krow{display:flex;gap:4px;justify-content:center;}
+  .key{
+    flex:1 1 0;min-width:0;height:clamp(30px,7vw,46px);
+    border:2px solid var(--bone);background:var(--panel2);color:var(--bone);
+    font-family:inherit;font-size:clamp(12px,3.4vw,18px);font-weight:800;
+    cursor:pointer;padding:0;touch-action:manipulation;user-select:none;-webkit-user-select:none;
+    transition:background .06s,color .06s,border-color .06s;
+  }
+  .key:hover:not(:disabled){background:var(--red);border-color:var(--red);color:#fff;}
+  .key:active:not(:disabled){transform:translateY(1px);}
+  .key:disabled{cursor:default;}
+  .key.hit{background:#183021;border-color:var(--good);color:var(--good);}
+  .key.miss{background:#2a1414;border-color:#5c2323;color:#7c4c4c;text-decoration:line-through;}
+  .key:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+
+  /* ---- Overlay ---- */
+  #overlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    padding:16px;background:rgba(8,8,7,.86);}
+  #overlay[hidden]{display:none;}
+  .card{
+    width:100%;max-width:440px;background:var(--panel);border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 var(--red);padding:20px;text-align:center;
+  }
+  .card[hidden]{display:none;}
+  .card h1{margin:0 0 4px;color:var(--red);letter-spacing:4px;font-size:clamp(26px,8vw,44px);}
+  .card h2{margin:0 0 6px;letter-spacing:2px;font-size:clamp(20px,6vw,32px);}
+  .card h2.over{color:var(--red);}
+  .card .sub{color:var(--dim);font-size:clamp(11px,2.9vw,13px);letter-spacing:1px;margin:0 0 12px;}
+  .answer{font-size:clamp(16px,4.4vw,24px);font-weight:800;letter-spacing:3px;color:var(--bone);margin:8px 0;word-break:break-word;}
+  .bigstreak{font-size:clamp(34px,11vw,58px);font-weight:800;color:var(--good);line-height:1;margin:4px 0;}
+  .note{color:var(--dim);font-size:clamp(10px,2.7vw,12px);letter-spacing:1px;margin:6px 0 14px;min-height:14px;}
+  .rules{text-align:left;color:var(--dim);font-size:clamp(11px,2.9vw,13px);line-height:1.75;margin:12px 0 16px;}
+  .rules b{color:var(--bone);}
+  .btn{
+    display:inline-block;border:2px solid var(--bone);background:var(--red);color:#fff;
+    font-family:inherit;font-weight:800;letter-spacing:2px;font-size:clamp(14px,4vw,18px);
+    padding:11px 26px;cursor:pointer;box-shadow:4px 4px 0 0 var(--bone);
+  }
+  .btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 0 var(--bone);}
+  .btn:focus-visible{outline:2px solid var(--red);outline-offset:3px;}
+
+  @media (min-width:820px) and (min-aspect-ratio:1/1){
+    #stage{flex-direction:row;}
+    #gallowsWrap{flex:0 0 42%;border-right:2px solid var(--line);}
+    #playWrap{flex:1 1 auto;justify-content:center;border-top:none;}
+  }
+  @media (prefers-reduced-motion:reduce){ .key{transition:none;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="brand">HANGMAN</div>
+    <div class="stats">
+      <div class="stat">STREAK<b id="streak">0</b></div>
+      <div class="stat">BEST<b id="best">0</b></div>
+      <div class="stat lives">GUESSES<b id="lives">6</b></div>
+    </div>
+  </header>
+
+  <main id="stage">
+    <section id="gallowsWrap">
+      <canvas id="gallows"></canvas>
+    </section>
+    <section id="playWrap">
+      <div id="catRow"><span class="catlabel">HINT</span><span id="category">-</span></div>
+      <div id="wordRow" aria-label="hidden word"></div>
+      <div id="wrongRow"></div>
+      <div id="message" aria-live="polite"></div>
+      <div id="keyboard" aria-label="on-screen keyboard"></div>
+    </section>
+  </main>
+
+  <div id="overlay">
+    <div class="card" id="cardStart">
+      <h1>HANGMAN</h1>
+      <p class="sub">ENDLESS WORD STREAK</p>
+      <div class="rules">
+        &#9656; A hidden word is shown as blanks with a <b>category hint</b>.<br/>
+        &#9656; Guess letters: <b>tap the keys</b> or use your keyboard.<br/>
+        &#9656; Reveal the whole word to <b>bank it</b> and move on. Streak +1.<br/>
+        &#9656; <b>Six wrong letters</b> completes the gallows and ends the run.<br/>
+        &#9656; Your score is the <b>longest streak</b> you reach; higher is better.
+      </div>
+      <button class="btn" id="btnStart" type="button">START</button>
+    </div>
+    <div class="card" id="cardOver" hidden>
+      <h2 class="over">GAME OVER</h2>
+      <p class="sub">the word was</p>
+      <div class="answer" id="oword">-</div>
+      <p class="sub" style="margin:14px 0 0">FINAL STREAK</p>
+      <div class="bigstreak" id="ostreak">0</div>
+      <p class="note" id="onote"></p>
+      <button class="btn" id="btnAgain" type="button">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ------------------------------------------------------------------ *
+   *  WORD BANK:  24 categories, space-separated single words.          *
+   *  Sanitised at load (A-Z only, 3+ chars, de-duplicated).            *
+   * ------------------------------------------------------------------ */
+  var CATS = [
+    {name:'ANIMALS', s:'elephant giraffe kangaroo cheetah leopard panther gorilla chimpanzee orangutan hedgehog squirrel raccoon badger otter beaver walrus buffalo bison antelope gazelle zebra camel llama alpaca donkey rabbit hamster gerbil ferret weasel mongoose meerkat armadillo anteater sloth koala wombat platypus possum lemur baboon jaguar cougar bobcat ocelot caribou moose reindeer wolverine coyote jackal hyena dingo tiger panda wolf deer mouse mole shrew hare hippo rhino mammoth'},
+    {name:'BIRDS', s:'eagle falcon hawk osprey vulture condor owl sparrow finch canary parrot macaw cockatoo parakeet penguin ostrich emu flamingo pelican heron stork crane swan goose mallard seagull albatross puffin woodpecker cardinal magpie raven crow pigeon turkey peacock pheasant quail partridge hummingbird kingfisher toucan nightingale warbler starling swallow cuckoo dove wren robin'},
+    {name:'SEA LIFE', s:'octopus squid jellyfish starfish seahorse stingray swordfish barracuda piranha catfish salmon trout herring mackerel sardine anchovy halibut flounder marlin urchin lobster crab shrimp oyster mussel scallop dolphin whale narwhal manatee seal plankton coral anemone barnacle clam cuttlefish eel tuna pufferfish angelfish clownfish guppy minnow sturgeon mako hammerhead orca dugong krill prawn'},
+    {name:'INSECTS', s:'butterfly dragonfly grasshopper beetle ladybug mosquito hornet wasp bumblebee caterpillar centipede millipede scorpion tarantula spider moth termite mantis cicada firefly ant aphid weevil locust cockroach earwig silverfish gnat flea tick maggot larva'},
+    {name:'FRUIT', s:'apple banana orange grape mango papaya pineapple strawberry blueberry raspberry blackberry cranberry cherry peach plum apricot nectarine watermelon cantaloupe honeydew kiwi lemon lime grapefruit coconut pomegranate guava lychee fig date pear persimmon tangerine clementine gooseberry currant mulberry avocado tomato'},
+    {name:'VEGETABLES', s:'carrot potato broccoli cauliflower spinach lettuce cabbage celery cucumber zucchini eggplant pepper onion garlic ginger radish turnip beetroot parsnip pumpkin squash asparagus artichoke mushroom corn pea bean lentil chickpea kale leek shallot okra rhubarb watercress endive chard fennel'},
+    {name:'FOOD', s:'pizza burger sandwich spaghetti lasagna noodle dumpling pancake waffle omelette pretzel popcorn pudding custard brownie muffin biscuit cracker croissant bagel doughnut cupcake cookie sausage bacon pickle mustard ketchup vinegar cinnamon chocolate caramel honey yogurt cheese butter cereal oatmeal porridge risotto curry taco burrito nacho sushi ramen gnocchi ravioli pastry meatball salad soup stew gravy'},
+    {name:'COUNTRIES', s:'canada brazil france germany spain italy portugal greece sweden norway finland denmark poland austria hungary ireland iceland belgium netherlands switzerland russia china japan india thailand vietnam indonesia malaysia singapore mongolia egypt morocco kenya nigeria ethiopia ghana tanzania uganda senegal algeria tunisia mexico argentina chile peru colombia venezuela ecuador uruguay paraguay bolivia australia pakistan bangladesh philippines ukraine romania croatia serbia'},
+    {name:'CITIES', s:'paris london tokyo madrid berlin rome athens cairo moscow sydney toronto chicago boston seattle denver dallas houston miami atlanta dublin lisbon vienna prague warsaw budapest helsinki oslo stockholm amsterdam brussels geneva zurich munich hamburg venice florence naples barcelona seville valencia bangkok jakarta manila mumbai delhi shanghai beijing seoul osaka nairobi casablanca montreal vancouver calgary glasgow edinburgh manchester liverpool'},
+    {name:'SPORTS', s:'soccer football baseball basketball hockey tennis cricket golf rugby volleyball badminton boxing wrestling fencing archery cycling rowing sailing surfing skiing snowboarding skating swimming diving gymnastics athletics marathon sprint hurdles javelin discus curling lacrosse handball softball bowling billiards snooker darts karate judo taekwondo kayaking climbing triathlon decathlon polo'},
+    {name:'MUSIC', s:'guitar piano violin cello trumpet trombone clarinet flute oboe bassoon saxophone harp banjo mandolin ukulele drums cymbal tambourine xylophone harmonica accordion bagpipes fiddle sitar melody harmony rhythm tempo chord octave lyric verse chorus ballad anthem symphony concerto sonata opera jazz blues reggae soprano tenor baritone treble crescendo'},
+    {name:'SCIENCE', s:'atom molecule electron proton neutron gravity energy momentum velocity friction magnet voltage current circuit photon quantum isotope element compound reaction catalyst acid alkaline oxygen hydrogen carbon nitrogen helium calcium sodium chlorine sulfur mercury cell nucleus membrane enzyme protein chromosome bacteria virus fossil mineral crystal density pressure spectrum radiation frequency amplitude gene mitosis osmosis ecosystem organism evolution'},
+    {name:'SPACE', s:'planet comet asteroid meteor galaxy nebula universe cosmos orbit satellite telescope astronaut rocket spacecraft eclipse solstice equinox crater meteorite supernova quasar pulsar constellation meteoroid venus earth mars jupiter saturn uranus neptune pluto moon sun star cosmonaut lunar solar celestial interstellar astronomy spacesuit observatory'},
+    {name:'NATURE', s:'mountain valley canyon plateau prairie meadow forest jungle desert glacier volcano waterfall river stream lake ocean island peninsula continent wetland swamp marsh tundra savanna rainforest cliff cave cavern geyser hill plain delta estuary lagoon reef dune oasis iceberg horizon sunrise sunset summit ridge gorge fjord bay coast shore'},
+    {name:'WEATHER', s:'rain snow sleet hail thunder lightning storm tornado hurricane blizzard drizzle downpour fog mist breeze gust cyclone monsoon typhoon drought flood humidity temperature forecast overcast sunshine cloudy windy frost dew rainbow showers tempest'},
+    {name:'BODY', s:'skeleton muscle tendon ligament cartilage spine vertebra rib skull jaw collarbone shoulder elbow wrist knuckle finger thumb palm knee ankle heel toe shin thigh hip pelvis femur tibia kidney liver lung heart stomach intestine pancreas bladder artery vein nerve brain eyebrow eyelash nostril tongue throat tonsil forehead cheek chin temple wrinkle'},
+    {name:'JOBS', s:'teacher doctor nurse engineer architect lawyer plumber electrician carpenter mechanic farmer fisherman chef baker butcher waiter cashier librarian journalist photographer painter sculptor musician dancer actor director producer pilot sailor soldier firefighter detective scientist astronomer geologist biologist chemist dentist surgeon veterinarian pharmacist accountant banker merchant tailor jeweler blacksmith welder gardener janitor surveyor professor translator programmer'},
+    {name:'CLOTHING', s:'shirt trousers jacket sweater hoodie cardigan blouse skirt dress jeans shorts socks gloves scarf mittens beanie cap hat coat raincoat overcoat blazer waistcoat vest pajamas slippers sandals sneakers boots loafers heels belt tie bowtie apron poncho kimono robe gown tuxedo uniform jumper leggings dungarees bandana'},
+    {name:'HOME', s:'sofa couch armchair table chair stool dresser wardrobe cabinet cupboard shelf bookcase mattress pillow blanket curtain carpet rug lamp chandelier mirror painting clock vase kettle toaster blender microwave oven stove fridge freezer dishwasher faucet sink bathtub shower toilet towel bucket broom mop vacuum dustpan ladder hammer screwdriver wrench pliers drawer doorknob hinge staircase fireplace mantelpiece'},
+    {name:'TECH', s:'computer laptop monitor keyboard printer scanner router modem server processor memory software hardware browser website internet network database algorithm password download upload firewall bluetooth ethernet pixel screen webcam speaker microphone charger battery adapter cable joystick console cartridge smartphone tablet application program encryption bandwidth transistor semiconductor'},
+    {name:'VEHICLES', s:'airplane helicopter motorcycle bicycle tricycle scooter truck tractor bulldozer excavator ambulance firetruck submarine sailboat canoe kayak ferry tanker freighter yacht gondola hovercraft glider blimp zeppelin train subway tram trolley carriage wagon chariot rickshaw forklift snowmobile jetski dinghy catamaran schooner minivan limousine convertible hatchback'},
+    {name:'COLORS', s:'crimson scarlet maroon magenta violet purple indigo turquoise teal cyan azure navy cobalt emerald olive amber golden mustard beige ivory cream tan bronze copper silver charcoal slate lavender lilac burgundy mauve fuchsia khaki chartreuse vermilion ochre sepia'},
+    {name:'PLANTS', s:'oak maple birch willow cedar spruce pine fir redwood sequoia sycamore chestnut walnut hazel poplar aspen juniper cypress magnolia dogwood hawthorn elm beech alder mahogany teak bamboo fern moss ivy cactus orchid tulip daisy rose lily daffodil sunflower marigold jasmine hyacinth petunia dandelion clover thistle nettle bramble sapling seedling'},
+    {name:'EMOTIONS', s:'joy anger sadness fear surprise disgust excitement boredom anxiety jealousy envy pride shame guilt gratitude hope despair delight contentment frustration curiosity nostalgia loneliness affection sympathy empathy courage confidence embarrassment relief serenity euphoria melancholy resentment compassion'}
+  ];
+
+  /* Build + sanitise the pool. */
+  var pool = [], seen = Object.create(null);
+  for (var ci=0; ci<CATS.length; ci++){
+    var parts = CATS[ci].s.split(/\s+/);
+    for (var wi=0; wi<parts.length; wi++){
+      var w = parts[wi].toUpperCase();
+      if (!/^[A-Z]{3,}$/.test(w)) continue;   // reject malformed / too-short
+      if (seen[w]) continue;                  // global de-dup
+      seen[w] = true;
+      pool.push({ w:w, cat:CATS[ci].name });
+    }
+  }
+  if (pool.length === 0) pool.push({ w:'BATCHLY', cat:'GENERAL' }); // impossible, but never crash
+
+  /* ------------------------------------------------------------------ *
+   *  Shuffle-bag: no repeats until the whole pool is exhausted.        *
+   * ------------------------------------------------------------------ */
+  var bag = [], bagIdx = 0;
+  function refillBag(){
+    bag = pool.slice();
+    for (var i=bag.length-1; i>0; i--){
+      var j = (Math.random()*(i+1))|0;
+      var t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+    }
+    // avoid the tiny chance the new bag opens with the word that just ended
+    if (bag.length > 1 && cur && bag[0].w === cur.w){
+      var t2 = bag[0]; bag[0] = bag[1]; bag[1] = t2;
+    }
+    bagIdx = 0;
+  }
+  function nextEntry(){
+    if (bagIdx >= bag.length) refillBag();
+    return bag[bagIdx++];
+  }
+
+  /* ------------------------------------------------------------------ */
+  var MAX_WRONG = 6;
+  var BASE_W = 170, BASE_H = 245;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var streakEl=$('streak'), bestEl=$('best'), livesEl=$('lives');
+  var categoryEl=$('category'), wordRow=$('wordRow'), wrongRow=$('wrongRow'), messageEl=$('message');
+  var keyboardEl=$('keyboard'), stage=$('stage'), gallowsWrap=$('gallowsWrap');
+  var overlay=$('overlay'), cardStart=$('cardStart'), cardOver=$('cardOver');
+  var btnStart=$('btnStart'), btnAgain=$('btnAgain');
+  var owordEl=$('oword'), ostreakEl=$('ostreak'), onoteEl=$('onote');
+  var canvas=$('gallows'), ctx=canvas.getContext('2d');
+
+  var state='start';          // 'start' | 'play' | 'won' | 'over'
+  var cur=null;               // {w, cat}
+  var guessed=null;           // Set of guessed letters
+  var wrong=0;                // wrong-guess count
+  var missed=[];              // wrong letters, in order
+  var streak=0, best=0, submitted=false;
+  var winTimer=0, wonAt=0;
+  var keyEls=Object.create(null);
+
+  try { best = Math.max(0, parseInt(localStorage.getItem('batchly-hangman-best')||'0',10)||0); } catch(e){}
+
+  /* ---- Build the on-screen keyboard once ---- */
+  (function buildKeyboard(){
+    var rows=['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+    for (var r=0;r<rows.length;r++){
+      var row=document.createElement('div'); row.className='krow';
+      for (var k=0;k<rows[r].length;k++){
+        var L=rows[r][k];
+        var b=document.createElement('button');
+        b.type='button'; b.className='key'; b.textContent=L;
+        b.setAttribute('aria-label','guess '+L);
+        b.dataset.letter=L;
+        row.appendChild(b);
+        keyEls[L]=b;
+      }
+      keyboardEl.appendChild(row);
+    }
+    keyboardEl.addEventListener('click', function(e){
+      var b=e.target.closest('.key');
+      if(!b) return;
+      var L=b.dataset.letter;
+      if(state==='play'){ b.blur(); guess(L); }
+    });
+  })();
+
+  /* ------------------------------------------------------------------ *
+   *  Rendering                                                         *
+   * ------------------------------------------------------------------ */
+  function renderWord(revealAll){
+    wordRow.innerHTML='';
+    wordRow.classList.toggle('win', state==='won');
+    for (var i=0;i<cur.w.length;i++){
+      var ch=cur.w[i];
+      var t=document.createElement('div');
+      t.className='tile';
+      var show = revealAll || guessed.has(ch);
+      if (revealAll && !guessed.has(ch)) t.className+=' reveal';
+      t.textContent = show ? ch : '';
+      wordRow.appendChild(t);
+    }
+  }
+  function renderMissed(){
+    if (missed.length===0){ wrongRow.innerHTML=''; return; }
+    wrongRow.innerHTML = 'MISSED &nbsp;<b>'+missed.join(' ')+'</b>';
+  }
+  function updateHud(){ streakEl.textContent=streak; bestEl.textContent=best; livesEl.textContent=(MAX_WRONG-wrong); }
+  function setMsg(text, cls){ messageEl.textContent=text||''; messageEl.className = cls?cls:''; }
+
+  function resetKeys(){
+    for (var L in keyEls){
+      var b=keyEls[L]; b.disabled=false; b.classList.remove('hit','miss');
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Canvas: the gallows                                               *
+   * ------------------------------------------------------------------ */
+  function ln(a,b,c,d){ ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); }
+  function drawFace(cx,cy,dead){
+    ctx.save();
+    ctx.lineWidth=2.4;
+    ctx.strokeStyle = dead ? '#ef3a3a' : '#f5f2e8';
+    if (dead){
+      ln(cx-7,cy-6,cx-2,cy-1); ln(cx-2,cy-6,cx-7,cy-1);   // X
+      ln(cx+2,cy-6,cx+7,cy-1); ln(cx+7,cy-6,cx+2,cy-1);   // X
+      ctx.beginPath(); ctx.arc(cx,cy+9,4.5,Math.PI*1.15,Math.PI*1.85); ctx.stroke(); // frown
+    } else {
+      ctx.fillStyle='#f5f2e8';
+      ctx.beginPath(); ctx.arc(cx-5,cy-3,1.6,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+5,cy-3,1.6,0,Math.PI*2); ctx.fill();
+      ln(cx-5,cy+6,cx+5,cy+6); // neutral mouth
+    }
+    ctx.restore();
+  }
+  function draw(){
+    var cw=canvas.width, ch=canvas.height;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,cw,ch);
+    if (cw<4||ch<4) return;
+    var s=Math.min(cw/BASE_W, ch/BASE_H)*0.92;
+    var ox=(cw-BASE_W*s)/2, oy=(ch-BASE_H*s)/2;
+    ctx.setTransform(s,0,0,s,ox,oy);
+    ctx.lineCap='round'; ctx.lineJoin='round';
+
+    var dead = (state==='over');
+    var wc = (cur ? wrong : 0);
+
+    // scaffold (always present)
+    ctx.strokeStyle='#6a675c'; ctx.lineWidth=6;
+    ln(15,228,120,228);   // base
+    ln(38,228,38,16);     // upright
+    ln(36,16,126,16);     // beam
+    ln(38,44,66,16);      // brace
+    ctx.strokeStyle='#b9a06a'; ctx.lineWidth=4;
+    ln(124,16,124,42);    // rope
+
+    // figure
+    var col = dead ? '#ef3a3a' : '#f5f2e8';
+    ctx.strokeStyle=col; ctx.lineWidth=5;
+    if (wc>=1){ ctx.beginPath(); ctx.arc(124,57,15,0,Math.PI*2); ctx.stroke(); drawFace(124,57,dead); ctx.strokeStyle=col; ctx.lineWidth=5; }
+    if (wc>=2) ln(124,72,124,135);   // torso
+    if (wc>=3) ln(124,86,104,112);   // left arm
+    if (wc>=4) ln(124,86,144,112);   // right arm
+    if (wc>=5) ln(124,135,107,167);  // left leg
+    if (wc>=6) ln(124,135,141,167);  // right leg
+  }
+
+  function fit(){
+    var r=canvas.getBoundingClientRect();
+    if (r.width<1||r.height<1) return;
+    var dpr=Math.min(window.devicePixelRatio||1, 2);
+    var w=Math.max(1,Math.round(r.width*dpr)), h=Math.max(1,Math.round(r.height*dpr));
+    if (w!==canvas.width||h!==canvas.height){ canvas.width=w; canvas.height=h; }
+    draw();
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Game flow                                                         *
+   * ------------------------------------------------------------------ */
+  function guess(L){
+    if (state!=='play') return;
+    if (guessed.has(L)) return;
+    guessed.add(L);
+    var b=keyEls[L]; if(b) b.disabled=true;
+    if (cur.w.indexOf(L) >= 0){
+      if(b) b.classList.add('hit');
+      renderWord(false);
+      // win?
+      var won=true;
+      for (var i=0;i<cur.w.length;i++){ if(!guessed.has(cur.w[i])){ won=false; break; } }
+      if (won) onWin();
+    } else {
+      if(b) b.classList.add('miss');
+      wrong++; missed.push(L);
+      renderMissed(); updateHud(); draw();
+      if (wrong>=MAX_WRONG) onLose();
+    }
+  }
+
+  function onWin(){
+    state='won';
+    streak++;
+    if (streak>best){ best=streak; try{ localStorage.setItem('batchly-hangman-best',String(best)); }catch(e){} }
+    updateHud();
+    renderWord(false);                 // shows in green (win class)
+    setMsg('SOLVED!  +1.  Next word', 'good');
+    wonAt = (window.performance&&performance.now)?performance.now():Date.now();
+    clearTimeout(winTimer);
+    winTimer = setTimeout(advance, 1250);
+  }
+
+  function advance(){
+    if (state!=='won') return;
+    clearTimeout(winTimer);
+    newWord();
+  }
+
+  function onLose(){
+    state='over';
+    renderWord(true);                  // reveal the answer in red
+    draw();                            // final figure, dead colours
+    setMsg('THE WORD WAS ' + cur.w, 'bad');
+    // ---- leaderboard: post ONCE, only on a real game over, only if streak>0 ----
+    if (!submitted && streak>0 && isFinite(streak)){
+      submitted=true;
+      try { window.parent.postMessage({ type:'batchly-score', score:streak }, '*'); } catch(e){}
+    }
+    showOver();
+  }
+
+  function newWord(){
+    cur = nextEntry();
+    guessed = new Set();
+    wrong = 0; missed = [];
+    state = 'play';
+    categoryEl.textContent = cur.cat;
+    resetKeys();
+    renderWord(false);
+    renderMissed();
+    updateHud();
+    setMsg('', '');
+    draw();
+  }
+
+  function newRun(){
+    streak = 0; submitted = false;
+    clearTimeout(winTimer);
+    hideOverlay();
+    newWord();
+  }
+
+  /* ---- Overlays ---- */
+  function hideOverlay(){ overlay.hidden = true; }
+  function showStart(){
+    cardStart.hidden=false; cardOver.hidden=true; overlay.hidden=false;
+    try{ btnStart.focus(); }catch(e){}
+  }
+  function showOver(){
+    owordEl.textContent = cur.w;
+    ostreakEl.textContent = streak;
+    if (streak>0){
+      onoteEl.textContent = submitted
+        ? 'Streak of ' + streak + ' sent to the leaderboard.'
+        : 'Streak of ' + streak + '.';
+    } else {
+      onoteEl.textContent = 'No streak this run: solve a word to score.';
+    }
+    cardStart.hidden=true; cardOver.hidden=false; overlay.hidden=false;
+    try{ btnAgain.focus(); }catch(e){}
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  Input                                                             *
+   * ------------------------------------------------------------------ */
+  window.addEventListener('keydown', function(e){
+    if (e.repeat) return;
+    var k=e.key;
+    if (state==='play'){
+      if (/^[a-zA-Z]$/.test(k)){ guess(k.toUpperCase()); }
+      return;
+    }
+    if (state==='won'){ advance(); return; }
+    if (state==='over'){ if(k==='Enter'||k===' '){ e.preventDefault(); newRun(); } return; }
+    if (state==='start'){ if(k==='Enter'||k===' '){ e.preventDefault(); startFromTitle(); } return; }
+  });
+
+  // tap the board (not a key) during the win pause to jump ahead
+  stage.addEventListener('click', function(e){
+    if (state==='won' && !e.target.closest('.key')) advance();
+  });
+
+  btnStart.addEventListener('click', startFromTitle);
+  btnAgain.addEventListener('click', newRun);
+
+  function startFromTitle(){ newRun(); }
+
+  /* ---- Sizing ---- */
+  if (window.ResizeObserver){
+    try { new ResizeObserver(fit).observe(canvas); } catch(e){}
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', function(){ setTimeout(fit,150); });
+
+  /* ------------------------------------------------------------------ *
+   *  Boot                                                              *
+   * ------------------------------------------------------------------ */
+  bestEl.textContent = best;
+  // a placeholder word so the scaffold draws behind the title card
+  cur = pool[0]; guessed = new Set(); wrong = 0;
+  categoryEl.textContent = '-';
+  fit();
+  showStart();
+})();
+</script>
+<style data-mobile-hit-fit>
+  /* Touch fit: 30px keys -> 44px tall (gallows is flex:1 and absorbs the 42px). Width is bounded by ten QWERTY keys across 390px; trimming the row gap/padding buys ~35px, the most the layout allows. */
+  @media (max-width: 900px), (pointer: coarse){
+    .key{ min-height:44px; }
+    .krow{ gap:3px; }
+    #playWrap{ padding-left:6px; padding-right:6px; }
+    .card .btn{ min-height:44px; touch-action:manipulation; }
+  }
+</style>
+</body>
+</html>

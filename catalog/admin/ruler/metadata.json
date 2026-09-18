@@ -1,0 +1,20 @@
+{
+  "folder": "admin/ruler",
+  "title": "Ruler",
+  "description": "A calibrated on-screen ruler in cm and inches. Calibrate against a card or coin so the measurements are real.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/ruler",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 55644,
+      "sha256": "2409470d8d5becbcdee7468dcb8488676d1128d47790cbf7e8da52476163acfc",
+      "source": "published catalog HTML"
+    }
+  ]
+}

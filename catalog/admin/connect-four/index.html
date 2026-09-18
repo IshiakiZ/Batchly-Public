@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Connect Four: drop discs into a 7×6 grid and line up four in a row before the computer does. Minimax AI with three difficulties. Vs the computer, so no score is posted." />
+<title>CONNECT FOUR</title>
+<!--
+  CONNECT FOUR: an original four-in-a-row drop game vs the computer, for Batchly.
+  ============================================================================
+  DESIGN NOTES
+
+  The game
+    A 7-column by 6-row grid stands on end. You (RED) and the computer (AMBER)
+    take turns dropping a disc into a column; it falls to the lowest empty slot.
+    The first side to line up FOUR of its own discs in a row (horizontally,
+    vertically, or on either diagonal) wins, and the winning line is lit up. If
+    all 42 slots fill with no four-in-a-row, it's a draw. It is a 1-v-1 versus
+    the computer, so there is NO leaderboard: this file NEVER posts a
+    `batchly-score` message to the parent frame. Local win/loss/draw tallies are
+    kept in localStorage purely for your own bragging rights.
+
+  The AI  (a real opponent: minimax + alpha-beta, threat-aware)
+    The computer searches the game tree with negamax + alpha-beta pruning, using
+    iterative deepening under a small time budget so it always returns a legal
+    move quickly and never hangs the tab. Leaf positions are scored by a
+    threat-based heuristic that counts every 4-in-a-window: three-of-mine-plus-a-
+    gap is a strong plus, an opponent's three-plus-a-gap is a strong minus (so it
+    values BLOCKING), with centre-column control weighted on top. A move that
+    makes four wins immediately; a faster win outranks a slower one, and a slower
+    loss outranks a quick one, so it presses real wins and delays real losses.
+      - EASY   shallow search + frequent random "blunders"; clearly beatable.
+      - MEDIUM a solid mid-depth search that blocks obvious threats.
+      - HARD   a deep, near-perfect search that punishes mistakes.
+    Every difficulty always grabs an immediate winning move if you hand it one,
+    and only ever considers columns that aren't full, so it can never play an
+    illegal move.
+
+  Rendering
+    Everything is drawn on a single <canvas> in code: no images, no fonts, no
+    network. The disc is animated falling into place with gravity and a couple of
+    small settling bounces (skipped under prefers-reduced-motion). Positions are
+    stored in scale-independent "cell units", so a resize mid-drop never desyncs
+    the animation. A live region announces turns and results for screen readers.
+
+  Controls
+    Mouse: hover to aim, click a column to drop. Touch: tap a column. Keyboard:
+    ◀ ▶ move the aim, ▼ / Space / Enter drop, number keys 1–7 drop directly,
+    R new game, M mute. Focus is never trapped.
+  ============================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --inset:#0c0c0f;
+    --board:#141419;
+    --hole:#0b0b0e;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --red:#ef3a3a;
+    --amber:#f5b23a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-size-adjust:100%;
+  }
+
+  #app{
+    height:100%;
+    display:flex; flex-direction:column; gap:8px;
+    padding:8px;
+  }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    position:relative; z-index:30;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px;
+  }
+  #brand{
+    display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:700; letter-spacing:.16em;
+    padding:0 4px 0 2px; white-space:nowrap;
+  }
+  #brand i{ width:11px; height:11px; background:var(--red); display:block; }
+  .group{ display:flex; align-items:center; gap:6px; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+
+  button{
+    font-family:var(--mono);
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    background:#22222a; color:var(--bone);
+    border:2px solid var(--bone); border-radius:0;
+    padding:6px 9px; margin:0; cursor:pointer;
+    box-shadow:3px 3px 0 0 #000;
+    transition:transform .06s ease, box-shadow .06s ease, background .1s ease;
+    white-space:nowrap;
+  }
+  button:hover{ background:#2f2f3a; }
+  button:active{ transform:translate(3px,3px); box-shadow:0 0 0 0 #000; }
+  button[aria-pressed="true"]{ background:var(--red); color:#10100e; }
+  button[aria-pressed="true"]:hover{ background:#ff4a4a; }
+  button:disabled{ opacity:.4; cursor:not-allowed; box-shadow:2px 2px 0 0 #000; }
+  button:disabled:hover{ background:#22222a; }
+  button:focus-visible{ outline:2px solid var(--red); outline-offset:3px; }
+
+  /* whose-turn readout */
+  .turn{
+    display:flex; align-items:center; gap:8px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:5px 10px; white-space:nowrap;
+  }
+  .turn .swatch{ width:14px; height:14px; border-radius:50%; display:block; border:2px solid rgba(0,0,0,.4); flex:0 0 auto; }
+  .turn .swatch.you{ background:var(--red); }
+  .turn .swatch.cpu{ background:var(--amber); }
+  .turn .swatch.none{ background:var(--line2); }
+  .turn b{ font-size:11px; letter-spacing:.1em; }
+  .turn.thinking .swatch{ animation:pulseSw .7s ease-in-out infinite; }
+  @keyframes pulseSw{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
+  /* session tally */
+  .tally{
+    display:flex; align-items:center; gap:9px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:4px 10px;
+  }
+  .tally .cell{ display:flex; flex-direction:column; align-items:center; line-height:1.05; }
+  .tally .cell span{ font-size:8px; letter-spacing:.14em; color:var(--mute); }
+  .tally .cell b{ font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .tally .cell.w b{ color:var(--red); }
+  .tally .cell.l b{ color:var(--amber); }
+  .tally .cell.d b{ color:var(--bone); }
+  .tally .cell b.bump{ animation:bump .3s ease; }
+  @keyframes bump{ 0%{ transform:scale(1); } 40%{ transform:scale(1.5); } 100%{ transform:scale(1); } }
+
+  /* ---------- board area ---------- */
+  #wrap{
+    flex:1 1 auto; min-height:0;
+    display:flex;
+    background:var(--inset); border:2px solid var(--line);
+    padding:8px;
+    overflow:hidden;
+  }
+  canvas{
+    display:block; margin:auto;
+    background:transparent;
+    touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    outline:none; cursor:pointer;
+  }
+
+  /* ---------- footer ---------- */
+  #foot{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:8px 10px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  #status{
+    font-size:12px; font-weight:700; letter-spacing:.08em;
+    display:flex; align-items:center; gap:8px; min-width:0;
+  }
+  #status .ok{ color:var(--red); }
+  #status .cpu{ color:var(--amber); }
+  #status .draw{ color:var(--bone); }
+  #status .tag{ color:var(--mute); font-weight:400; letter-spacing:.05em; }
+  .legend{ display:flex; align-items:center; gap:12px; font-size:9px; letter-spacing:.12em; color:var(--mute); }
+  .legend b{ display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--bone); }
+  .legend b i{ width:11px; height:11px; border-radius:50%; display:block; }
+  .legend b.you i{ background:var(--red); }
+  .legend b.cpu i{ background:var(--amber); }
+  #help{
+    flex:1 1 240px; min-width:0;
+    font-size:10px; line-height:1.55; color:var(--mute); letter-spacing:.02em;
+  }
+  #help b{ color:var(--bone); font-weight:700; }
+  #help kbd{
+    font-family:var(--mono); font-size:10px; color:var(--bone);
+    background:var(--inset); border:1px solid var(--line2);
+    padding:0 4px; margin:0 1px;
+  }
+  #help .sep{ color:#4d4d5c; padding:0 3px; }
+
+  .sr{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+  /* ---------- overlay ---------- */
+  #over{
+    position:fixed; inset:0; z-index:20;
+    display:none; place-items:center;
+    background:rgba(8,8,10,.82);
+    padding:16px;
+  }
+  #over.show{ display:grid; }
+  #card{
+    width:100%; max-width:430px;
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 #000;
+    padding:18px 16px 16px;
+    text-align:center;
+  }
+  #ovTitle{ font-size:27px; font-weight:700; letter-spacing:.14em; margin:0 0 2px; line-height:1.1; }
+  #ovSub{ font-size:10px; letter-spacing:.16em; color:var(--mute); margin-bottom:14px; }
+  .rows{ border:2px solid var(--line2); background:var(--inset); margin-bottom:12px; text-align:left; }
+  .row{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 11px; }
+  .row + .row{ border-top:2px solid var(--line2); }
+  .row .k{ font-size:9px; letter-spacing:.16em; color:var(--mute); }
+  .row .v{ font-size:15px; font-weight:700; letter-spacing:.04em; font-variant-numeric:tabular-nums; }
+  .row .v.you{ color:var(--red); }
+  .row .v.cpu{ color:var(--amber); }
+  #ovNote{ font-size:10px; line-height:1.6; color:var(--mute); letter-spacing:.03em; margin-bottom:13px; }
+  #ovNote b{ color:var(--bone); font-weight:700; }
+  #ovNote .ok{ color:var(--red); font-weight:700; }
+  #ovBtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  #ovBtns button{ font-size:12px; padding:9px 16px; }
+  #ovPrimary{ background:var(--red); color:#10100e; }
+  #ovPrimary:hover{ background:#ff4a4a; }
+
+  @media (max-width:640px){ #brand span{ display:none; } #help .extra{ display:none; } }
+  @media (max-width:520px){ .legend #legend-tip{ display:none; } }
+  @media (prefers-reduced-motion:reduce){
+    button, .tally .cell b.bump, .turn.thinking .swatch{ transition:none; animation:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="bar">
+    <div id="brand"><i></i><span>CONNECT FOUR</span></div>
+
+    <div class="group">
+      <button id="diff"  title="Computer difficulty">CPU: MEDIUM</button>
+      <button id="first" title="Who drops first next game">YOU FIRST</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="turn" id="turnBox" aria-hidden="true">
+      <span class="swatch you" id="turnSw"></span>
+      <b id="turnTxt">YOUR TURN</b>
+    </div>
+
+    <div class="tally" title="This session: your wins / losses / draws">
+      <div class="cell w"><span>WON</span><b id="tW">0</b></div>
+      <div class="cell l"><span>LOST</span><b id="tL">0</b></div>
+      <div class="cell d"><span>DREW</span><b id="tD">0</b></div>
+    </div>
+
+    <div class="group">
+      <button id="mute" aria-pressed="false" title="Mute / unmute (M)">SOUND</button>
+      <button id="newg" title="New game (R)">NEW</button>
+    </div>
+  </header>
+
+  <main id="wrap">
+    <canvas id="board" aria-label="Connect Four board, 7 columns by 6 rows. Use left and right arrows to aim, then down or Enter to drop a disc."></canvas>
+  </main>
+
+  <footer id="foot">
+    <div id="status" role="status" aria-live="polite"></div>
+    <div class="legend" aria-hidden="true">
+      <b class="you"><i></i>YOU</b>
+      <b class="cpu"><i></i>CPU</b>
+      <span id="legend-tip">four in a row wins</span>
+    </div>
+    <div id="help">
+      <b>DROP</b> click / tap a column <span class="extra"><span class="sep">&middot;</span> <kbd>&#9664;</kbd><kbd>&#9654;</kbd> aim <span class="sep">&middot;</span> <kbd>&#9660;</kbd>/<kbd>Space</kbd> drop <span class="sep">&middot;</span> <kbd>1</kbd>&ndash;<kbd>7</kbd> column</span>
+      <span class="sep">&middot;</span> <b>NEW</b> <kbd>R</kbd>
+      <br>
+      Line up <b>four of your discs</b> in a row (across, down, or diagonally) before the computer does. Versus the CPU, so no leaderboard.
+    </div>
+  </footer>
+
+</div>
+
+<div id="over" role="dialog" aria-modal="false" aria-labelledby="ovTitle">
+  <div id="card">
+    <div id="ovTitle">CONNECT FOUR</div>
+    <div id="ovSub">STRATEGY · FOUR IN A ROW VS CPU</div>
+    <div class="rows" id="ovRows"></div>
+    <div id="ovNote"></div>
+    <div id="ovBtns">
+      <button id="ovPrimary">START GAME</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ==================================================================
+  // Board dimensions
+  // ==================================================================
+  var COLS = 7, ROWS = 6, NEED = 4;
+  var SIZE = COLS * ROWS;                 // 42 slots
+  // Internal coordinates: column 0..6, row 0 = BOTTOM row .. row 5 = top.
+  // Flat index for (col,row) = col * ROWS + row.
+  var HUMAN = 1, CPU = 2;
+
+  // Centre-out column order: good move ordering makes alpha-beta bite hard.
+  var ORDER = [3, 2, 4, 1, 5, 0, 6];
+
+  // Difficulty knobs.
+  //   depth   : maximum negamax search depth (plies) via iterative deepening.
+  //   blunder : chance/turn the AI throws away the search and plays a random
+  //             legal column instead: the main "beatability" dial.
+  //   budget  : ms time cap on the search, so HARD never freezes the tab.
+  //   guard   : higher levels ALWAYS parry a single immediate threat (an "obvious
+  //             win") outright; a blunder can never throw one away. EASY omits
+  //             the guard, so it stays genuinely beatable.
+  var DIFFS = {
+    EASY:   { depth:2, blunder:0.40, budget:120, guard:false },
+    MEDIUM: { depth:5, blunder:0.05, budget:200, guard:true  },
+    HARD:   { depth:9, blunder:0.00, budget:280, guard:true  }
+  };
+  var WIN_SCORE = 1000000;                // a made-four dominates any heuristic
+  var THINK_MS = 300;                      // deliberate "thinking" pause for feel
+
+  var PREF_KEY = 'batchly-connectfour-prefs';
+  var TALLY_KEY = 'batchly-connectfour-tally';
+  var MUTE_KEY = 'batchly-connectfour-muted';
+
+  var REDUCE = false;
+  try { REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+
+  // ==================================================================
+  // Elements
+  // ==================================================================
+  var canvas  = document.getElementById('board');
+  var ctx     = canvas.getContext('2d');
+  var wrap    = document.getElementById('wrap');
+  var app     = document.getElementById('app');
+
+  var btnDiff  = document.getElementById('diff');
+  var btnFirst = document.getElementById('first');
+  var btnMute  = document.getElementById('mute');
+  var btnNew   = document.getElementById('newg');
+
+  var turnBox = document.getElementById('turnBox');
+  var turnSw  = document.getElementById('turnSw');
+  var turnTxt = document.getElementById('turnTxt');
+  var elStatus = document.getElementById('status');
+
+  var tW = document.getElementById('tW');
+  var tL = document.getElementById('tL');
+  var tD = document.getElementById('tD');
+
+  var over    = document.getElementById('over');
+  var ovTitle = document.getElementById('ovTitle');
+  var ovSub   = document.getElementById('ovSub');
+  var ovRows  = document.getElementById('ovRows');
+  var ovNote  = document.getElementById('ovNote');
+  var ovPrimary = document.getElementById('ovPrimary');
+
+  // ==================================================================
+  // Settings (persisted)
+  // ==================================================================
+  var diffName = 'MEDIUM';
+  var youFirst = true;
+  var muted = false;
+  try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch(e){}
+  try {
+    var pr = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+    if(pr && DIFFS[pr.diff]) diffName = pr.diff;
+    if(pr && typeof pr.youFirst === 'boolean') youFirst = pr.youFirst;
+  } catch(e){}
+
+  var tally = { w:0, l:0, d:0 };
+  try {
+    var tj = JSON.parse(localStorage.getItem(TALLY_KEY) || '{}');
+    if(tj && isFinite(tj.w)) tally.w = tj.w|0;
+    if(tj && isFinite(tj.l)) tally.l = tj.l|0;
+    if(tj && isFinite(tj.d)) tally.d = tj.d|0;
+  } catch(e){}
+
+  // ==================================================================
+  // Game state
+  // ==================================================================
+  var grid = new Int8Array(SIZE);          // 0 empty, 1 human, 2 cpu
+  var heights = new Int8Array(COLS);       // pieces per column (next free row)
+  var pieces = 0;                          // total placed discs
+
+  // states: menu | playerTurn | thinking | dropping | over
+  var state = 'menu';
+  var winner = '';                         // 'you' | 'cpu' | 'draw' | ''
+  var winLine = null;                      // array of {c,r} for the winning four
+  var cursorCol = 3;                       // keyboard / hover aim
+  var pointerInside = false;
+  var gameId = 0;                          // invalidates a pending AI think on reset
+  var aiTimer = null;
+
+  // falling disc animation (position in scale-independent "cell units")
+  var falling = null;                      // {col,row,owner,cy,target,vy,bounces,cb}
+  var badFlash = { col:-1, t:0 };          // brief flash when a full column is tapped
+
+  // ==================================================================
+  // Layout / canvas sizing
+  // ==================================================================
+  var cell = 48, dpr = 1, DP = 48, boardTop = 48;
+  function availSize(){
+    var w = wrap.clientWidth  - 16 - 4;    // 8px padding each side + tiny slack
+    var h = wrap.clientHeight - 16 - 4;
+    return { w:Math.max(60, w), h:Math.max(60, h) };
+  }
+  function layout(){
+    var a = availSize();
+    // Board is COLS wide and (ROWS + 1) tall: the extra top row is the "chute"
+    // where the disc waits / falls from. Cells are square.
+    var c = Math.floor(Math.min(a.w / COLS, a.h / (ROWS + 1)));
+    if(!isFinite(c) || c < 12) c = 12;
+    cell = Math.min(c, 96);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    DP = cell * dpr;
+    boardTop = DP;                          // chute is one cell tall
+
+    var cssW = COLS * cell, cssH = (ROWS + 1) * cell;
+    canvas.style.width  = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    var bw = Math.round(COLS * DP), bh = Math.round((ROWS + 1) * DP);
+    if(canvas.width !== bw || canvas.height !== bh){ canvas.width = bw; canvas.height = bh; }
+  }
+
+  // geometry helpers (device px)
+  function cellCX(c){ return c * DP + DP / 2; }
+  function cellCY(r){ return boardTop + (ROWS - 1 - r) * DP + DP / 2; }   // r=0 bottom
+  function chuteCY(){ return DP / 2; }
+  // screen-y for a disc at continuous "cell-units below the chute centre"
+  function cyToY(cy){ return DP / 2 + cy * DP; }
+  function discR(){ return DP * 0.40; }
+  function holeR(){ return DP * 0.435; }
+
+  // ==================================================================
+  // Audio: all synthesised, muteable, no assets
+  // ==================================================================
+  var AC = null;
+  function ac(){
+    if(muted) return null;
+    if(!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){ AC = null; } }
+    if(AC && AC.state === 'suspended'){ try { AC.resume(); } catch(e){} }
+    return AC;
+  }
+  function tone(freq, dur, type, vol, when){
+    var c = ac(); if(!c) return;
+    var t0 = c.currentTime + (when || 0);
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'square'; o.frequency.value = freq;
+    o.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.05, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+  function thunk(){                          // disc settling
+    var c = ac(); if(!c) return;
+    tone(150, 0.08, 'square', 0.05);
+    tone(90, 0.10, 'sine', 0.06, 0.01);
+  }
+  function tick(){ tone(320, 0.03, 'square', 0.03); }
+  function buzz(){ tone(120, 0.14, 'sawtooth', 0.05); }
+  function jingleWin(){ tone(523,0.12,'square',0.06,0); tone(659,0.12,'square',0.06,0.11); tone(880,0.22,'square',0.06,0.22); }
+  function jingleLose(){ tone(392,0.14,'sawtooth',0.05,0); tone(311,0.14,'sawtooth',0.05,0.13); tone(233,0.28,'sawtooth',0.05,0.26); }
+  function jingleDraw(){ tone(392,0.14,'triangle',0.05,0); tone(392,0.20,'triangle',0.05,0.15); }
+
+  function now(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  // ==================================================================
+  // Board mechanics: push/pop are shared by the live game and the search,
+  // and are always perfectly balanced so the search never corrupts the board.
+  // ==================================================================
+  function push(col, owner){ var r = heights[col]; grid[col * ROWS + r] = owner; heights[col]++; return r; }
+  function pop(col){ heights[col]--; grid[col * ROWS + heights[col]] = 0; }
+
+  // Does an owner's disc just placed at (col,row) complete four-in-a-row?
+  function run(col, row, dc, dr, owner){
+    var k = 0, c = col + dc, r = row + dr;
+    while(c >= 0 && c < COLS && r >= 0 && r < ROWS && grid[c * ROWS + r] === owner){ k++; c += dc; r += dr; }
+    return k;
+  }
+  var DIRS = [[1,0],[0,1],[1,1],[1,-1]];
+  function madeFour(col, row, owner){
+    for(var i = 0; i < 4; i++){
+      var d = DIRS[i];
+      if(1 + run(col, row, d[0], d[1], owner) + run(col, row, -d[0], -d[1], owner) >= NEED) return true;
+    }
+    return false;
+  }
+  // Build the full winning line (for highlighting), called once at game end.
+  function winningLine(col, row, owner){
+    for(var i = 0; i < 4; i++){
+      var d = DIRS[i], dc = d[0], dr = d[1];
+      var line = [{ c:col, r:row }];
+      var c = col + dc, r = row + dr;
+      while(c >= 0 && c < COLS && r >= 0 && r < ROWS && grid[c * ROWS + r] === owner){ line.push({ c:c, r:r }); c += dc; r += dr; }
+      c = col - dc; r = row - dr;
+      while(c >= 0 && c < COLS && r >= 0 && r < ROWS && grid[c * ROWS + r] === owner){ line.unshift({ c:c, r:r }); c -= dc; r -= dr; }
+      if(line.length >= NEED) return line;
+    }
+    return null;
+  }
+
+  // ==================================================================
+  // AI: threat heuristic + negamax with alpha-beta and iterative deepening
+  // ==================================================================
+  // Precompute every length-4 window as four flat indices.
+  var WINDOWS = (function(){
+    var out = [];
+    for(var c = 0; c < COLS; c++){
+      for(var r = 0; r < ROWS; r++){
+        for(var i = 0; i < 4; i++){
+          var d = DIRS[i], ec = c + d[0] * 3, er = r + d[1] * 3;
+          if(ec < 0 || ec >= COLS || er < 0 || er >= ROWS) continue;
+          out.push([ c*ROWS+r, (c+d[0])*ROWS+(r+d[1]), (c+d[0]*2)*ROWS+(r+d[1]*2), ec*ROWS+er ]);
+        }
+      }
+    }
+    return out;
+  })();
+
+  function evalBoard(player){                 // score the settled board for `player`
+    var opp = player === HUMAN ? CPU : HUMAN;
+    var score = 0, r;
+    // centre-column control
+    for(r = 0; r < ROWS; r++){
+      var v = grid[3 * ROWS + r];
+      if(v === player) score += 6; else if(v === opp) score -= 6;
+    }
+    // window threats
+    for(var w = 0; w < WINDOWS.length; w++){
+      var win = WINDOWS[w], m = 0, o = 0;
+      for(var k = 0; k < 4; k++){ var g = grid[win[k]]; if(g === player) m++; else if(g === opp) o++; }
+      if(m > 0 && o > 0) continue;            // blocked window: dead
+      if(m === 3) score += 50;
+      else if(m === 2) score += 10;
+      else if(m === 1) score += 1;
+      else if(o === 3) score -= 54;           // value blocking a bit above attacking
+      else if(o === 2) score -= 10;
+      else if(o === 1) score -= 1;
+    }
+    return score;
+  }
+
+  var searchAbort = false, deadline = 0;
+  function negamax(player, depth, alpha, beta){
+    if(now() > deadline){ searchAbort = true; return 0; }
+    if(depth === 0) return evalBoard(player);
+    var best = -2e9, moved = false, opp = player === HUMAN ? CPU : HUMAN;
+    for(var oi = 0; oi < COLS; oi++){
+      var c = ORDER[oi];
+      if(heights[c] >= ROWS) continue;
+      moved = true;
+      var r = push(c, player);
+      var sc;
+      if(madeFour(c, r, player)) sc = WIN_SCORE + depth;    // prefer quicker wins
+      else sc = -negamax(opp, depth - 1, -beta, -alpha);
+      pop(c);
+      if(searchAbort) return best === -2e9 ? 0 : best;
+      if(sc > best) best = sc;
+      if(best > alpha) alpha = best;
+      if(alpha >= beta) break;                              // prune
+    }
+    if(!moved) return 0;                                    // board full: draw
+    return best;
+  }
+
+  function chooseCpuMove(cfg){
+    searchAbort = false;
+    deadline = now() + cfg.budget;
+    var oi, c, r;
+
+    // any legal move at all?
+    var firstValid = -1;
+    for(oi = 0; oi < COLS; oi++){ if(heights[ORDER[oi]] < ROWS){ firstValid = ORDER[oi]; break; } }
+    if(firstValid < 0) return -1;
+
+    // 1) take an immediate win outright, every difficulty
+    for(oi = 0; oi < COLS; oi++){
+      c = ORDER[oi]; if(heights[c] >= ROWS) continue;
+      r = push(c, CPU); var w = madeFour(c, r, CPU); pop(c);
+      if(w) return c;
+    }
+
+    // 1.5) higher levels ALWAYS block an obvious win. If the human has exactly one
+    //      immediate winning column (and we have no win of our own, checked above),
+    //      that block is forced, so parry it before any blunder or search can drop
+    //      it. Two-plus simultaneous threats are an unblockable fork: fall through
+    //      to the search, which then plays the least-bad line.
+    if(cfg.guard){
+      var threats = null;
+      for(oi = 0; oi < COLS; oi++){
+        c = ORDER[oi]; if(heights[c] >= ROWS) continue;
+        r = push(c, HUMAN); var t = madeFour(c, r, HUMAN); pop(c);
+        if(t){ if(threats === null) threats = c; else { threats = -2; break; } }
+      }
+      if(threats !== null && threats !== -2) return threats;
+    }
+
+    // 2) EASY blunders: sometimes just drop somewhere random
+    if(cfg.blunder > 0 && Math.random() < cfg.blunder){
+      var pool = [];
+      for(c = 0; c < COLS; c++){ if(heights[c] < ROWS) pool.push(c); }
+      return pool[(Math.random() * pool.length) | 0];
+    }
+
+    // 3) iterative-deepening negamax; keep the best move from the deepest
+    //    fully-completed depth. A quick shallow pass guarantees a legal move.
+    var best = firstValid;
+    for(var d = 1; d <= cfg.depth; d++){
+      var alpha = -2e9, beta = 2e9, localBest = -2e9, localCol = best, aborted = false;
+      for(oi = 0; oi < COLS; oi++){
+        c = ORDER[oi]; if(heights[c] >= ROWS) continue;
+        r = push(c, CPU);
+        var sc;
+        if(madeFour(c, r, CPU)) sc = WIN_SCORE + d;
+        else sc = -negamax(HUMAN, d - 1, -beta, -alpha);
+        pop(c);
+        if(searchAbort){ aborted = true; break; }
+        // STRICT improvement only. Once alpha has risen, a later move can be
+        // alpha-beta cut and fail-soft-return a BOUND equal to localBest without
+        // truly being as good, so `sc === localBest` is NOT a real tie and must
+        // never be chosen (treating it as one once let the AI pick a losing move
+        // over the winning block). The move that strictly raises localBest is the
+        // true best and its value is exact.
+        if(sc > localBest){ localBest = sc; localCol = c; }
+        if(localBest > alpha) alpha = localBest;
+      }
+      if(aborted) break;
+      best = localCol;
+      if(localBest >= WIN_SCORE) break;       // forced win located: stop early
+    }
+    return best;
+  }
+
+  // ==================================================================
+  // Turn flow
+  // ==================================================================
+  function cfg(){ return DIFFS[diffName]; }
+
+  function newGame(){
+    if(aiTimer){ clearTimeout(aiTimer); aiTimer = null; }
+    gameId++;
+    grid = new Int8Array(SIZE);
+    heights = new Int8Array(COLS);
+    pieces = 0;
+    winner = ''; winLine = null; falling = null;
+    badFlash.col = -1;
+    cursorCol = 3;
+    hideOverlay();
+    if(youFirst){ state = 'playerTurn'; setTurnUI(); }
+    else { scheduleCpu(); }
+    updateControls();
+  }
+
+  function tryPlayerDrop(col){
+    if(state !== 'playerTurn') return;
+    if(col < 0 || col >= COLS) return;
+    if(heights[col] >= ROWS){ badFlash.col = col; badFlash.t = now(); buzz(); return; }
+    beginDrop(col, HUMAN, afterPlayerDrop);
+  }
+  function afterPlayerDrop(row, col){
+    var line = winningLine(col, row, HUMAN);
+    if(line){ endGame('you', line); return; }
+    if(pieces >= SIZE){ endGame('draw', null); return; }
+    scheduleCpu();
+  }
+
+  function scheduleCpu(){
+    state = 'thinking';
+    setTurnUI(); updateControls();
+    var gid = gameId;
+    aiTimer = setTimeout(function(){
+      aiTimer = null;
+      if(gid !== gameId) return;              // a new game started meanwhile
+      var col = chooseCpuMove(cfg());
+      if(col < 0){ endGame('draw', null); return; }   // safety: no legal move
+      beginDrop(col, CPU, afterCpuDrop);
+    }, REDUCE ? 220 : THINK_MS);
+  }
+  function afterCpuDrop(row, col){
+    var line = winningLine(col, row, CPU);
+    if(line){ endGame('cpu', line); return; }
+    if(pieces >= SIZE){ endGame('draw', null); return; }
+    state = 'playerTurn'; setTurnUI(); updateControls();
+  }
+
+  // Start a falling-disc animation. On settle it commits the disc to the grid
+  // and calls back. Under reduced motion it commits instantly.
+  function beginDrop(col, owner, cb){
+    var row = heights[col];                   // target resting row
+    state = 'dropping';
+    setTurnUI(); updateControls();
+    if(REDUCE){ commitDrop(col, owner); cb(row, col); return; }
+    falling = {
+      col: col, row: row, owner: owner,
+      cy: 0,                                  // start at chute centre
+      target: (ROWS - row),                   // cell-units from chute to slot
+      vy: 0, bounces: 0, cb: cb
+    };
+  }
+  function commitDrop(col, owner){
+    var r = heights[col];
+    grid[col * ROWS + r] = owner;
+    heights[col]++;
+    pieces++;
+    thunk();
+  }
+
+  function endGame(result, line){
+    winner = result; winLine = line;
+    state = 'over';
+    if(result === 'you') tally.w++;
+    else if(result === 'cpu') tally.l++;
+    else tally.d++;
+    saveTally();
+    updateTally();
+    setTurnUI(); updateControls();
+    if(result === 'you') jingleWin();
+    else if(result === 'cpu') jingleLose();
+    else jingleDraw();
+    // give the winning line a beat to appear before the card
+    setTimeout(function(){ if(state === 'over') showOver(); }, REDUCE ? 260 : 620);
+  }
+
+  // ==================================================================
+  // Main loop
+  // ==================================================================
+  var lastT = now();
+  var GRAV = 58, REST = 0.24, MIN_BOUNCE = 6;   // fall in cell-units/sec, /sec^2
+  function frame(t){
+    requestAnimationFrame(frame);
+    var dt = (t - lastT) / 1000; lastT = t;
+    if(dt < 0) dt = 0; if(dt > 0.05) dt = 0.05;
+
+    if(falling){
+      falling.vy += GRAV * dt;
+      falling.cy += falling.vy * dt;
+      if(falling.cy >= falling.target){
+        falling.cy = falling.target;
+        if(falling.vy > MIN_BOUNCE && falling.bounces < 2){
+          falling.vy = -falling.vy * REST; falling.bounces++;
+        } else {
+          var col = falling.col, owner = falling.owner, row = falling.row, cb = falling.cb;
+          falling = null;
+          commitDrop(col, owner);
+          cb(row, col);
+        }
+      }
+    }
+    draw(t);
+  }
+
+  // ==================================================================
+  // Drawing
+  // ==================================================================
+  function withRing(cx, cy, r, fill, ring){
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = Math.max(1.5, DP * 0.055); ctx.strokeStyle = ring; ctx.stroke();
+  }
+  function discColors(owner){
+    return owner === HUMAN
+      ? { fill:'#ef3a3a', ring:'#7a1414', hi:'rgba(255,255,255,0.28)' }
+      : { fill:'#f5b23a', ring:'#7a5210', hi:'rgba(255,255,255,0.32)' };
+  }
+  function drawDisc(cx, cy, r, owner){
+    var col = discColors(owner);
+    withRing(cx, cy, r, col.fill, col.ring);
+    // small top-left specular dot for a bit of body (still flat/hard elsewhere)
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy - r * 0.34, r * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = col.hi; ctx.fill();
+  }
+
+  function draw(t){
+    var W = canvas.width, H = canvas.height;
+    if(!W || !H) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // ---- board panel (below the chute) ----
+    var bx = 0, by = boardTop, bw = COLS * DP, bh = ROWS * DP;
+    ctx.fillStyle = '#141419';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.lineWidth = 2 * dpr; ctx.strokeStyle = '#3a3a46';
+    ctx.strokeRect(bx + dpr, by + dpr, bw - 2 * dpr, bh - 2 * dpr);
+    // thick top lip so the chute reads as an opening into the board
+    ctx.fillStyle = '#26262e';
+    ctx.fillRect(bx, by - 2 * dpr, bw, 3 * dpr);
+
+    // ---- aim highlight column (player turn only) ----
+    var showAim = (state === 'playerTurn');
+    if(showAim && cursorCol >= 0 && cursorCol < COLS){
+      ctx.fillStyle = heights[cursorCol] >= ROWS ? 'rgba(239,58,58,0.05)' : 'rgba(245,242,232,0.055)';
+      ctx.fillRect(cursorCol * DP, by, DP, bh);
+    }
+
+    // ---- holes + settled discs ----
+    var hr = holeR(), dr = discR();
+    for(var c = 0; c < COLS; c++){
+      for(var r = 0; r < ROWS; r++){
+        var cx = cellCX(c), cy = cellCY(r), v = grid[c * ROWS + r];
+        if(v === 0){
+          withRing(cx, cy, hr, '#0b0b0e', '#26262e');
+        } else {
+          // don't paint the just-committed slot twice while its disc is airborne
+          drawDisc(cx, cy, dr, v);
+        }
+      }
+    }
+
+    // ---- winning line: pulsing bone rings over the four discs ----
+    if(winLine){
+      var pulse = REDUCE ? 1 : (0.55 + 0.45 * Math.abs(Math.sin(t / 240)));
+      for(var i = 0; i < winLine.length; i++){
+        var wc = winLine[i];
+        var wx = cellCX(wc.c), wy = cellCY(wc.r);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.beginPath(); ctx.arc(wx, wy, dr * 1.02, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(2, DP * 0.11); ctx.strokeStyle = '#f5f2e8'; ctx.stroke();
+        ctx.restore();
+      }
+      // connecting bar through the line
+      if(winLine.length >= 2){
+        var a = winLine[0], b = winLine[winLine.length - 1];
+        ctx.save();
+        ctx.globalAlpha = 0.5 * pulse;
+        ctx.lineWidth = Math.max(2, DP * 0.09); ctx.lineCap = 'round';
+        ctx.strokeStyle = '#f5f2e8';
+        ctx.beginPath(); ctx.moveTo(cellCX(a.c), cellCY(a.r)); ctx.lineTo(cellCX(b.c), cellCY(b.r)); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // ---- falling disc (airborne) ----
+    if(falling){
+      var fx = cellCX(falling.col);
+      var fy = cyToY(falling.cy);
+      drawDisc(fx, fy, dr, falling.owner);
+    }
+
+    // ---- ghost / aim disc in the chute (player turn) ----
+    if(showAim && !falling){
+      var gx = cellCX(cursorCol), gy = chuteCY();
+      var full = heights[cursorCol] >= ROWS;
+      ctx.save();
+      ctx.globalAlpha = full ? 0.22 : 0.5;
+      drawDisc(gx, gy, dr, HUMAN);
+      ctx.restore();
+      // little downward arrow marker
+      if(!full){
+        ctx.fillStyle = 'rgba(245,242,232,0.55)';
+        var ax = gx, ay = by - DP * 0.16, s = DP * 0.12;
+        ctx.beginPath(); ctx.moveTo(ax - s, ay - s); ctx.lineTo(ax + s, ay - s); ctx.lineTo(ax, ay + s * 0.4); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // ---- full-column flash feedback ----
+    if(badFlash.col >= 0){
+      var age = now() - badFlash.t;
+      if(age < 360){
+        ctx.save();
+        ctx.globalAlpha = 0.35 * (1 - age / 360);
+        ctx.fillStyle = '#ef3a3a';
+        ctx.fillRect(badFlash.col * DP, by, DP, bh);
+        ctx.restore();
+      } else { badFlash.col = -1; }
+    }
+  }
+
+  // ==================================================================
+  // HUD
+  // ==================================================================
+  function setTurnUI(){
+    turnBox.classList.remove('thinking');
+    var sw = 'none', txt = '', cls = 'tag';
+    if(state === 'menu'){ sw = 'none'; txt = 'READY'; }
+    else if(state === 'playerTurn'){ sw = 'you'; txt = 'YOUR TURN'; cls = 'ok'; }
+    else if(state === 'thinking'){ sw = 'cpu'; txt = 'CPU THINKING…'; cls = 'cpu'; turnBox.classList.add('thinking'); }
+    else if(state === 'dropping'){
+      if(falling && falling.owner === CPU){ sw = 'cpu'; txt = 'CPU DROPS'; cls = 'cpu'; }
+      else { sw = 'you'; txt = 'DROPPING'; cls = 'ok'; }
+    }
+    else if(state === 'over'){
+      if(winner === 'you'){ sw = 'you'; txt = 'YOU WIN'; cls = 'ok'; }
+      else if(winner === 'cpu'){ sw = 'cpu'; txt = 'CPU WINS'; cls = 'cpu'; }
+      else { sw = 'none'; txt = 'DRAW'; cls = 'draw'; }
+    }
+    turnSw.className = 'swatch ' + sw;
+    turnTxt.textContent = txt;
+
+    var s;
+    if(state === 'menu') s = '<span class="tag">PRESS START</span>';
+    else if(state === 'playerTurn') s = '<span class="ok">YOUR TURN</span> <span class="tag">· drop a disc</span>';
+    else if(state === 'thinking') s = '<span class="cpu">CPU THINKING…</span>';
+    else if(state === 'dropping') s = (falling && falling.owner === CPU) ? '<span class="cpu">CPU DROPS…</span>' : '<span class="ok">DROPPING…</span>';
+    else if(state === 'over'){
+      s = winner === 'you' ? '<span class="ok">YOU CONNECTED FOUR. YOU WIN!</span>'
+        : winner === 'cpu' ? '<span class="cpu">CPU CONNECTED FOUR. YOU LOSE</span>'
+        : '<span class="draw">BOARD FULL. IT\'S A DRAW</span>';
+    } else s = '';
+    elStatus.innerHTML = s + ' <span class="tag">· CPU ' + diffName + '</span>';
+  }
+
+  var lastW = tally.w, lastL = tally.l, lastD = tally.d;
+  function updateTally(){
+    tW.textContent = String(tally.w);
+    tL.textContent = String(tally.l);
+    tD.textContent = String(tally.d);
+    if(tally.w !== lastW){ bump(tW); lastW = tally.w; }
+    if(tally.l !== lastL){ bump(tL); lastL = tally.l; }
+    if(tally.d !== lastD){ bump(tD); lastD = tally.d; }
+  }
+  function bump(el){ if(REDUCE) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+
+  function updateControls(){
+    var thinking = (state === 'thinking' || state === 'dropping');
+    btnDiff.disabled = thinking;
+    btnFirst.disabled = thinking;
+  }
+
+  // ==================================================================
+  // Overlay cards
+  // ==================================================================
+  function rowHTML(k, v, cls){
+    return '<div class="row"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>';
+  }
+  function showStart(){
+    ovTitle.textContent = 'CONNECT FOUR';
+    ovTitle.style.color = 'var(--bone)';
+    ovSub.textContent = 'STRATEGY · FOUR IN A ROW VS CPU';
+    ovRows.innerHTML =
+      rowHTML('GOAL', 'Line up four of your discs') +
+      rowHTML('DROP', 'Click / tap a column') +
+      rowHTML('YOU', 'Red', 'you') +
+      rowHTML('CPU', 'Amber · ' + diffName, 'cpu');
+    ovNote.innerHTML = 'Discs fall to the lowest slot. Connect four across, down, or diagonally before the computer does, and block its threats. ' +
+      'It\'s a 1-v-1 versus the CPU, so <b>there\'s no leaderboard</b>. ' +
+      'Your session: <b>' + tally.w + 'W&ndash;' + tally.l + 'L&ndash;' + tally.d + 'D</b>.';
+    ovPrimary.textContent = 'START GAME';
+    ovPrimary.dataset.action = 'start';
+    showOverlay();
+  }
+  function showOver(){
+    var youWon = winner === 'you', draw = winner === 'draw';
+    ovTitle.textContent = draw ? 'DRAW' : (youWon ? 'YOU WIN!' : 'CPU WINS');
+    ovTitle.style.color = draw ? 'var(--bone)' : (youWon ? 'var(--red)' : 'var(--amber)');
+    ovSub.textContent = draw ? 'THE BOARD FILLED UP' : (youWon ? 'YOU CONNECTED FOUR' : 'THE COMPUTER CONNECTED FOUR');
+    ovRows.innerHTML =
+      rowHTML('RESULT', draw ? 'Draw' : (youWon ? 'Win' : 'Loss'), youWon ? 'you' : (draw ? '' : 'cpu')) +
+      rowHTML('CPU', diffName) +
+      rowHTML('SESSION', tally.w + 'W &ndash; ' + tally.l + 'L &ndash; ' + tally.d + 'D');
+    ovNote.innerHTML = draw
+      ? 'A hard-fought stalemate. Try again, or bump the CPU up a level.'
+      : (youWon
+        ? '<span class="ok">Nicely played.</span> Try <b>HARD</b>, or let the CPU move first for a real test. No score is posted: this is a versus-CPU game with no leaderboard.'
+        : 'The computer lined four up first. Watch for its three-in-a-rows and block early. No score is posted: this is a versus-CPU game with no leaderboard.');
+    ovPrimary.textContent = 'PLAY AGAIN';
+    ovPrimary.dataset.action = 'again';
+    showOverlay();
+  }
+  function showOverlay(){
+    over.classList.add('show');
+    if(document.hasFocus && document.hasFocus()){ try { ovPrimary.focus(); } catch(e){} }
+  }
+  function hideOverlay(){ over.classList.remove('show'); }
+
+  function overlayPrimary(){
+    var a = ovPrimary.dataset.action;
+    if(a === 'start' || a === 'again'){ ac(); newGame(); }
+  }
+
+  // ==================================================================
+  // Input: pointer (mouse + touch)
+  // ==================================================================
+  function colFromClientX(clientX){
+    var rect = canvas.getBoundingClientRect();
+    if(rect.width <= 0) return -1;
+    var x = clientX - rect.left;
+    var col = Math.floor(x / (rect.width / COLS));
+    if(col < 0) col = 0; if(col >= COLS) col = COLS - 1;
+    return col;
+  }
+
+  canvas.addEventListener('mousemove', function(e){
+    pointerInside = true;
+    if(state === 'playerTurn'){
+      var c = colFromClientX(e.clientX);
+      if(c !== cursorCol && c >= 0){ cursorCol = c; }
+    }
+  });
+  canvas.addEventListener('mouseleave', function(){ pointerInside = false; });
+
+  var lastTouchEnd = 0;
+  canvas.addEventListener('click', function(e){
+    if(now() - lastTouchEnd < 700) return;    // ignore the click synthesised after a tap
+    if(state === 'menu'){ ac(); return; }
+    if(state !== 'playerTurn') return;
+    var c = colFromClientX(e.clientX);
+    cursorCol = c;
+    tryPlayerDrop(c);
+  });
+
+  var tsx = 0, tMoved = false, tst = 0;
+  canvas.addEventListener('touchstart', function(e){
+    if(e.touches.length !== 1) return;
+    tsx = e.touches[0].clientX; tMoved = false; tst = now();
+    if(state === 'playerTurn'){ cursorCol = colFromClientX(tsx); }
+  }, { passive:true });
+  canvas.addEventListener('touchmove', function(e){
+    if(!e.touches.length) return;
+    var dx = e.touches[0].clientX - tsx;
+    if(Math.abs(dx) > 12) tMoved = true;
+    if(state === 'playerTurn'){ cursorCol = colFromClientX(e.touches[0].clientX); }
+  }, { passive:true });
+  canvas.addEventListener('touchend', function(e){
+    lastTouchEnd = now();
+    if(now() - tst > 700) return;             // long press: ignore
+    if(state === 'menu'){ ac(); return; }
+    if(state !== 'playerTurn') return;
+    // drop into whatever column the touch ended over (tap or short drag+release)
+    var cx = tsx;
+    if(e.changedTouches && e.changedTouches.length){ cx = e.changedTouches[0].clientX; }
+    var c = colFromClientX(cx);
+    cursorCol = c;
+    tryPlayerDrop(c);
+    if(e.cancelable) e.preventDefault();
+  }, { passive:false });
+
+  // ==================================================================
+  // Input: keyboard
+  // ==================================================================
+  window.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+
+    // global keys
+    if(k === 'r' || k === 'R'){ ac(); newGame(); e.preventDefault(); return; }
+    if(k === 'm' || k === 'M'){ toggleMute(); e.preventDefault(); return; }
+
+    // overlay: Enter/Space triggers the primary button
+    if(over.classList.contains('show')){
+      if(k === 'Enter' || k === ' '){
+        if(document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+        overlayPrimary(); e.preventDefault();
+      }
+      return;
+    }
+
+    if(state !== 'playerTurn') return;
+
+    if(k === 'ArrowLeft'  || k === 'a' || k === 'A'){ cursorCol = Math.max(0, cursorCol - 1); tick(); e.preventDefault(); return; }
+    if(k === 'ArrowRight' || k === 'd' || k === 'D'){ cursorCol = Math.min(COLS - 1, cursorCol + 1); tick(); e.preventDefault(); return; }
+    if(k === 'ArrowDown'  || k === 's' || k === 'S' || k === ' ' || k === 'Enter'){
+      if(document.activeElement && document.activeElement.tagName === 'BUTTON' && (k === ' ' || k === 'Enter')) return;
+      tryPlayerDrop(cursorCol); e.preventDefault(); return;
+    }
+    if(k >= '1' && k <= '7'){ var col = (k.charCodeAt(0) - 49); cursorCol = col; tryPlayerDrop(col); e.preventDefault(); return; }
+  });
+
+  // ==================================================================
+  // Buttons
+  // ==================================================================
+  function cycleDiff(){
+    if(state === 'thinking' || state === 'dropping') return;
+    diffName = diffName === 'EASY' ? 'MEDIUM' : (diffName === 'MEDIUM' ? 'HARD' : 'EASY');
+    btnDiff.textContent = 'CPU: ' + diffName;
+    savePrefs(); setTurnUI();
+    if(over.classList.contains('show') && ovPrimary.dataset.action === 'start') showStart();
+  }
+  function cycleFirst(){
+    if(state === 'thinking' || state === 'dropping') return;
+    youFirst = !youFirst;
+    btnFirst.textContent = youFirst ? 'YOU FIRST' : 'CPU FIRST';
+    savePrefs();
+    if(over.classList.contains('show') && ovPrimary.dataset.action === 'start') showStart();
+  }
+  function toggleMute(){
+    muted = !muted;
+    btnMute.setAttribute('aria-pressed', String(muted));
+    btnMute.textContent = muted ? 'MUTED' : 'SOUND';
+    try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch(e){}
+    if(!muted) tick();
+  }
+  function savePrefs(){
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ diff:diffName, youFirst:youFirst })); } catch(e){}
+  }
+  function saveTally(){
+    try { localStorage.setItem(TALLY_KEY, JSON.stringify(tally)); } catch(e){}
+  }
+
+  btnDiff.addEventListener('click', cycleDiff);
+  btnFirst.addEventListener('click', cycleFirst);
+  btnMute.addEventListener('click', toggleMute);
+  btnNew.addEventListener('click', function(){ ac(); newGame(); });
+  ovPrimary.addEventListener('click', overlayPrimary);
+
+  // ==================================================================
+  // Resize: geometry is scale-independent, so nothing to re-simulate
+  // ==================================================================
+  var queued = false;
+  function queueLayout(){
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(function(){ queued = false; layout(); });
+  }
+  window.addEventListener('resize', queueLayout);
+  window.addEventListener('orientationchange', queueLayout);
+  if(typeof ResizeObserver !== 'undefined'){
+    try { new ResizeObserver(queueLayout).observe(app); } catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){
+    // resume audio ctx timing baseline when returning; nothing else needed
+    if(!document.hidden){ lastT = now(); }
+  });
+
+  // ==================================================================
+  // Init
+  // ==================================================================
+  btnDiff.textContent = 'CPU: ' + diffName;
+  btnFirst.textContent = youFirst ? 'YOU FIRST' : 'CPU FIRST';
+  btnMute.textContent = muted ? 'MUTED' : 'SOUND';
+  btnMute.setAttribute('aria-pressed', String(muted));
+
+  updateTally();
+  layout();
+  state = 'menu'; setTurnUI(); updateControls();
+  showStart();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+<style data-batchly="hit-targets">/* Batchly mobile hit-target shim: >=44px tappables on phones/touch only */
+@media (max-width: 900px), (pointer: coarse){
+  #bar button{min-height:44px;min-width:44px;touch-action:manipulation}
+  #ovBtns button{min-height:44px;touch-action:manipulation}
+}
+</style>
+</body>
+</html>

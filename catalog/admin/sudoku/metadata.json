@@ -1,0 +1,20 @@
+{
+  "folder": "admin/sudoku",
+  "title": "Sudoku",
+  "description": "A real Sudoku: four difficulties, every puzzle uniquely solvable, with pencil notes, hints, mistake-checking and undo.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/sudoku",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 67012,
+      "sha256": "88523a1c475619f5acc70a23be27aa312e0e86bf1751f77363d75510ba993adb",
+      "source": "published catalog HTML"
+    }
+  ]
+}

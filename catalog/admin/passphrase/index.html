@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Passphrase: password &amp; passphrase generator</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  /* The UA rule is only `[hidden]{display:none}`, and ANY author `display` beats
+     it regardless of specificity; author origin outranks user-agent origin. So
+     `.legend{display:flex}` silently defeated `legend.hidden = true` and the
+     colour key stayed on screen under "Nothing generated". Re-assert it here. */
+  [hidden]{display:none !important}
+  body{
+    margin:0;background:#10100e;color:#eee;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:15px;line-height:1.55;
+  }
+  main{max-width:640px;margin:0 auto;padding:20px}
+  h1{font-size:22px;letter-spacing:.16em;text-transform:uppercase;margin:0 0 6px;font-weight:700}
+  h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;margin:0 0 12px;font-weight:700}
+  p{margin:0 0 12px}
+  .tag{color:#888;font-size:12px;margin:0 0 20px;line-height:1.6}
+  .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;font-weight:700}
+  .accent{color:#ff3b30}
+
+  .panel{border:2px solid #eee;padding:16px;margin:0 0 16px;background:#10100e}
+  .panel.alert{border-color:#ff3b30;color:#ff3b30}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
+
+  /* ---- tabs ---- */
+  .tabs{display:flex;gap:0;margin:0 0 16px;border:2px solid #eee}
+  .tabs button{
+    flex:1 1 50%;min-height:48px;background:transparent;color:#888;border:0;
+    font:inherit;font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+    cursor:pointer;padding:12px 6px;
+  }
+  .tabs button + button{border-left:2px solid #eee}
+  .tabs button[aria-selected="true"]{background:#eee;color:#10100e}
+
+  /* ---- output ---- */
+  .secret{
+    display:block;background:#161613;border:2px solid #33332e;padding:14px;
+    font-size:19px;line-height:1.7;min-height:5.4em;word-break:break-all;
+    overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;-webkit-user-select:all;
+  }
+  .secret .d{color:#ff3b30}          /* digits */
+  .secret .s{color:#f0c419}          /* symbols / separators */
+  .secret.empty{color:#888;font-size:13px;user-select:auto}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 0;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#888}
+  .legend b{font-weight:700}
+
+  .actions{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .btn,.btn2{
+    display:block;width:100%;min-height:48px;font:inherit;font-weight:700;font-size:13px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:12px;
+  }
+  .btn{background:#ff3b30;color:#10100e;border:2px solid #ff3b30}
+  .btn:hover{background:#ff5a50;border-color:#ff5a50}
+  .btn2{background:transparent;color:#ff3b30;border:2px solid #ff3b30}
+  .btn2:hover{background:rgba(255,59,48,.12)}
+  .btn:disabled,.btn2:disabled{opacity:.4;cursor:not-allowed}
+  @media (min-width:460px){ .actions{flex-direction:row} }
+
+  .msg{font-size:12px;margin:10px 0 0;min-height:1.4em;color:#888}
+  .msg.bad{color:#ff3b30}
+  .msg.good{color:#4fc76a}
+  .err{font-size:12px;color:#ff3b30;margin:10px 0 0}
+
+  /* ---- strength ---- */
+  .bits{font-size:32px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+  .bits small{font-size:12px;color:#888;font-weight:400;letter-spacing:.1em;text-transform:uppercase}
+  .meter{height:14px;border:2px solid #eee;display:flex;margin:12px 0 12px;padding:2px;gap:2px}
+  .meter i{display:block;height:100%;background:#33332e;flex:1 1 0}
+  .meter i.on{background:var(--sc,#ff3b30)}
+  .verdict{font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--sc,#ff3b30)}
+  .crack{font-size:12px;color:#888;margin:10px 0 0}
+  .crack b{color:#eee;font-weight:700}
+  .crack div{margin-top:4px}
+
+  /* ---- controls ---- */
+  .field{margin:0 0 18px}
+  .field:last-child{margin-bottom:0}
+  .field > .lbl{display:block;margin-bottom:8px}
+  .slider{display:flex;align-items:center;gap:12px}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;margin:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:6px;background:#33332e}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:26px;height:26px;background:#ff3b30;border:2px solid #10100e;
+    border-radius:0;margin-top:-10px;
+  }
+  input[type=range]::-moz-range-track{height:6px;background:#33332e}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;background:#ff3b30;border:2px solid #10100e;border-radius:0}
+  input[type=number],input[type=text]{
+    background:#161613;border:2px solid #eee;color:#eee;font:inherit;min-height:44px;padding:8px 10px;
+    border-radius:0;
+  }
+  input[type=number]{width:84px;flex:0 0 auto;text-align:center}
+  input[type=text].sepbox{width:100%;margin-top:10px}
+
+  .checks{display:flex;flex-direction:column;gap:8px}
+  .check{
+    display:flex;align-items:center;gap:12px;min-height:48px;border:2px solid #33332e;
+    padding:8px 12px;cursor:pointer;
+  }
+  .check:hover{border-color:#eee}
+  .check .name{flex:1 1 auto}
+  .check .set{font-size:11px;color:#888;letter-spacing:.04em;max-width:44%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  input[type=checkbox]{
+    appearance:none;-webkit-appearance:none;position:relative;width:24px;height:24px;
+    border:2px solid #eee;background:transparent;margin:0;flex:0 0 auto;cursor:pointer;border-radius:0;
+  }
+  input[type=checkbox]:checked{background:#ff3b30;border-color:#ff3b30}
+  input[type=checkbox]:checked::after{
+    content:"";position:absolute;left:6px;top:1px;width:6px;height:12px;
+    border:solid #10100e;border-width:0 3px 3px 0;transform:rotate(45deg);
+  }
+
+  .seg{display:flex;flex-wrap:wrap;gap:8px}
+  .seg label{
+    flex:1 1 auto;min-width:78px;min-height:48px;border:2px solid #33332e;display:flex;
+    align-items:center;justify-content:center;cursor:pointer;padding:6px 8px;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;text-align:center;
+  }
+  .seg label:hover{border-color:#eee}
+  .seg label.on{background:#eee;color:#10100e;border-color:#eee;font-weight:700}
+  .seg input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+  .seg label:focus-within{outline:2px solid #ff3b30;outline-offset:2px}
+
+  details{border:2px solid #33332e;padding:0 14px;margin:0 0 16px}
+  details[open]{padding-bottom:14px}
+  summary{
+    min-height:48px;display:flex;align-items:center;cursor:pointer;list-style:none;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;font-weight:700;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"+ ";color:#ff3b30;margin-right:8px}
+  details[open] summary::before{content:"− "}
+  details p{font-size:12.5px;color:#888;line-height:1.7}
+  details b{color:#eee}
+
+  footer{font-size:11px;color:#888;line-height:1.8;border-top:2px solid #33332e;padding-top:14px;margin-top:4px}
+  .hint{font-size:11px;color:#888;margin:8px 0 0;line-height:1.6}
+
+  :focus-visible{outline:2px solid #ff3b30;outline-offset:2px}
+  .btn:focus-visible{outline:2px solid #eee;outline-offset:2px}
+  .tabs button:focus-visible{outline:2px solid #ff3b30;outline-offset:-4px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+  <h1>Passphrase</h1>
+  <p class="tag">
+    Random passwords and diceware-style passphrases, generated in this page with your browser's
+    cryptographic RNG. Nothing is stored, nothing is sent.
+  </p>
+
+  <div class="panel alert" id="nocrypto" hidden>
+    <strong>This browser has no secure random number generator</strong> (<code>crypto.getRandomValues</code>
+    is missing), so nothing here can be generated safely. Generation is disabled on purpose: a fallback
+    would produce guessable output. Try a current browser, or a page served over HTTPS.
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Generator type">
+    <button type="button" role="tab" id="tab-pw" aria-controls="panel-pw" aria-selected="true">Password</button>
+    <button type="button" role="tab" id="tab-pp" aria-controls="panel-pp" aria-selected="false" tabindex="-1">Passphrase</button>
+  </div>
+
+  <section class="panel" aria-labelledby="out-h">
+    <div class="row">
+      <span class="lbl" id="out-h">Output</span>
+      <span class="lbl" id="outMeta"></span>
+    </div>
+    <output id="out" class="secret empty" aria-live="polite" aria-atomic="true"></output>
+    <p class="legend" id="legend" hidden>
+      <span><b style="color:#eee">Aa</b> letters</span>
+      <span><b class="accent">09</b> digits</span>
+      <span><b style="color:#f0c419">#!</b> symbols</span>
+    </p>
+    <!-- role=alert: the output box says "see below", so the reason must be
+         announced too or a screen-reader user is pointed at silence. -->
+    <p class="err" id="outErr" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn" id="gen">Generate</button>
+      <button type="button" class="btn2" id="copy">Copy</button>
+    </div>
+    <p class="msg" id="copyMsg" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="str-h">
+    <h2 id="str-h">Strength</h2>
+    <div class="bits" id="bits" aria-live="polite">- <small>bits</small></div>
+    <div class="meter" id="meter" aria-hidden="true"></div>
+    <div class="verdict" id="verdict">No password yet</div>
+    <div class="crack" id="crack"></div>
+  </section>
+
+  <!-- ================= PASSWORD CONTROLS ================= -->
+  <section class="panel" id="panel-pw" role="tabpanel" aria-labelledby="tab-pw" tabindex="0">
+    <h2>Password options</h2>
+
+    <div class="field">
+      <label class="lbl" for="len">Length</label>
+      <div class="slider">
+        <input type="range" id="len" min="4" max="128" step="1" value="20">
+        <input type="number" id="lenNum" min="4" max="128" step="1" value="20" aria-label="Password length in characters">
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Character types</span>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="c-lower" checked><span class="name">Lowercase</span><span class="set" id="set-lower">a–z</span></label>
+        <label class="check"><input type="checkbox" id="c-upper" checked><span class="name">Uppercase</span><span class="set" id="set-upper">A–Z</span></label>
+        <label class="check"><input type="checkbox" id="c-digit" checked><span class="name">Digits</span><span class="set" id="set-digit">0–9</span></label>
+        <label class="check"><input type="checkbox" id="c-sym" checked><span class="name">Symbols</span><span class="set" id="set-sym">!@#$…</span></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Rules</span>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="c-ambig"><span class="name">Exclude look-alikes</span><span class="set">I l 1 O 0</span></label>
+        <label class="check"><input type="checkbox" id="c-req" checked><span class="name">Use every type at least once</span><span class="set">for strict sites</span></label>
+      </div>
+      <p class="hint" id="ruleHint"></p>
+    </div>
+  </section>
+
+  <!-- ================= PASSPHRASE CONTROLS ================= -->
+  <section class="panel" id="panel-pp" role="tabpanel" aria-labelledby="tab-pp" tabindex="0" hidden>
+    <h2>Passphrase options</h2>
+
+    <div class="field">
+      <label class="lbl" for="wc">Words</label>
+      <div class="slider">
+        <input type="range" id="wc" min="2" max="16" step="1" value="6">
+        <input type="number" id="wcNum" min="2" max="16" step="1" value="6" aria-label="Number of words">
+      </div>
+      <p class="hint" id="ppHint"></p>
+    </div>
+
+    <div class="field">
+      <span class="lbl" id="sep-h">Separator</span>
+      <div class="seg" role="radiogroup" aria-labelledby="sep-h" id="segSep">
+        <label><input type="radio" name="sep" value="dash" checked><span>Dash -</span></label>
+        <label><input type="radio" name="sep" value="space"><span>Space</span></label>
+        <label><input type="radio" name="sep" value="dot"><span>Dot .</span></label>
+        <label><input type="radio" name="sep" value="under"><span>Under _</span></label>
+        <label><input type="radio" name="sep" value="none"><span>None</span></label>
+        <label><input type="radio" name="sep" value="custom"><span>Custom</span></label>
+      </div>
+      <input type="text" class="sepbox" id="sepCustom" maxlength="3" value="+" aria-label="Custom separator characters" hidden>
+    </div>
+
+    <div class="field">
+      <label class="lbl" for="pnum">Extra random digits at the end</label>
+      <div class="slider">
+        <input type="range" id="pnum" min="0" max="6" step="1" value="0">
+        <input type="number" id="pnumNum" min="0" max="6" step="1" value="0" aria-label="Number of extra random digits">
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Style</span>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="c-caps"><span class="name">Capitalise Each Word</span><span class="set">+0 bits</span></label>
+      </div>
+      <p class="hint">
+        Capitalising is a fixed rule an attacker can replay, so it adds no strength; it is only there
+        for sites that demand a capital letter. Extra digits do add strength (3.32 bits each).
+      </p>
+    </div>
+  </section>
+
+  <details>
+    <summary>What does the bits number mean?</summary>
+    <p>
+      <b>Entropy in bits describes the generator, not the string.</b> It is the number of coin flips
+      it would take to reproduce this exact choice: <b>n bits means 2ⁿ equally likely outcomes</b>, and
+      every extra bit doubles the attacker's work.
+    </p>
+    <p>
+      The number here is computed from what actually happened: <b>length × log2(alphabet size)</b> for
+      passwords, and <b>words × log2(wordlist size)</b> for passphrases, using the real sizes after your
+      exclusions. It assumes the attacker knows everything except the random draws: your settings,
+      this exact wordlist, the separator. That is the honest assumption; secrecy of the method is not
+      strength.
+    </p>
+    <p>
+      A string that merely <i>looks</i> random but was picked by a human has far less entropy than its
+      length suggests. That is why this number cannot be measured from the characters; only the
+      generator knows it.
+    </p>
+    <p>
+      Crack times below are averages (half the keyspace) at two speeds: <b>1,000 guesses/sec</b> for
+      an attack against a live login, and <b>100 billion/sec</b> for an offline attack on a stolen
+      database hashed with something fast. A slow hash such as bcrypt or Argon2 is far harder than the
+      offline figure; a leaked plaintext database is instant regardless. Aim for <b>75+ bits</b> for
+      anything you care about.
+    </p>
+  </details>
+
+  <footer>
+    <p>
+      <b class="accent">Nothing is stored or transmitted.</b> This page has no network code of any
+      kind: no scripts, fonts or images are fetched, and no password is ever sent, logged or saved.
+      Pull the plug on your connection and it still works. Generated secrets live only in this tab
+      until you close or regenerate.
+    </p>
+    <p id="storeNote">Your <i>settings</i> (length, options) are kept in this browser's local storage. Passwords never are.</p>
+    <p>After copying, your clipboard holds the secret until you copy something else.</p>
+  </footer>
+</main>
+
+<noscript>
+  <p style="max-width:640px;margin:0 auto;padding:20px;color:#ff3b30">
+    This generator needs JavaScript. The randomness is generated in your browser, so there is no
+    server-side fallback.
+  </p>
+</noscript>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =====================================================================
+     WORDLIST
+     2,222 common English words, 3–9 letters. Deduplicated at load time so
+     the entropy figure can never over-count: log2 uses the array length
+     that generation actually draws from.
+     ===================================================================== */
+  var RAW = [
+"able about above absorb accent accept access acorn across action active actor adapt adjust admire",
+"adopt adult advance afford afraid after again agency agent agree ahead airline airport aisle alarm",
+"album alert alien alike alive allow almond almost alone along aloud alpha alter always amaze amber",
+"amount amuse anchor angel anger angle angry animal ankle annual answer antique anvil apart appeal",
+"appear apple apply apron arcade arch arena argue armor army around arrange arrest arrive arrow",
+"artist ash aside ask aspect assist assume atlas atom attach attend attic auction audio august aunt",
+"author autumn avenue average avoid awake award aware away awful",
+"bacon badge bagel baker balance balcony ballad ballet balloon bamboo banana bandage banjo banker",
+"banner barber bargain barley barrel basic basil basket batch bathtub beach beacon beam bean beard",
+"beast beaver become beetle before begin behave behind belief belong below bench benefit berry",
+"beside better between beyond bicycle binary binder biology birch birth biscuit bishop bison bitter",
+"black blade blame blanket blast blaze blend bless blind blink blizzard block blood bloom blouse",
+"blush board boast bobcat boil bolt bonus bookmark boost booth border borrow bottle bottom boulder",
+"bounce bouquet bowl boxer bracket braid brain brake branch brand brass brave bread break breeze",
+"brick bridge brief bright bring brisk broad bronze brook broom brother brown brush bubble bucket",
+"buckle budget buffalo bugle build bulb bulk bullet bumper bunch bundle bunker burden burger burrow",
+"burst busy butter button buyer",
+"cabbage cabin cable cactus cadet cage cake calcium calendar camel camera campus canal candle candy",
+"canine cannon canoe canvas canyon capable cape captain capture caramel carbon career cargo carnival",
+"carpet carrot cartoon carve cascade casket castle casual catalog cattle caution cavern ceiling",
+"celery cellar cement census center century ceramic cereal certain chain chair chalk chamber",
+"champion chance change chapel chapter charcoal charge charm chart chase cheddar cheek cheer cheese",
+"chef cherry chess chest chicken chief child chili chimney chip chirp chisel choice choir choose",
+"chorus chowder chrome chunk cider cinema circle circus citizen city civic claim clamp clash classic",
+"claw clay clean clear clerk clever client cliff climate climb clinic cloak clock clone cloth cloud",
+"clover clown club cluster clutch coach coast cobra cocoa coconut coffee coil coin collar collect",
+"college colony color column comb comedy comet comfort comic command common compact compare compass",
+"compete complex compose concert conduct cone confirm connect console constant contact contest",
+"context contrast control convert cookie cool copper copy coral cord cork corner correct cottage",
+"cotton couch cougar council country couple courage cousin cover coyote cozy crab cracker cradle",
+"craft crane crash crate crawl crayon cream create credit creek crescent crest crew cricket crimson",
+"crisp critic crop crowd crown cruise crumb crunch crust crystal cube cuckoo cucumber culture curb",
+"cure curious curl current curtain curve cushion custom cycle cylinder cymbal",
+"dagger daily dairy daisy dance danger dapper dark dash data dawn deal debate decade decide declare",
+"decode decor deep deer defend define degree delay deliver delta demand denim dense dental depart",
+"depend deposit depth desert design desk detail detect develop device devote diagram dial diamond",
+"diary dice diesel diet digest digital dinner direct dirt disco discuss dispute distant ditch dive",
+"divide dizzy doctor dodge dolphin domain donate donkey donut double dough dove downtown dozen draft",
+"dragon drama drape draw dream dress drift drill drink drive drone drop drum dryer duck duel duet",
+"during dusk dust duty dwarf dwell dynamic",
+"eager eagle early earn earth easel east easy echo eclipse edge edit effort eight either elbow elder",
+"electric elegant element elephant eleven elite elm else email embark ember emblem embrace emerald",
+"empire employ empty enable enamel enchant enclose encode endless endure energy engage engine enjoy",
+"enlist enough enrich ensure enter entire entry envelope equal equator era erase errand escape",
+"escort essay estate ethics evening event every evidence evolve exact exam exceed excite exhale",
+"exist exit expand expert explain export expose extend extra",
+"fabric face factor faculty fade fairy faith falcon fame family famous fancy fantasy farm fashion",
+"fast father faucet favor feast feather feature fedora feed feel fellow female fence fern ferry",
+"festival fetch fever fiber fiction field fierce fifteen fifty figure filter final finance finch",
+"finger finish fire firm first fiscal fish fitness five fixture flag flame flash flask flavor fleet",
+"flex flight flint float flock flood floor flour flower fluent fluid flute focus fog folder follow",
+"font food foot force forest forever forget fork form fortune forty forum fossil foster found",
+"fountain four fox fraction frame free freeze fresh friend fringe frost frozen fruit fuel full fun",
+"funnel fur future",
+"gadget gain galaxy gallery gallon game garage garden garlic garment gasp gate gather gauge gaze",
+"gear gecko gem general genius gentle genuine germ ghost giant gift giggle ginger giraffe girl given",
+"glacier glad glance glass glide glitter globe glory glove glow glue goal goat goggles gold golf",
+"good goose gorilla gospel govern gown grab grace grade grain grand grape graph grasp grass gravel",
+"gravity gray great green greet grid grill grip grocery groove ground group grove grow guard guess",
+"guest guide guitar gulf gym",
+"habit hair half hall hammer hamster hand handle happen harbor hard hardy harmony harvest haste",
+"hatch haunt haven hawk hazel head health heap heart heat heavy hedge height helium helmet help hen",
+"herb herd hero hidden high hike hill hint hip hire history hobby hockey hold hollow home honest",
+"honey honor hoodie hook hope horizon horn horse hose host hotel hour house hover howl hub huge",
+"human humble humor hundred hunger hunt hurdle hurry hymn",
+"ice icon idea ideal ignite image imagine impact import impress improve impulse inch include income",
+"indeed index indoor infant inform inject injury ink inner input insect inside insight inspire",
+"install intact intend invent invest invite iris iron island issue item ivory ivy",
+"jacket jaguar jam january jar jazz jeans jelly jersey jewel job jockey jog join joint joke jolly",
+"journal journey joy judge juice july jump june jungle junior jury",
+"kangaroo karate kayak keen keep kennel kettle key keyboard kick kidney kind king kiosk kitchen kite",
+"kitten knee knife knight knit knob knock knot know koala",
+"label labor ladder lady lagoon lake lamb lamp land lane language lantern laptop large laser last",
+"late later laugh launch laundry lava law lawn layer lazy leader leaf league lean leap learn leather",
+"leave lecture ledge left legacy legend legume lemon lend length lens leopard lesson letter level",
+"liberty library license lid life lift light like lilac lily lime limit line linen link lion liquid",
+"list listen liter little live lizard load loaf lobby lobster local locate lock lodge log logic",
+"lonely long loop lotus loud lounge love lower loyal luck lumber lunar lunch lung luxury lyric",
+"machine macro madam magic magnet magnify maid mail main major make mammal manage mango mansion",
+"manual maple marble march margin marine market marsh martial marvel mask mason master match",
+"material matrix matter mature maximum maybe mayor maze meadow meal mean measure meat medal media",
+"medium meet melody melon melt member memory mention mentor menu mercy merge merit merry mesh",
+"message metal meteor method metric middle midnight might mild mile milk mill mimic mind mineral",
+"mingle minor mint minute mirror mission mist mixture mobile model modern modest modify moment",
+"monitor monkey month moon moral morning mosaic moss most motel motion motor mountain mouse mouth",
+"move movie much muffin mule multiply muscle museum music must mustard mutual myself mystery myth",
+"nail name napkin narrow nation native nature naval near neat neck nectar need needle negative",
+"neighbor neon nephew nerve nest net network never news next nice night nimble nine noble node noise",
+"noodle noon normal north nose note notice novel nozzle number nurse nut nylon",
+"oak oasis oat obey object oblige observe obtain occur ocean octopus odor offer office often oil",
+"olive omega omit once onion online only onward open opera opinion oppose option orange orbit orchard",
+"order organ origin ostrich other otter ounce outdoor outer output outside oval oven owl owner",
+"oxygen oyster",
+"pace pack paddle page paint pair palace pale palm panda panel panic paper parade parcel parent park",
+"parrot parsley part party pass past pasta patch path patient patrol pattern pause pave peace peach",
+"peak peanut pear pearl pebble pedal pelican pen pencil penguin people pepper perch perfect perform",
+"perhaps period permit person pet petal phase phone photo phrase piano pick picnic picture piece",
+"pigeon pilgrim pillar pillow pilot pinch pine pink pioneer pipe pitch pixel pizza place plain plan",
+"plank plant plasma plastic plate play plaza pleasant pledge plenty plot plug plum plumber plus",
+"pocket poem point polar pole police polish polite pond pony pool popular porch portal portion post",
+"potato potter pouch pound powder power praise prairie prank prefer premium prepare present press",
+"pretty prevent price pride primary print prism private prize probe problem process produce profile",
+"profit program project promise proof proper protect proud prove public pudding puddle pull pulse",
+"pump pumpkin punch pupil puppy purple purpose purse push puzzle pyramid",
+"quail quake quality quantum quarter queen query quest question quick quiet quilt quit quiz quote",
+"rabbit raccoon race radar radio radish raft rail rain raise rally ramp ranch random range rank",
+"rapid rare rate rather rattle raven raw ray razor reach react read ready real reason rebel recall",
+"receive recipe record recover recruit recycle red reduce reef refer refine reflect reform refuge",
+"refund regard region regret regular reject relax release relief remain remedy remind remote remove",
+"render renew rent repair repeat replace reply report request rescue research resist resolve resort",
+"resource respect respond rest result retail retire return reveal review reward rhythm ribbon rice",
+"rich ride ridge right rigid ring rinse ripe rise risk ritual rival river road roast robin robot",
+"rock rocket rodeo roll roof room root rope rose rotate rough round route royal rubber ruby rug rule",
+"rumor runner rural rush rust",
+"saddle safari safe sage sail salad salmon salon salt sample sand sandal satin satisfy sauce sausage",
+"save saw scale scan scarf scatter scene schedule scheme scholar school science scissors scoop scope",
+"score scout scramble scrap screen screw script scroll sculpt sea seal search season seat second",
+"secret section sector secure seed seek segment select self sell seminar senate send senior sense",
+"sentence series serve session settle seven shade shadow shaft shallow shampoo shape share shark",
+"sharp shave shelf shell shelter sheriff shield shift shine ship shirt shock shoe shoot shop shore",
+"short shoulder shovel show shower shrimp shrink shuffle shy sibling side siege sight sign silent",
+"silk silly silver similar simple since sincere sing single sink siren sister site six size skate",
+"sketch ski skill skin skirt skull sky slam sleep sleeve slender slice slide slight slim slogan",
+"slope slot slow small smart smile smoke smooth snack snake snap sneaker snow soap soccer social",
+"sock soda sofa soft soil solar soldier solid solve someone song soon sorry sort soul sound soup",
+"source south space spare spark speak special speech speed spell spend sphere spice spider spill",
+"spin spirit split spoke sponge spoon sport spot spray spread spring sprout square squash squeeze",
+"squid stable stack stadium staff stage stairs stamp stand star start state station statue stay",
+"steady steam steel stem step stereo stick still sting stock stomach stone stool stop store storm",
+"story stove straight strange straw stream street stretch strike string strong studio study stuff",
+"style subject submit subway success sudden sugar suggest suit summer summit sunset super supply",
+"support sure surface surge surprise survey survive sushi swamp swan swap swarm sweater sweet swift",
+"swim swing switch sword symbol syrup system",
+"table tablet tackle tactic tag tail tailor talent talk tall tank tape target task taste tattoo",
+"tavern tax teach team tear tease teeth telescope tell temple tempo tenant tennis tent term terrain",
+"test text thank theater theme theory thick thin thing think third thirty thorn thought thread three",
+"thrive throat throne throw thumb thunder ticket tide tidy tiger tight tile timber time tiny tip",
+"tired tissue title toast tobacco today toe together toilet token tomato tomorrow tone tongue",
+"tonight tool tooth top topic torch total touch tough tour toward tower town toy trace track trade",
+"traffic trail train trait tram transfer trap travel tray treat tree trend trial triangle tribe",
+"trick trigger trim trip triumph trophy tropic trouble truck true trumpet trunk trust truth tube",
+"tulip tumble tuna tune tunnel turkey turn turtle twelve twenty twice twin twist type",
+"ultra umbrella uncle under unfold uniform union unique unit universe unlock until unusual update",
+"upgrade upon upper upset urban urge usage useful usual utility",
+"vacation vacuum valid valley value valve van vanilla vapor variety various vast vault vector",
+"vegetable vehicle velvet vendor venture venue verb verify verse version vessel veteran vibrant",
+"victory video view village vintage vinyl violet violin virtue visible vision visit visual vital",
+"vivid vocal voice volume vote voyage",
+"wafer wage wagon waist wait wake walk wall walnut walrus wander want warden warm warn wash wasp",
+"waste watch water wave wax weapon wear weather weave web wedding week weight weird welcome well",
+"west wet whale wheat wheel when where which while whisper whistle white whole why wide widget width",
+"wild will willow win wind window wing winner winter wire wisdom wise wish witness wizard wolf",
+"woman wonder wood wool word work world worry worth wrap wrist write wrong",
+"xenon xylophone",
+"yacht yard yarn yawn year yeast yellow yes yesterday yet yield yoga yogurt young youth",
+"zebra zero zigzag zinc zipper zone zoo zoom"
+  ].join(" ");
+
+  var WORDS = (function(){
+    var seen = Object.create(null), out = [], parts = RAW.split(/\s+/), i, w;
+    for (i = 0; i < parts.length; i++){
+      w = parts[i];
+      if (!w || seen[w]) continue;   // duplicates would silently inflate the entropy claim
+      seen[w] = 1;
+      out.push(w);
+    }
+    return out;
+  })();
+
+  /* =====================================================================
+     CSPRNG: crypto.getRandomValues only. There is deliberately no
+     Math.random fallback: a fallback that "works" would hand out
+     predictable passwords, which is worse than a visible failure.
+     ===================================================================== */
+  var CRYPTO = (typeof crypto !== "undefined" && crypto && typeof crypto.getRandomValues === "function")
+    ? crypto : null;
+
+  var pool = CRYPTO ? new Uint32Array(256) : null;
+  var poolIdx = pool ? pool.length : 0;
+
+  function nextU32(){
+    if (poolIdx >= pool.length){ CRYPTO.getRandomValues(pool); poolIdx = 0; }
+    return pool[poolIdx++];
+  }
+
+  // Uniform integer in [0, max).
+  //
+  // `nextU32() % max` is biased whenever max does not divide 2^32: the low
+  // residues get one extra representative each, so early alphabet letters come
+  // up slightly more often. Rejection sampling removes it: discard any draw
+  // landing in the short final block so every residue has exactly the same
+  // number of preimages. When max divides 2^32 (2, 4, 8, 16...) limit is 2^32
+  // and nothing is ever rejected.
+  function randomInt(max){
+    if (!(max > 0) || max > 4294967296) throw new RangeError("range");
+    var limit = Math.floor(4294967296 / max) * max;
+    var v;
+    do { v = nextU32(); } while (v >= limit);
+    return v % max;
+  }
+
+  function pick(arr){ return arr[randomInt(arr.length)]; }
+
+  /* =====================================================================
+     Character sets
+     ===================================================================== */
+  var LOWER = "abcdefghijklmnopqrstuvwxyz";
+  var UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  var DIGIT = "0123456789";
+  // No quotes, backslash, backtick, space or pipe: they get mangled by shells,
+  // CSV imports and careless web forms far too often to be worth the ~0.3 bits.
+  var SYMBOL = "!@#$%^&*()-_=+[]{}<>?,./:;~";
+  var AMBIGUOUS = "Il1O0";   // capital i, lowercase L, one, capital o, zero
+
+  function strip(set, drop){
+    if (!drop) return set;
+    var out = "", i;
+    for (i = 0; i < set.length; i++) if (drop.indexOf(set.charAt(i)) === -1) out += set.charAt(i);
+    return out;
+  }
+
+  /* =====================================================================
+     Entropy
+     ===================================================================== */
+  function log2(x){ return Math.log(x) / Math.LN2; }
+
+  // Entropy when every selected class must appear at least once.
+  //
+  // We reject whole strings until all classes are present, so the result is
+  // uniform over the SUBSET of valid strings, which is smaller than the full
+  // space, so the true entropy is a shade BELOW length * log2(N). Counting the
+  // valid strings by inclusion-exclusion:
+  //     |valid| = Σ over subsets S of classes  (-1)^|S| * (N - nS)^L
+  // (N - nS)^L overflows a double for large L, so factor out N^L and keep every
+  // term in [0,1]:
+  //     log2|valid| = L*log2(N) + log2( Σ (-1)^|S| * ((N-nS)/N)^L )
+  function entropyRequiringAll(sizes, L){
+    var k = sizes.length, N = 0, i, mask, excluded, bitsSet, term, sum = 0;
+    for (i = 0; i < k; i++) N += sizes[i];
+    for (mask = 0; mask < (1 << k); mask++){
+      excluded = 0; bitsSet = 0;
+      for (i = 0; i < k; i++) if (mask & (1 << i)){ excluded += sizes[i]; bitsSet++; }
+      term = Math.pow((N - excluded) / N, L);
+      sum += (bitsSet % 2) ? -term : term;
+    }
+    // When L < k no valid string exists and the true sum is exactly 0, but the
+    // alternating terms cancel to a ~1e-16 residue that is often POSITIVE, so a
+    // bare `sum > 0` test passes and the function returns a large negative bit
+    // count instead of null. Every legitimate case leaves sum far above this
+    // floor: the tightest is L === k, e.g. 4!·26·26·10·27 / 89^4 ≈ 0.07.
+    if (!(sum > 1e-9)) return null;
+    return L * log2(N) + log2(sum);
+  }
+
+  var SUPER = ["⁰","¹","²","³","⁴","⁵","⁶","⁷","⁸","⁹"];
+  function superscript(n){
+    var s = String(n), out = "", i;
+    for (i = 0; i < s.length; i++) out += SUPER[+s.charAt(i)] || s.charAt(i);
+    return out;
+  }
+
+  var YEAR = 31557600; // Julian year in seconds
+
+  // Human crack time. Everything is done in log10 space because 2^(bits-1)
+  // overflows a double past ~1024 bits and we support up to ~840.
+  function crackTime(bits, guessesPerSec){
+    var l10 = (bits - 1) * Math.LOG10E * Math.LN2 - Math.log(guessesPerSec) * Math.LOG10E;
+    if (l10 < 0) return "instantly";
+    var units = [["second",1],["minute",60],["hour",3600],["day",86400],["year",YEAR]];
+    var picked = units[0], i, v, e, m;
+    for (i = 0; i < units.length; i++) if (l10 >= Math.log(units[i][1]) * Math.LOG10E) picked = units[i];
+    v = Math.pow(10, l10 - Math.log(picked[1]) * Math.LOG10E);
+    if (picked[0] === "year" && v >= 1e6){
+      e = Math.floor(Math.log(v) * Math.LOG10E);
+      m = Math.pow(10, Math.log(v) * Math.LOG10E - e);
+      return m.toFixed(1) + "×10" + superscript(e) + " years";
+    }
+    // Pluralise on the number actually printed, not on v: 1.024 seconds prints
+    // as "1.0", and "1.0 seconds" reads as a bug.
+    var shown = v < 10 ? +v.toFixed(1) : Math.round(v);
+    var txt = v < 10 ? shown.toFixed(1) : shown.toLocaleString();
+    return txt + " " + picked[0] + (shown === 1 ? "" : "s");
+  }
+
+  function verdictFor(bits){
+    if (bits < 40)  return { label: "Weak",        color: "#ff3b30", fill: 1 };
+    if (bits < 60)  return { label: "Fair",        color: "#f0c419", fill: 2 };
+    if (bits < 75)  return { label: "Good",        color: "#f0c419", fill: 3 };
+    if (bits < 100) return { label: "Strong",      color: "#4fc76a", fill: 4 };
+    if (bits < 128) return { label: "Very strong", color: "#4fc76a", fill: 5 };
+    return            { label: "Overkill",   color: "#4fc76a", fill: 6 };
+  }
+
+  /* =====================================================================
+     Settings (never secrets). Storage may throw on an opaque origin.
+     ===================================================================== */
+  var KEY = "batchly.passphrase.settings.v1";
+  var storageOk = true;
+
+  function defaults(){
+    return {
+      mode: "pw",
+      len: 20, lower: true, upper: true, digit: true, sym: true, ambig: false, req: true,
+      wc: 6, sep: "dash", sepCustom: "+", caps: false, pnum: 0
+    };
+  }
+  var S = defaults();
+
+  function loadSettings(){
+    var raw = null, o, i, keys;
+    try { raw = localStorage.getItem(KEY); }
+    catch (e) { storageOk = false; return; }
+    if (!raw) return;
+    try { o = JSON.parse(raw); } catch (e) { return; }
+    if (!o || typeof o !== "object") return;
+    try {
+      // Stored values are untrusted: clamp and coerce rather than assigning blind.
+      if (o.mode === "pw" || o.mode === "pp") S.mode = o.mode;
+      S.len = clamp(int(o.len, S.len), 4, 128);
+      S.wc  = clamp(int(o.wc,  S.wc),  2, 16);
+      S.pnum = clamp(int(o.pnum, S.pnum), 0, 6);
+      keys = ["lower","upper","digit","sym","ambig","req","caps"];
+      for (i = 0; i < keys.length; i++) if (typeof o[keys[i]] === "boolean") S[keys[i]] = o[keys[i]];
+      if (["dash","space","dot","under","none","custom"].indexOf(o.sep) !== -1) S.sep = o.sep;
+      if (typeof o.sepCustom === "string") S.sepCustom = o.sepCustom.slice(0, 3);
+      if (!S.lower && !S.upper && !S.digit && !S.sym) S.lower = true; // never restore an unusable state
+    } catch (e) {
+      // Nothing a stored value can do may abort the boot. Half-applied settings
+      // are worse than none: a throw partway through used to leave S.mode set
+      // to "pp" while the tab strip never synced, and skipped the first
+      // generation AND the no-CSPRNG lockout below it. Start clean instead.
+      S = defaults();
+    }
+  }
+
+  function saveSettings(){
+    if (!storageOk) return;
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) { storageOk = false; noteStorage(); }
+  }
+
+  // parseInt coerces its argument with ToString, which THROWS a TypeError for an
+  // object whose toString is not callable, and JSON.parse can hand us exactly
+  // that from `{"toString":1}` in storage. Coercion of untrusted data must not
+  // be able to throw.
+  function int(v, dflt){
+    var n;
+    try { n = parseInt(v, 10); } catch (e) { return dflt; }
+    return isFinite(n) ? n : dflt;
+  }
+  function clamp(n, lo, hi){ return n < lo ? lo : (n > hi ? hi : n); }
+
+  /* =====================================================================
+     DOM
+     ===================================================================== */
+  var $ = function(id){ return document.getElementById(id); };
+  var out = $("out"), outMeta = $("outMeta"), outErr = $("outErr"), legend = $("legend");
+  var bitsEl = $("bits"), meter = $("meter"), verdictEl = $("verdict"), crackEl = $("crack");
+  var copyMsg = $("copyMsg"), genBtn = $("gen"), copyBtn = $("copy");
+  var tabPw = $("tab-pw"), tabPp = $("tab-pp"), panelPw = $("panel-pw"), panelPp = $("panel-pp");
+  var sepCustom = $("sepCustom"), ruleHint = $("ruleHint"), ppHint = $("ppHint"), storeNote = $("storeNote");
+
+  var current = "";          // the secret currently on screen; never persisted
+  var copyTimer = null;
+
+  var METER_CELLS = 6;
+  (function buildMeter(){
+    for (var i = 0; i < METER_CELLS; i++) meter.appendChild(document.createElement("i"));
+  })();
+
+  function noteStorage(){
+    storeNote.textContent = "Settings can't be saved in this browser (storage is blocked here), " +
+      "so options reset when you reload. Generation is unaffected.";
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function renderSecret(str){
+    var frag = document.createDocumentFragment(), i, ch, span;
+    out.textContent = "";
+    out.classList.remove("empty");
+    for (i = 0; i < str.length; i++){
+      ch = str.charAt(i);
+      span = document.createElement("span");
+      span.textContent = ch;
+      if (ch >= "0" && ch <= "9") span.className = "d";
+      else if (!/[a-z]/i.test(ch)) span.className = "s";
+      frag.appendChild(span);
+    }
+    out.appendChild(frag);
+    legend.hidden = false;
+  }
+
+  function showError(msg){
+    current = "";
+    out.textContent = "";
+    out.classList.add("empty");
+    out.appendChild(document.createTextNode("Nothing generated: see below."));
+    legend.hidden = true;
+    outErr.hidden = false;
+    outErr.textContent = msg;
+    outMeta.textContent = "";
+    // The hints describe the last SUCCESSFUL draw. Left standing they contradict
+    // the error sitting right above them: "no character types selected" over
+    // "27 characters in play, 4.75 bits per character". Both are repopulated by
+    // the next successful generation, including the one a tab switch triggers.
+    ruleHint.textContent = "";
+    ppHint.textContent = "";
+    copyBtn.disabled = true;
+    setStrength(null);
+  }
+
+  function clearError(){
+    outErr.hidden = true;
+    outErr.textContent = "";
+    copyBtn.disabled = false;
+  }
+
+  function setStrength(bits){
+    var cells = meter.children, i, v;
+    if (bits === null || !isFinite(bits)){
+      bitsEl.textContent = "- ";
+      bitsEl.appendChild(el("small", "bits"));
+      verdictEl.textContent = "No password yet";
+      verdictEl.style.setProperty("--sc", "#888");
+      crackEl.textContent = "";
+      for (i = 0; i < cells.length; i++) cells[i].className = "";
+      return;
+    }
+    v = verdictFor(bits);
+    bitsEl.textContent = (bits >= 100 ? Math.round(bits) : bits.toFixed(1)) + " ";
+    bitsEl.appendChild(el("small", "bits of entropy"));
+    verdictEl.textContent = v.label;
+    verdictEl.style.setProperty("--sc", v.color);
+    for (i = 0; i < cells.length; i++){
+      cells[i].className = i < v.fill ? "on" : "";
+      cells[i].style.setProperty("--sc", v.color);
+    }
+    crackEl.textContent = "";
+    crackEl.appendChild(line("Offline attack, 100 billion guesses/sec: ", crackTime(bits, 1e11)));
+    crackEl.appendChild(line("Online attack, 1,000 guesses/sec: ", crackTime(bits, 1e3)));
+  }
+
+  function el(tag, text){ var n = document.createElement(tag); n.textContent = text; return n; }
+  function line(label, value){
+    var d = document.createElement("div");
+    d.appendChild(document.createTextNode(label));
+    d.appendChild(el("b", value));
+    return d;
+  }
+
+  /* ---------------- generation ---------------- */
+
+  function drawString(alphabet, len){
+    var s = "", i;
+    for (i = 0; i < len; i++) s += alphabet.charAt(randomInt(alphabet.length));
+    return s;
+  }
+
+  function hasAny(str, set){
+    var i;
+    for (i = 0; i < str.length; i++) if (set.indexOf(str.charAt(i)) !== -1) return true;
+    return false;
+  }
+
+  function genPassword(){
+    var classes = [], sizes = [], alphabet, i, bits, str, ok, attempts;
+
+    if (S.lower) classes.push(strip(LOWER, S.ambig ? AMBIGUOUS : ""));
+    if (S.upper) classes.push(strip(UPPER, S.ambig ? AMBIGUOUS : ""));
+    if (S.digit) classes.push(strip(DIGIT, S.ambig ? AMBIGUOUS : ""));
+    if (S.sym)   classes.push(SYMBOL);
+    classes = classes.filter(function(c){ return c.length > 0; });
+
+    if (!classes.length){
+      showError("No character types selected. Tick at least one of lowercase, uppercase, digits or symbols.");
+      return;
+    }
+    if (S.req && S.len < classes.length){
+      showError("A " + S.len + "-character password can't contain all " + classes.length +
+        " selected types. Raise the length to at least " + classes.length +
+        ", or turn off “Use every type at least once”.");
+      return;
+    }
+
+    alphabet = classes.join("");
+    for (i = 0; i < classes.length; i++) sizes.push(classes[i].length);
+
+    if (S.req){
+      // Whole-string rejection keeps the result uniform over valid strings.
+      // Per-position "force one of each" would bias those positions instead.
+      attempts = 0;
+      do {
+        str = drawString(alphabet, S.len);
+        ok = true;
+        for (i = 0; i < classes.length; i++) if (!hasAny(str, classes[i])){ ok = false; break; }
+        attempts++;
+      } while (!ok && attempts < 100000);
+      if (!ok){
+        showError("Couldn't build a password containing every selected type after 100,000 tries. " +
+          "Increase the length or turn off “Use every type at least once”.");
+        return;
+      }
+      bits = entropyRequiringAll(sizes, S.len);
+    } else {
+      str = drawString(alphabet, S.len);
+      bits = S.len * log2(alphabet.length);
+    }
+
+    if (bits === null){
+      showError("That combination has no valid passwords. Raise the length or relax the rules.");
+      return;
+    }
+
+    clearError();
+    current = str;
+    renderSecret(str);
+    outMeta.textContent = S.len + " chars · " + alphabet.length + "-char alphabet";
+    setStrength(bits);
+    updateRuleHint(alphabet.length, classes.length);
+  }
+
+  function separator(){
+    switch (S.sep){
+      case "dash":  return "-";
+      case "space": return " ";
+      case "dot":   return ".";
+      case "under": return "_";
+      case "none":  return "";
+      case "custom": return S.sepCustom;
+      default: return "-";
+    }
+  }
+
+  function genPassphrase(){
+    if (WORDS.length < 2){
+      showError("The built-in wordlist failed to load, so no passphrase can be generated.");
+      return;
+    }
+    var sep = separator(), words = [], i, w, str, bits, digits = "";
+
+    for (i = 0; i < S.wc; i++){
+      w = pick(WORDS);                     // with replacement: each draw is independent,
+      if (S.caps) w = w.charAt(0).toUpperCase() + w.slice(1);  // so entropy is exactly wc*log2(W)
+      words.push(w);
+    }
+    str = words.join(sep);
+
+    if (S.pnum > 0){
+      for (i = 0; i < S.pnum; i++) digits += String(randomInt(10));
+      str += (sep ? sep : "") + digits;
+    }
+
+    // Capitalisation is a deterministic transform of the drawn words, so it
+    // contributes exactly zero bits. Only the draws count.
+    bits = S.wc * log2(WORDS.length) + S.pnum * log2(10);
+
+    clearError();
+    current = str;
+    renderSecret(str);
+    outMeta.textContent = S.wc + " words · " + WORDS.length.toLocaleString() + "-word list";
+    setStrength(bits);
+    updatePpHint();
+  }
+
+  function updatePpHint(){
+    var per = log2(WORDS.length);
+    // Smallest word count that clears the 75-bit bar quoted in the explainer,
+    // derived from the list actually in use rather than hard-coded.
+    var need = Math.ceil(75 / per);
+    var txt = WORDS.length.toLocaleString() + " words in the list, " + per.toFixed(2) +
+      " bits per word, drawn independently (repeats are allowed and cost nothing).";
+    if (S.wc < need) txt += " " + need + " words clears 75 bits.";
+    ppHint.textContent = txt;
+  }
+
+  function updateRuleHint(alphaSize, classCount){
+    var bitsPerChar = log2(alphaSize);
+    var txt = alphaSize + " characters in play, " + bitsPerChar.toFixed(2) + " bits per character.";
+    if (S.ambig) txt += " Look-alikes I l 1 O 0 removed, which is why the alphabet is smaller.";
+    if (S.req && classCount > 1) txt += " Requiring all " + classCount +
+      " types costs a sliver of entropy (the count above already accounts for it).";
+    ruleHint.textContent = txt;
+  }
+
+  function generate(){
+    if (!CRYPTO) return;
+    if (S.mode === "pw") genPassword(); else genPassphrase();
+    setCopyMsg("", "");
+  }
+
+  /* ---------------- copy ---------------- */
+
+  function setCopyMsg(text, cls){
+    copyMsg.textContent = text;
+    copyMsg.className = "msg" + (cls ? " " + cls : "");
+    if (copyTimer){ clearTimeout(copyTimer); copyTimer = null; }
+    if (text) copyTimer = setTimeout(function(){ copyMsg.textContent = ""; copyMsg.className = "msg"; }, 6000);
+  }
+
+  function selectOutput(){
+    try {
+      var sel = window.getSelection(), range = document.createRange();
+      range.selectNodeContents(out);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // execCommand path for iframes/browsers where the async Clipboard API is
+  // unavailable or blocked by permissions policy.
+  function legacyCopy(text){
+    var ta = null, ok = false, sel = null, prev = null;
+    try {
+      ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+      document.body.appendChild(ta);
+      sel = document.getSelection();
+      if (sel && sel.rangeCount > 0) prev = sel.getRangeAt(0);
+      ta.select();
+      if (ta.setSelectionRange) ta.setSelectionRange(0, text.length); // iOS needs this
+      ok = document.execCommand("copy");
+    } catch (e) {
+      ok = false;
+    } finally {
+      // Teardown MUST run on every path. execCommand is absent in some browsers
+      // and throws in some sandboxes, and this textarea holds the secret in
+      // plain text: left behind, every failed copy would park another old
+      // password in the DOM, outliving the one on screen. execCommand("copy")
+      // is synchronous, so clearing here cannot race the clipboard write.
+      if (ta){
+        ta.value = "";
+        if (ta.parentNode) ta.parentNode.removeChild(ta);
+      }
+      if (sel && prev){ try { sel.removeAllRanges(); sel.addRange(prev); } catch (e2) {} }
+    }
+    return ok;
+  }
+
+  function doCopy(){
+    if (!current){ setCopyMsg("Nothing to copy yet. Generate one first.", "bad"); return; }
+    var done = function(){ setCopyMsg("Copied. Your clipboard holds it until you copy something else.", "good"); };
+    var failed = function(){
+      var selected = selectOutput();
+      setCopyMsg(selected
+        ? "The browser blocked clipboard access here. The text is selected: press Ctrl+C (or Cmd+C)."
+        : "The browser blocked clipboard access here. Select the text above and copy it manually.", "bad");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(current).then(done, function(){
+        if (legacyCopy(current)) done(); else failed();
+      });
+      return;
+    }
+    if (legacyCopy(current)) done(); else failed();
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  function setMode(mode, focusTab){
+    S.mode = mode;
+    var isPw = mode === "pw";
+    tabPw.setAttribute("aria-selected", isPw ? "true" : "false");
+    tabPp.setAttribute("aria-selected", isPw ? "false" : "true");
+    tabPw.tabIndex = isPw ? 0 : -1;
+    tabPp.tabIndex = isPw ? -1 : 0;
+    panelPw.hidden = !isPw;
+    panelPp.hidden = isPw;
+    if (focusTab) (isPw ? tabPw : tabPp).focus();
+    saveSettings();
+    generate();
+  }
+
+  tabPw.addEventListener("click", function(){ setMode("pw"); });
+  tabPp.addEventListener("click", function(){ setMode("pp"); });
+
+  function tabKeys(e){
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft"){
+      e.preventDefault();
+      setMode(S.mode === "pw" ? "pp" : "pw", true);
+    } else if (e.key === "Home"){ e.preventDefault(); setMode("pw", true); }
+    else if (e.key === "End"){ e.preventDefault(); setMode("pp", true); }
+  }
+  tabPw.addEventListener("keydown", tabKeys);
+  tabPp.addEventListener("keydown", tabKeys);
+
+  // Pair a range and a number input so either can drive the value.
+  function bindNumberPair(rangeId, numId, key, lo, hi){
+    var r = $(rangeId), n = $(numId);
+    function apply(v, echoBoth){
+      v = clamp(int(v, S[key]), lo, hi);
+      S[key] = v;
+      r.value = v;
+      if (echoBoth) n.value = v;
+      saveSettings();
+      generate();
+    }
+    r.addEventListener("input", function(){ apply(r.value, true); });
+    n.addEventListener("change", function(){ apply(n.value, true); });
+    n.addEventListener("blur", function(){ n.value = S[key]; });
+    return function sync(){ r.value = S[key]; n.value = S[key]; };
+  }
+
+  function bindCheck(id, key){
+    var c = $(id);
+    c.addEventListener("change", function(){ S[key] = c.checked; saveSettings(); generate(); });
+    return function sync(){ c.checked = !!S[key]; };
+  }
+
+  var syncLen  = bindNumberPair("len", "lenNum", "len", 4, 128);
+  var syncWc   = bindNumberPair("wc", "wcNum", "wc", 2, 16);
+  var syncPnum = bindNumberPair("pnum", "pnumNum", "pnum", 0, 6);
+
+  var syncLower = bindCheck("c-lower", "lower");
+  var syncUpper = bindCheck("c-upper", "upper");
+  var syncDigit = bindCheck("c-digit", "digit");
+  var syncSym   = bindCheck("c-sym", "sym");
+  var syncAmbig = bindCheck("c-ambig", "ambig");
+  var syncReq   = bindCheck("c-req", "req");
+  var syncCaps  = bindCheck("c-caps", "caps");
+
+  function syncSegLabels(){
+    var labels = document.querySelectorAll("#segSep label"), i, input;
+    for (i = 0; i < labels.length; i++){
+      input = labels[i].querySelector("input");
+      labels[i].classList.toggle("on", input.value === S.sep);
+      input.checked = input.value === S.sep;
+    }
+    sepCustom.hidden = S.sep !== "custom";
+  }
+
+  (function bindSep(){
+    var inputs = document.querySelectorAll("#segSep input"), i;
+    for (i = 0; i < inputs.length; i++){
+      inputs[i].addEventListener("change", function(e){
+        S.sep = e.target.value;
+        syncSegLabels();
+        if (S.sep === "custom") sepCustom.focus();
+        saveSettings();
+        generate();
+      });
+    }
+    sepCustom.addEventListener("input", function(){
+      S.sepCustom = sepCustom.value.slice(0, 3);
+      saveSettings();
+      generate();
+    });
+  })();
+
+  genBtn.addEventListener("click", generate);
+  copyBtn.addEventListener("click", doCopy);
+
+  // Symbol set is long; show the real characters so nothing is a surprise.
+  $("set-sym").textContent = SYMBOL;
+  $("set-sym").title = SYMBOL;
+
+  /* ---------------- boot ---------------- */
+
+  loadSettings();
+  if (!storageOk) noteStorage();
+
+  syncLen(); syncWc(); syncPnum();
+  syncLower(); syncUpper(); syncDigit(); syncSym(); syncAmbig(); syncReq(); syncCaps();
+  sepCustom.value = S.sepCustom;
+  syncSegLabels();
+
+  // Sync the tabs to the restored mode either way. generate() is a no-op without
+  // a CSPRNG, so this is safe when generation is disabled, and skipping it used
+  // to strand a user who had saved the Passphrase tab on a Password panel that
+  // did not match S.mode.
+  setMode(S.mode, false);   // also runs the first generation when crypto exists
+
+  if (!CRYPTO){
+    $("nocrypto").hidden = false;
+    genBtn.disabled = true;
+    copyBtn.disabled = true;
+    out.textContent = "Generation disabled: no secure randomness available.";
+    verdictEl.textContent = "Unavailable";
+    verdictEl.style.setProperty("--sc", "#ff3b30");
+  }
+})();
+</script>
+</body>
+</html>
+<style>
+/* mobile: .check labels are already min-height:48 tap targets; just kill the 300ms tap delay */
+@media (max-width: 900px), (pointer: coarse) {
+  .check { touch-action: manipulation; }
+}
+</style>

@@ -1,0 +1,20 @@
+{
+  "folder": "admin/checkers",
+  "title": "Checkers",
+  "description": "Play checkers against a computer that plans ahead: jump, chain multi-captures, and crown your kings. Easy to hard.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/checkers",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 39074,
+      "sha256": "84dcf5f01816ca0623c1220ef17dcf9cab16b1b724df19b481ee644fd3fffc6c",
+      "source": "published catalog HTML"
+    }
+  ]
+}

@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diff: compare two texts</title>
+<style>
+  :root{
+    --bg:#10100e;
+    --fg:#eee;
+    --mut:#888;
+    --acc:#ff3b30;
+    --line:#3a3a36;
+    --field:#151513;
+
+    --add-bg:rgba(46,160,67,.15);
+    --add-fg:#8ee79a;
+    --add-br:#2ea043;
+    --add-hi:rgba(46,160,67,.45);
+
+    --del-bg:rgba(255,59,48,.13);
+    --del-fg:#ff9d97;
+    --del-br:#ff3b30;
+    --del-hi:rgba(255,59,48,.42);
+
+    --maxw:640px;
+
+    /* Width of a line-number column. Set per-diff from the real digit count in
+       render(); a fixed value clipped five-digit numbers on long files, and
+       `ch` only lines up between the header and the body because both now use
+       the same font-size (see .dhead). */
+    --nw:3.6ch;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:14px;
+    line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    overflow-x:hidden;
+  }
+  .wrap{
+    max-width:var(--maxw);
+    margin:0 auto;
+    padding:20px;
+  }
+  body.wide{--maxw:1180px}
+
+  h1{
+    font-size:15px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    margin:0;
+    font-weight:700;
+  }
+  h1 .dot{color:var(--acc)}
+  .sub{
+    color:var(--mut);
+    font-size:11px;
+    letter-spacing:.06em;
+    margin:6px 0 0;
+  }
+  header{
+    border-bottom:2px solid var(--fg);
+    padding-bottom:14px;
+    margin-bottom:18px;
+  }
+
+  .lbl{
+    display:block;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--mut);
+    margin-bottom:6px;
+  }
+
+  /* ---------- input panes ---------- */
+  .panes{display:grid;grid-template-columns:1fr;gap:14px}
+  @media (min-width:760px){ .panes{grid-template-columns:1fr 1fr} }
+
+  .pane{
+    border:2px solid var(--fg);
+    padding:12px;
+    background:transparent;
+  }
+  .pane.drag{border-color:var(--acc);background:rgba(255,59,48,.06)}
+  .pane textarea{
+    width:100%;
+    min-height:160px;
+    resize:vertical;
+    background:var(--field);
+    color:var(--fg);
+    border:2px solid var(--line);
+    padding:10px;
+    font:inherit;
+    font-size:12.5px;
+    line-height:1.5;
+    tab-size:4;
+    white-space:pre;
+    overflow:auto;
+  }
+  /* 4.8:1 on the field background. #5f5f5a was 2.9:1; placeholder text is
+     still text and has to clear the same floor as everything else. */
+  .pane textarea::placeholder{color:#83837c;opacity:1}
+  .panefoot{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+  .meta{font-size:11px;letter-spacing:.08em;color:var(--mut);text-transform:uppercase}
+
+  /* ---------- controls ---------- */
+  .btn{
+    -webkit-appearance:none;appearance:none;
+    display:inline-flex;align-items:center;justify-content:center;
+    min-height:44px;
+    padding:0 16px;
+    background:var(--acc);
+    color:var(--bg);
+    border:2px solid var(--acc);
+    border-radius:0;
+    font:inherit;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .btn2{
+    background:transparent;
+    color:var(--acc);
+    border:2px solid var(--acc);
+  }
+  .btn3{
+    background:transparent;
+    color:var(--mut);
+    border:2px solid var(--line);
+  }
+  /* Still 44px tall: a smaller-looking button must not become a smaller
+     touch target. Only the type size and side padding shrink. */
+  .btn.sm{min-height:44px;padding:0 12px;font-size:10px}
+  .btn:hover{filter:brightness(1.12)}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  /* Layered on purpose. An engine without :focus-visible support drops the
+     second rule as invalid and keeps a focus ring on every focus: the safe
+     failure. Engines that do support it hide the ring for mouse clicks only. */
+  :focus{outline:3px solid #fff;outline-offset:2px}
+  :focus:not(:focus-visible){outline:none}
+  :focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .actions{margin-top:16px}
+  .actions .btn{flex:1 1 auto;min-width:120px}
+
+  fieldset{border:2px solid var(--line);margin:16px 0 0;padding:12px}
+  legend{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:0 6px;
+  }
+  .opt{
+    display:flex;align-items:center;gap:10px;
+    min-height:44px;
+    cursor:pointer;
+    font-size:11.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .opt input{
+    width:20px;height:20px;flex:0 0 auto;
+    accent-color:var(--acc);
+    cursor:pointer;
+  }
+  .opts-grid{display:grid;grid-template-columns:1fr;gap:0}
+  @media (min-width:560px){ .opts-grid{grid-template-columns:1fr 1fr} }
+  .hint{color:var(--mut);font-size:10.5px;letter-spacing:.05em;margin:2px 0 0}
+
+  /* ---------- messages ---------- */
+  .msg{
+    border:2px solid var(--line);
+    border-left:6px solid var(--mut);
+    padding:10px 12px;
+    margin-top:14px;
+    font-size:11.5px;
+    letter-spacing:.04em;
+    color:var(--fg);
+  }
+  .msg.warn{border-left-color:var(--acc);color:#ffcbc7}
+  .msg.ok{border-left-color:var(--add-br);color:var(--add-fg)}
+  .msg:empty{display:none}
+
+  /* ---------- summary ---------- */
+  .summary{
+    display:flex;flex-wrap:wrap;gap:8px;
+    margin-top:18px;
+  }
+  .stat{
+    border:2px solid var(--line);
+    padding:8px 10px;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--mut);
+    flex:1 1 auto;
+    min-width:96px;
+  }
+  .stat b{display:block;font-size:18px;letter-spacing:.02em;color:var(--fg);margin-top:2px}
+  .stat.add b{color:var(--add-fg)}
+  .stat.del b{color:var(--del-fg)}
+  .stat.mod b{color:#ffd479}
+
+  /* ---------- view bar ---------- */
+  .viewbar{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    margin-top:16px;padding-bottom:14px;border-bottom:2px solid var(--fg);
+  }
+  .seg{display:flex;border:2px solid var(--acc)}
+  .seg button{
+    -webkit-appearance:none;appearance:none;
+    min-height:44px;padding:0 12px;
+    background:transparent;color:var(--acc);
+    border:0;border-radius:0;
+    font:inherit;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    cursor:pointer;
+  }
+  .seg button[aria-pressed="true"]{background:var(--acc);color:var(--bg)}
+  .spacer{flex:1 1 auto}
+
+  /* ---------- diff output ---------- */
+  .out{margin-top:14px}
+  .dhead{
+    display:grid;
+    gap:0;
+    /* MUST match .dbody: the grid columns are sized in `ch`, and `ch` resolves
+       against the font of the element that declares the columns. With the head
+       at 10px and the body at 12.5px the two grids used different units and
+       every header sat ~5px left of the column it labelled. */
+    font-size:12.5px;
+    text-transform:uppercase;color:var(--mut);
+    border:2px solid var(--fg);border-bottom:0;
+    padding:6px 0;
+  }
+  .dhead span{padding:0 8px;font-size:10px;letter-spacing:.12em}
+  .dbody{
+    border:2px solid var(--fg);
+    background:var(--field);
+    font-size:12.5px;
+    line-height:1.55;
+    tab-size:4;
+  }
+  .r{display:grid;align-items:stretch}
+  .uni .r{grid-template-columns:var(--nw) var(--nw) 2ch minmax(0,1fr)}
+  .sbs .r{grid-template-columns:var(--nw) minmax(0,1fr) var(--nw) minmax(0,1fr)}
+  .uni .dhead{grid-template-columns:var(--nw) var(--nw) 2ch minmax(0,1fr)}
+  .sbs .dhead{grid-template-columns:var(--nw) minmax(0,1fr) var(--nw) minmax(0,1fr)}
+
+  .n{
+    /* 4.7:1 on the diff background. #6d6d67 was 3.5:1, under the AA floor for
+       10px text, and a line number is content, not decoration. */
+    font-size:10px;color:#82827b;text-align:right;
+    padding:1px 4px 0 0;
+    user-select:none;-webkit-user-select:none;
+    font-style:normal;
+    border-right:1px solid var(--line);
+    overflow:hidden;
+  }
+  .sg{
+    font-size:11px;color:var(--mut);text-align:center;
+    user-select:none;-webkit-user-select:none;font-style:normal;
+  }
+  .c{
+    padding:1px 8px;
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+    word-break:normal;
+    min-width:0;
+  }
+  .c.gap{background:repeating-linear-gradient(135deg,transparent,transparent 5px,rgba(255,255,255,.045) 5px,rgba(255,255,255,.045) 10px)}
+  .r-del .c:not(.gap){background:var(--del-bg);color:var(--del-fg)}
+  .r-ins .c:not(.gap){background:var(--add-bg);color:var(--add-fg)}
+  .r-mod .cL{background:var(--del-bg);color:var(--del-fg)}
+  .r-mod .cR{background:var(--add-bg);color:var(--add-fg)}
+  .r-del .sg{color:var(--del-br)}
+  .r-ins .sg{color:var(--add-br)}
+  .hi-del{background:var(--del-hi);color:#fff;box-shadow:0 0 0 1px var(--del-hi)}
+  .hi-add{background:var(--add-hi);color:#fff;box-shadow:0 0 0 1px var(--add-hi)}
+  .near{color:#c8a24a}
+
+  .skip{
+    display:block;width:100%;
+    -webkit-appearance:none;appearance:none;
+    background:#191917;color:var(--mut);
+    border:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    font:inherit;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    min-height:44px;padding:0 10px;text-align:left;cursor:pointer;
+  }
+  .skip:hover{color:var(--fg);background:#202020}
+
+  .patchbox{
+    width:100%;min-height:180px;margin-top:12px;
+    background:var(--field);color:var(--fg);
+    border:2px solid var(--line);padding:10px;
+    font:inherit;font-size:12px;white-space:pre;overflow:auto;
+  }
+
+  footer{
+    margin-top:28px;padding-top:14px;border-top:2px solid var(--line);
+    color:var(--mut);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  }
+  .sr{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+
+  <header>
+    <h1>Diff<span class="dot">.</span></h1>
+    <p class="sub">Line diff (Myers) with word-level highlighting. Everything runs locally.</p>
+  </header>
+
+  <div class="panes">
+    <div class="pane" id="paneA">
+      <label class="lbl" for="ta">Original / Before</label>
+      <textarea id="ta" spellcheck="false" autocapitalize="off" autocorrect="off"
+        placeholder="Paste the original text here, or drop a text file onto this panel."></textarea>
+      <div class="panefoot">
+        <span class="meta" id="metaA">Empty</span>
+        <button type="button" class="btn btn3 sm" id="pickA">Load file</button>
+      </div>
+      <input type="file" id="fileA" class="sr" tabindex="-1" aria-hidden="true">
+    </div>
+
+    <div class="pane" id="paneB">
+      <label class="lbl" for="tb">Changed / After</label>
+      <textarea id="tb" spellcheck="false" autocapitalize="off" autocorrect="off"
+        placeholder="Paste the changed text here, or drop a text file onto this panel."></textarea>
+      <div class="panefoot">
+        <span class="meta" id="metaB">Empty</span>
+        <button type="button" class="btn btn3 sm" id="pickB">Load file</button>
+      </div>
+      <input type="file" id="fileB" class="sr" tabindex="-1" aria-hidden="true">
+    </div>
+  </div>
+
+  <fieldset>
+    <legend>Comparison options</legend>
+    <div class="opts-grid">
+      <label class="opt"><input type="checkbox" id="optWs"> Ignore edge whitespace</label>
+      <label class="opt"><input type="checkbox" id="optCase"> Ignore case</label>
+      <label class="opt"><input type="checkbox" id="optBlank"> Ignore blank lines</label>
+      <label class="opt"><input type="checkbox" id="optAuto" checked> Compare as I type</label>
+    </div>
+    <p class="hint" id="optHint">Edge whitespace = leading and trailing spaces/tabs only.</p>
+  </fieldset>
+
+  <div class="row actions">
+    <button type="button" class="btn" id="run">Compare</button>
+    <button type="button" class="btn btn2" id="swap">Swap sides</button>
+    <button type="button" class="btn btn3" id="sample">Load sample</button>
+    <button type="button" class="btn btn3" id="clear">Clear</button>
+  </div>
+
+  <div class="msg" id="notice" role="status" aria-live="polite"></div>
+
+  <div id="results" hidden>
+    <div class="summary" id="summary" role="status" aria-live="polite"></div>
+
+    <div class="viewbar">
+      <div class="seg" role="group" aria-label="Diff view mode">
+        <button type="button" id="vUni" aria-pressed="true">Unified</button>
+        <button type="button" id="vSbs" aria-pressed="false">Side&nbsp;by&nbsp;side</button>
+      </div>
+      <button type="button" class="btn btn3 sm" id="tCollapse" aria-pressed="true">Collapse unchanged</button>
+      <button type="button" class="btn btn3 sm" id="tWide" aria-pressed="false">Wide</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn2 sm" id="copy">Copy patch</button>
+    </div>
+
+    <div class="out" id="out"></div>
+    <div class="msg" id="renderNote" role="status" aria-live="polite"></div>
+    <textarea class="patchbox" id="patchbox" hidden readonly aria-label="Unified patch text: select and copy manually"></textarea>
+  </div>
+
+  <footer>
+    <span id="storeNote">Offline · nothing leaves this page</span>
+  </footer>
+</div>
+
+<noscript>
+  <div class="wrap"><div class="msg warn">This tool needs JavaScript enabled.</div></div>
+</noscript>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =====================================================================
+     LIMITS: a diff is O(N*D); without caps a pathological input hangs
+     the tab. Everything here degrades loudly, never silently.
+     ===================================================================== */
+  var MAX_FILE_BYTES   = 3 * 1024 * 1024;  // per dropped/loaded file
+  var MAX_CHARS        = 4 * 1024 * 1024;  // per side, after which we truncate
+  var MAX_LINES        = 30000;            // per side
+  var AUTO_LINE_LIMIT  = 3000;             // above this, compare-as-you-type is off
+  var MAX_RENDER_ROWS  = 3000;             // rows painted before we ask first
+  var LINE_OP_BUDGET   = 60000000;         // Myers inner-loop steps for line diff
+  var TOKEN_OP_BUDGET  = 400000;           // ... per intra-line word diff
+  var MAX_TOKENS_LINE  = 2000;             // longer lines skip word highlighting
+  var SIM_THRESHOLD    = 0.30;             // below this, a -/+ pair is not "an edit"
+  var CONTEXT          = 3;                // unchanged lines kept around a change
+  var STORE_KEY        = "batchly.diff.v1";
+  var STORE_MAX        = 300000;           // don't try to persist novels
+
+  var INF = 1 << 28;   // "unreachable" sentinel for the reverse frontier
+  var NEG = -(1 << 28);// "unreachable" sentinel for the forward frontier
+
+  /* =====================================================================
+     MYERS DIFF: O(ND) time, O(N+M) space (linear-space refinement with
+     the divide-and-conquer "middle snake").
+
+     Why not a line-by-line equality walk: inserting one line at the top of
+     a file shifts every following line by one, and a naive walk then
+     reports the ENTIRE file as changed. An LCS-based diff re-aligns.
+
+     diffSequences returns the maximal common runs as [aStart, bStart, len].
+     ===================================================================== */
+
+  function par(n) { return ((n % 2) + 2) % 2; }              // parity, negative-safe
+  function alignUp(k, p)   { return par(k) === p ? k : k + 1; }
+  function alignDown(k, p) { return par(k) === p ? k : k - 1; }
+
+  /**
+   * Find the middle snake of the edit graph for A[aOff..aOff+N) vs B[bOff..bOff+M).
+   * Returns {x,y,u,v,d}: the snake runs from (x,y) to (u,v) in local coords.
+   *
+   * The k-loops are clamped to feasible diagonals (-M..N) and every diagonal
+   * that cannot actually be reached is stamped with a sentinel, so the max()/
+   * min() recurrences and the overlap test can never read a stale or
+   * out-of-range value. (Skipping such diagonals instead would leave holes in
+   * the frontier and silently corrupt the next step.)
+   */
+  function middleSnake(A, aOff, N, B, bOff, M, Vf, Vr, off, budget) {
+    var delta = N - M;
+    var odd = (delta & 1) !== 0;
+    var dMax = ((N + M) >> 1) + 1;
+    var k, x, y, sx, sy, hasL, hasR;
+
+    // d = 0 : one snake forward from (0,0), one backward from (N,M).
+    x = 0; y = 0;
+    while (x < N && y < M && A[aOff + x] === B[bOff + y]) { x++; y++; }
+    Vf[off] = x;
+
+    var rx = N, ry = M, rsx = N, rsy = M;
+    while (rx > 0 && ry > 0 && A[aOff + rx - 1] === B[bOff + ry - 1]) { rx--; ry--; }
+    Vr[off + delta] = rx;
+
+    if (!odd && delta === 0 && Vf[off] >= Vr[off]) {
+      return { x: rx, y: ry, u: rsx, v: rsy, d: 0 };
+    }
+
+    var fLo = 0, fHi = 0;             // diagonals the forward pass filled last step
+    var rLo = delta, rHi = delta;     // ... and the reverse pass
+
+    for (var d = 1; d <= dMax; d++) {
+      budget.ops -= (4 * d + 4);
+      if (budget.ops < 0) return null;
+
+      /* ---- forward ---- */
+      var pf = par(d);
+      var kLo = alignUp(Math.max(-d, -M), pf);
+      var kHi = alignDown(Math.min(d, N), pf);
+      for (k = kLo; k <= kHi; k += 2) {
+        hasL = (k - 1 >= fLo && k - 1 <= fHi);   // arrive via a deletion  (x+1)
+        hasR = (k + 1 >= fLo && k + 1 <= fHi);   // arrive via an insertion (y+1)
+        if (hasL && hasR)      x = Math.max(Vf[off + k - 1] + 1, Vf[off + k + 1]);
+        else if (hasL)         x = Vf[off + k - 1] + 1;
+        else if (hasR)         x = Vf[off + k + 1];
+        else { Vf[off + k] = NEG; continue; }
+        y = x - k;
+        if (x < 0 || y < 0 || x > N || y > M) { Vf[off + k] = NEG; continue; }
+        sx = x; sy = y;
+        while (x < N && y < M && A[aOff + x] === B[bOff + y]) { x++; y++; }
+        budget.ops -= (x - sx);
+        Vf[off + k] = x;
+        // Odd delta: a forward path of d steps can meet a reverse path of d-1.
+        if (odd && k >= delta - (d - 1) && k <= delta + (d - 1) && k >= rLo && k <= rHi) {
+          if (x >= Vr[off + k]) return { x: sx, y: sy, u: x, v: y, d: 2 * d - 1 };
+        }
+      }
+      fLo = kLo; fHi = kHi;
+
+      /* ---- reverse ---- */
+      var pr = par(delta - d);
+      var jLo = alignUp(Math.max(delta - d, -M), pr);
+      var jHi = alignDown(Math.min(delta + d, N), pr);
+      for (k = jLo; k <= jHi; k += 2) {
+        hasL = (k - 1 >= rLo && k - 1 <= rHi);   // arrive via an insertion (y-1)
+        hasR = (k + 1 >= rLo && k + 1 <= rHi);   // arrive via a deletion  (x-1)
+        if (hasL && hasR)      x = Math.min(Vr[off + k - 1], Vr[off + k + 1] - 1);
+        else if (hasL)         x = Vr[off + k - 1];
+        else if (hasR)         x = Vr[off + k + 1] - 1;
+        else { Vr[off + k] = INF; continue; }
+        y = x - k;
+        if (x < 0 || y < 0 || x > N || y > M) { Vr[off + k] = INF; continue; }
+        sx = x; sy = y;
+        while (x > 0 && y > 0 && A[aOff + x - 1] === B[bOff + y - 1]) { x--; y--; }
+        budget.ops -= (sx - x);
+        Vr[off + k] = x;
+        // Even delta: forward d meets reverse d.
+        if (!odd && k >= -d && k <= d && k >= fLo && k <= fHi) {
+          if (Vf[off + k] >= x) return { x: x, y: y, u: sx, v: sy, d: 2 * d };
+        }
+      }
+      rLo = jLo; rHi = jHi;
+    }
+    return null;
+  }
+
+  function diffSequences(A, B, budget) {
+    var N0 = A.length, M0 = B.length;
+    var matches = [];
+    if (N0 === 0 || M0 === 0) return matches;
+
+    // Array sizing: the k index can reach off + N + (N+M)/2 + 2 upward and
+    // off - M - (N+M)/2 - 2 downward, so give both ends real headroom.
+    var off = 2 * M0 + 6;
+    var size = off + 2 * N0 + M0 + 12;
+    var Vf = new Int32Array(size);
+    var Vr = new Int32Array(size);
+
+    var stack = [[0, N0, 0, M0]];
+    while (stack.length) {
+      var job = stack.pop();
+      var a0 = job[0], a1 = job[1], b0 = job[2], b1 = job[3];
+
+      // Trimming the common prefix/suffix first is not just a speed-up: it
+      // guarantees A[a0] !== B[b0], which is what makes the middle-snake split
+      // strictly shrink the problem.
+      var p = 0;
+      while (a0 + p < a1 && b0 + p < b1 && A[a0 + p] === B[b0 + p]) p++;
+      if (p > 0) { matches.push([a0, b0, p]); a0 += p; b0 += p; }
+      var s = 0;
+      while (a1 - s > a0 && b1 - s > b0 && A[a1 - 1 - s] === B[b1 - 1 - s]) s++;
+      if (s > 0) { matches.push([a1 - s, b1 - s, s]); a1 -= s; b1 -= s; }
+
+      var N = a1 - a0, M = b1 - b0;
+      if (N === 0 || M === 0) continue;        // pure insert / pure delete
+      if (N === 1 && M === 1) continue;        // one replaced line, nothing common
+
+      var sn = middleSnake(A, a0, N, B, b0, M, Vf, Vr, off, budget);
+      // Defensive: a null/degenerate snake would loop forever. Bail out of this
+      // block instead. The result is a valid (just non-minimal) diff.
+      if (!sn || sn.x < 0 || sn.y < 0 || sn.u > N || sn.v > M ||
+          sn.x > sn.u || sn.y > sn.v ||
+          (sn.x === N && sn.y === M) || (sn.u === 0 && sn.v === 0)) {
+        budget.degraded = true;
+        continue;
+      }
+      stack.push([a0 + sn.u, a1, b0 + sn.v, b1]);
+      stack.push([a0, a0 + sn.x, b0, b0 + sn.y]);
+      if (sn.u > sn.x) matches.push([a0 + sn.x, b0 + sn.y, sn.u - sn.x]);
+    }
+
+    matches.sort(function (m, n) { return m[0] - n[0]; });
+    var outM = [];
+    for (var i = 0; i < matches.length; i++) {
+      var m = matches[i];
+      var last = outM.length ? outM[outM.length - 1] : null;
+      if (last && last[0] + last[2] === m[0] && last[1] + last[2] === m[1]) last[2] += m[2];
+      else outM.push([m[0], m[1], m[2]]);
+    }
+    return outM;
+  }
+
+  /** Longest strictly-increasing subsequence. Returns indices into vals. */
+  function lisIndices(vals) {
+    var n = vals.length;
+    if (!n) return [];
+    var tails = [];                       // tails[l] = index of smallest tail of length l+1
+    var prev = new Int32Array(n);
+    for (var i = 0; i < n; i++) {
+      var v = vals[i], lo = 0, hi = tails.length;
+      while (lo < hi) {
+        var mid = (lo + hi) >> 1;
+        if (vals[tails[mid]] < v) lo = mid + 1; else hi = mid;
+      }
+      prev[i] = lo > 0 ? tails[lo - 1] : -1;
+      tails[lo] = i;
+    }
+    var out = [], k = tails[tails.length - 1];
+    while (k !== -1) { out.push(k); k = prev[k]; }
+    out.reverse();
+    return out;
+  }
+
+  /**
+   * Patience-style fallback, used ONLY when the exact search runs out of
+   * budget. Lines that occur exactly once on each side are unambiguous
+   * anchors; the longest non-crossing set of them (an LIS) splits the file
+   * into small gaps that exact Myers can then chew through cheaply.
+   *
+   * Not guaranteed minimal, but it is what rescues the case the exact search
+   * handles worst: a large block moved from one place to another, where a
+   * budget-capped Myers otherwise matches nothing at all.
+   * Returns null when there are no usable anchors (then retrying is pointless).
+   */
+  function anchoredDiff(sa, sb, totalBudget) {
+    var i, k;
+    var maxK = 0;
+    for (i = 0; i < sa.length; i++) if (sa[i] > maxK) maxK = sa[i];
+    for (i = 0; i < sb.length; i++) if (sb[i] > maxK) maxK = sb[i];
+
+    var cA = new Int32Array(maxK + 2), cB = new Int32Array(maxK + 2);
+    var pB = new Int32Array(maxK + 2);
+    for (i = 0; i < sa.length; i++) cA[sa[i]]++;
+    for (i = 0; i < sb.length; i++) { cB[sb[i]]++; pB[sb[i]] = i; }
+
+    var candA = [], candB = [];
+    for (i = 0; i < sa.length; i++) {           // ascending i keeps candA sorted
+      k = sa[i];
+      if (cA[k] === 1 && cB[k] === 1) { candA.push(i); candB.push(pB[k]); }
+    }
+    if (candA.length === 0) return null;
+    var lis = lisIndices(candB);
+    if (lis.length === 0) return null;
+
+    var runs = [], degraded = false;
+    var perGap = Math.max(400000, Math.floor(totalBudget / (lis.length + 1)));
+    var pa = 0, pb = 0;
+    for (var t = 0; t <= lis.length; t++) {
+      var ai = (t < lis.length) ? candA[lis[t]] : sa.length;
+      var bi = (t < lis.length) ? candB[lis[t]] : sb.length;
+      if (ai > pa && bi > pb) {
+        var gb = { ops: perGap, degraded: false };
+        var sub = diffSequences(sa.subarray(pa, ai), sb.subarray(pb, bi), gb);
+        if (gb.degraded) degraded = true;
+        for (var q = 0; q < sub.length; q++) runs.push([sub[q][0] + pa, sub[q][1] + pb, sub[q][2]]);
+      }
+      if (t < lis.length) runs.push([ai, bi, 1]);
+      pa = ai + 1; pb = bi + 1;
+    }
+
+    var merged = [];
+    for (i = 0; i < runs.length; i++) {
+      var last = merged.length ? merged[merged.length - 1] : null;
+      if (last && last[0] + last[2] === runs[i][0] && last[1] + last[2] === runs[i][1]) last[2] += runs[i][2];
+      else merged.push(runs[i]);
+    }
+    return { runs: merged, degraded: degraded };
+  }
+
+  /**
+   * Lossless pre-reduction. A line whose key occurs nowhere on the other side
+   * can never belong to ANY common subsequence, so removing it before the
+   * O(N*D) search cannot change the answer, but it collapses D dramatically.
+   * Without this, a 20k-line file with 6k scattered edits blows the work
+   * budget and degrades to "everything removed, everything added"; with it,
+   * the same file diffs in a few milliseconds.
+   *
+   * Returns matches in ORIGINAL index space.
+   */
+  function diffLines(ka, kb, maxKey, budget) {
+    var n = ka.length, m = kb.length, i;
+    if (n === 0 || m === 0) return [];
+
+    var seenA = new Uint8Array(maxKey + 2), seenB = new Uint8Array(maxKey + 2);
+    for (i = 0; i < n; i++) seenA[ka[i]] = 1;
+    for (i = 0; i < m; i++) seenB[kb[i]] = 1;
+
+    var ia = [], ib = [];
+    for (i = 0; i < n; i++) if (seenB[ka[i]]) ia.push(i);
+    for (i = 0; i < m; i++) if (seenA[kb[i]]) ib.push(i);
+
+    var reduced = !(ia.length === n && ib.length === m);
+    if (!reduced) { ia = null; ib = null; }
+    if (reduced && (ia.length === 0 || ib.length === 0)) return [];
+
+    var sa, sb;
+    if (reduced) {
+      sa = new Int32Array(ia.length); sb = new Int32Array(ib.length);
+      for (i = 0; i < ia.length; i++) sa[i] = ka[ia[i]];
+      for (i = 0; i < ib.length; i++) sb[i] = kb[ib[i]];
+    } else { sa = ka; sb = kb; }
+
+    var total = budget.ops;
+    var runs = diffSequences(sa, sb, budget);
+    if (budget.degraded) {
+      // Exact search gave up. Anchoring usually recovers almost all of it.
+      var anc = anchoredDiff(sa, sb, total);
+      if (anc) { runs = anc.runs; budget.degraded = anc.degraded; budget.approx = true; }
+    }
+    if (!reduced) return runs;
+
+    var out = [];
+    for (var r = 0; r < runs.length; r++) {
+      var ma = runs[r][0], mb = runs[r][1], len = runs[r][2];
+      for (var j = 0; j < len; j++) {
+        // Runs are contiguous in reduced space but not in original space, so
+        // re-merge pair by pair.
+        var oa = ia[ma + j], ob = ib[mb + j];
+        var last = out.length ? out[out.length - 1] : null;
+        if (last && last[0] + last[2] === oa && last[1] + last[2] === ob) last[2]++;
+        else out.push([oa, ob, 1]);
+      }
+    }
+    return out;
+  }
+
+  /* =====================================================================
+     TOKENISER + intra-line word diff
+     ===================================================================== */
+  var TOKEN_RE;
+  try {
+    TOKEN_RE = new RegExp("[\\p{L}\\p{N}_]+|\\s+|[\\s\\S]", "gu");
+  } catch (e) {
+    TOKEN_RE = /[A-Za-z0-9_]+|\s+|[\s\S]/g;   // engines without \p{...}
+  }
+  function tokenize(s) {
+    TOKEN_RE.lastIndex = 0;
+    return s.match(TOKEN_RE) || [];
+  }
+  function nonWsLen(s) { return s.replace(/\s+/g, "").length; }
+
+  /**
+   * Word-level diff of two lines. Returns null when the line is too long to
+   * bother with, or when the two lines are too dissimilar for a
+   * character-level highlight to mean anything (then the whole line is
+   * coloured instead, which is honest rather than confetti).
+   */
+  function intraDiff(aText, bText, ignoreCase) {
+    var at = tokenize(aText), bt = tokenize(bText);
+    if (at.length > MAX_TOKENS_LINE || bt.length > MAX_TOKENS_LINE) return null;
+    var ka = at, kb = bt;
+    if (ignoreCase) {
+      ka = at.map(function (t) { return t.toLowerCase(); });
+      kb = bt.map(function (t) { return t.toLowerCase(); });
+    }
+    var budget = { ops: TOKEN_OP_BUDGET, degraded: false };
+    var m = diffSequences(ka, kb, budget);
+    if (budget.degraded) return null;
+
+    var aParts = [], bParts = [], ai = 0, bi = 0, same = 0;
+    for (var i = 0; i < m.length; i++) {
+      var ma = m[i][0], mb = m[i][1], len = m[i][2];
+      if (ma > ai) aParts.push([at.slice(ai, ma).join(""), 1]);
+      if (mb > bi) bParts.push([bt.slice(bi, mb).join(""), 1]);
+      var eq = at.slice(ma, ma + len).join("");
+      aParts.push([eq, 0]);
+      bParts.push([bt.slice(mb, mb + len).join(""), 0]);
+      same += nonWsLen(eq);
+      ai = ma + len; bi = mb + len;
+    }
+    if (ai < at.length) aParts.push([at.slice(ai).join(""), 1]);
+    if (bi < bt.length) bParts.push([bt.slice(bi).join(""), 1]);
+
+    // Similarity over non-whitespace characters only, otherwise two totally
+    // different but similarly-indented lines look "90% the same".
+    var denom = nonWsLen(aText) + nonWsLen(bText);
+    var sim = denom === 0 ? 1 : (2 * same) / denom;
+    if (sim < SIM_THRESHOLD) return null;
+    return { a: aParts, b: bParts, sim: sim };
+  }
+
+  /* =====================================================================
+     Input preparation
+     ===================================================================== */
+  function splitLines(text) {
+    if (!text) return [];
+    var raw = text.split(/\r\n|\r|\n/);
+    // "a\nb\n" is two lines, not three. Drop exactly one trailing empty.
+    if (raw.length > 1 && raw[raw.length - 1] === "") raw.pop();
+    return raw;
+  }
+
+  function prepare(text, opts) {
+    var raw = splitLines(text);
+    var truncated = false;
+    if (raw.length > MAX_LINES) { raw = raw.slice(0, MAX_LINES); truncated = true; }
+    var lines = [];
+    for (var i = 0; i < raw.length; i++) {
+      if (opts.blank && raw[i].trim() === "") continue;
+      lines.push({ text: raw[i], no: i + 1 });
+    }
+    return { lines: lines, rawCount: raw.length, truncated: truncated };
+  }
+
+  // Explicit escapes on purpose: literal invisible characters inside a
+  // character class are unreviewable and trivially corrupted by an editor.
+  // ASCII blanks + NBSP + the U+2000 block + ZWSP + ideographic space + BOM.
+  var EDGE_WS = /^[ \t\f\v\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]+|[ \t\f\v\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]+$/g;
+  function keyOf(t, opts) {
+    var s = t;
+    if (opts.ws) s = s.replace(EDGE_WS, "");
+    if (opts.caseless) s = s.toLowerCase();
+    return s;
+  }
+
+  /* =====================================================================
+     Ops + rows
+     ===================================================================== */
+  function buildOps(nA, nB, matches) {
+    var ops = [], ai = 0, bi = 0, i, j;
+    for (i = 0; i < matches.length; i++) {
+      var ma = matches[i][0], mb = matches[i][1], len = matches[i][2];
+      while (ai < ma) { ops.push({ t: -1, a: ai++, b: -1 }); }
+      while (bi < mb) { ops.push({ t: 1, a: -1, b: bi++ }); }
+      for (j = 0; j < len; j++) { ops.push({ t: 0, a: ai++, b: bi++ }); }
+    }
+    while (ai < nA) { ops.push({ t: -1, a: ai++, b: -1 }); }
+    while (bi < nB) { ops.push({ t: 1, a: -1, b: bi++ }); }
+    return ops;
+  }
+
+  // Pair each deletion run with the insertion run that follows it, so a
+  // rewritten line reads as one modification rather than an unrelated
+  // remove + add. Surplus lines on either side stay pure add / pure remove.
+  function buildRows(ops) {
+    var rows = [], i = 0, j;
+    while (i < ops.length) {
+      if (ops[i].t === 0) { rows.push({ k: "eq", a: ops[i].a, b: ops[i].b }); i++; continue; }
+      var dels = [], ins = [];
+      while (i < ops.length && ops[i].t === -1) dels.push(ops[i++]);
+      while (i < ops.length && ops[i].t === 1) ins.push(ops[i++]);
+      var n = Math.min(dels.length, ins.length);
+      for (j = 0; j < n; j++) rows.push({ k: "mod", a: dels[j].a, b: ins[j].b });
+      for (j = n; j < dels.length; j++) rows.push({ k: "del", a: dels[j].a, b: -1 });
+      for (j = n; j < ins.length; j++) rows.push({ k: "ins", a: -1, b: ins[j].b });
+    }
+    return rows;
+  }
+
+  function collapseRows(rows, expanded) {
+    var keep = new Uint8Array(rows.length);
+    var i, j;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].k !== "eq") {
+        var lo = Math.max(0, i - CONTEXT), hi = Math.min(rows.length - 1, i + CONTEXT);
+        for (j = lo; j <= hi; j++) keep[j] = 1;
+      }
+    }
+    var out = [], gid = 0;
+    i = 0;
+    while (i < rows.length) {
+      if (keep[i]) { out.push({ type: "row", row: rows[i] }); i++; continue; }
+      j = i;
+      while (j < rows.length && !keep[j]) j++;
+      var id = gid++;
+      if (j - i < 4 || expanded[id]) {
+        for (var x = i; x < j; x++) out.push({ type: "row", row: rows[x] });
+      } else {
+        out.push({ type: "skip", id: id, count: j - i });
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  /* =====================================================================
+     Unified patch text
+     ===================================================================== */
+  function toPatch(ops, A, B, opts) {
+    var notes = [];
+    if (opts.ws) notes.push("ignored leading/trailing whitespace");
+    if (opts.caseless) notes.push("ignored case");
+    if (opts.blank) notes.push("ignored blank lines (they are not in this patch)");
+
+    var head = "";
+    if (notes.length) head += "# comparison " + notes.join("; ") + "\n";
+    if (opts.blank) head += "# line numbers below count compared lines, not original file lines\n";
+    head += "--- original\n+++ changed\n";
+
+    var lines = [];
+    var i, k;
+    var isChange = [];
+    for (i = 0; i < ops.length; i++) isChange.push(ops[i].t !== 0);
+
+    i = 0;
+    var any = false;
+    while (i < ops.length) {
+      if (!isChange[i]) { i++; continue; }
+      var start = Math.max(0, i - CONTEXT);
+      var end = i;
+      // extend while the next change is close enough to share a hunk
+      while (true) {
+        var look = end + 1, found = -1;
+        var limit = Math.min(ops.length - 1, end + 2 * CONTEXT + 1);
+        for (k = look; k <= limit; k++) { if (isChange[k]) { found = k; break; } }
+        if (found === -1) break;
+        end = found;
+      }
+      var stop = Math.min(ops.length - 1, end + CONTEXT);
+
+      var aStart = -1, bStart = -1, aCount = 0, bCount = 0, body = [];
+      for (k = start; k <= stop; k++) {
+        var o = ops[k];
+        if (o.a >= 0 && aStart < 0) aStart = o.a;
+        if (o.b >= 0 && bStart < 0) bStart = o.b;
+        if (o.t === 0) { aCount++; bCount++; body.push(" " + A[o.a].text); }
+        else if (o.t === -1) { aCount++; body.push("-" + A[o.a].text); }
+        else { bCount++; body.push("+" + B[o.b].text); }
+      }
+      lines.push("@@ -" + (aCount ? (aStart + 1) : 0) + "," + aCount +
+                 " +" + (bCount ? (bStart + 1) : 0) + "," + bCount + " @@");
+      lines = lines.concat(body);
+      any = true;
+      i = stop + 1;
+    }
+    if (!any) return head + "# no differences\n";
+    return head + lines.join("\n") + "\n";
+  }
+
+  /* =====================================================================
+     DOM helpers
+     ===================================================================== */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function partsHtml(parts, cls) {
+    if (!parts) return "";
+    var out = "";
+    for (var i = 0; i < parts.length; i++) {
+      var t = esc(parts[i][0]);
+      out += parts[i][1] ? '<span class="' + cls + '">' + t + "</span>" : t;
+    }
+    return out;
+  }
+  function bodyHtml(text) {
+    // An empty line still needs to occupy a row.
+    return text === "" ? "&#8203;" : esc(text);
+  }
+
+  /* =====================================================================
+     State
+     ===================================================================== */
+  var S = {
+    view: "uni",
+    collapse: true,
+    wide: false,
+    expanded: {},
+    rows: null, A: null, B: null, ops: null,
+    counts: null, patch: null, degraded: false,
+    renderAll: false,
+    optsUsed: null
+  };
+  var storageOK = true;
+
+  var els = {
+    ta: $("ta"), tb: $("tb"),
+    metaA: $("metaA"), metaB: $("metaB"),
+    paneA: $("paneA"), paneB: $("paneB"),
+    fileA: $("fileA"), fileB: $("fileB"),
+    optWs: $("optWs"), optCase: $("optCase"), optBlank: $("optBlank"), optAuto: $("optAuto"),
+    optHint: $("optHint"),
+    notice: $("notice"), results: $("results"), summary: $("summary"),
+    out: $("out"), renderNote: $("renderNote"), patchbox: $("patchbox"),
+    vUni: $("vUni"), vSbs: $("vSbs"),
+    tCollapse: $("tCollapse"), tWide: $("tWide"), copy: $("copy"),
+    storeNote: $("storeNote")
+  };
+
+  function readOpts() {
+    return {
+      ws: els.optWs.checked,
+      caseless: els.optCase.checked,
+      blank: els.optBlank.checked
+    };
+  }
+
+  function setNotice(msg, kind) {
+    els.notice.className = "msg" + (kind ? " " + kind : "");
+    els.notice.innerHTML = msg ? msg : "";
+  }
+
+  /**
+   * Append to the notice instead of replacing it.
+   *
+   * compare() owns the notice and rewrites it on every run, so anything set
+   * immediately BEFORE a compare() was destroyed before it could be read: the
+   * "this file contains NUL bytes" warning was never visible for a single
+   * frame. File-level messages are therefore added after the compare, not
+   * before it.
+   */
+  function addNotice(msg, kind) {
+    if (!msg) return;
+    var cur = els.notice.innerHTML;
+    els.notice.innerHTML = cur ? cur + "<br>" + msg : msg;
+    // A warning anywhere in the stack keeps the whole block flagged.
+    if (kind === "warn" || els.notice.className.indexOf("warn") !== -1) els.notice.className = "msg warn";
+    else els.notice.className = "msg" + (kind ? " " + kind : "");
+  }
+
+  function updateMeta() {
+    var a = splitLines(els.ta.value), b = splitLines(els.tb.value);
+    els.metaA.textContent = els.ta.value ? (a.length + " line" + (a.length === 1 ? "" : "s")) : "Empty";
+    els.metaB.textContent = els.tb.value ? (b.length + " line" + (b.length === 1 ? "" : "s")) : "Empty";
+    return a.length + b.length;
+  }
+
+  /* =====================================================================
+     Compare
+     ===================================================================== */
+  function compare() {
+    var opts = readOpts();
+    var warnings = [];
+    // compare() is the authoritative "read the textareas" moment, so refresh
+    // the line counters here too; otherwise any path that changes the text
+    // without firing an input event leaves them showing stale numbers.
+    updateMeta();
+
+    var rawA = els.ta.value, rawB = els.tb.value;
+    if (rawA.length > MAX_CHARS) { rawA = rawA.slice(0, MAX_CHARS); warnings.push("Original was longer than " + Math.round(MAX_CHARS / 1048576) + " MB and was truncated for comparison."); }
+    if (rawB.length > MAX_CHARS) { rawB = rawB.slice(0, MAX_CHARS); warnings.push("Changed text was longer than " + Math.round(MAX_CHARS / 1048576) + " MB and was truncated for comparison."); }
+
+    if (!rawA.trim() && !rawB.trim()) {
+      S.rows = null;
+      els.results.hidden = true;
+      setNotice("Paste or drop text into <b>both</b> panels, then press Compare.", "");
+      return;
+    }
+
+    var pa = prepare(rawA, opts), pb = prepare(rawB, opts);
+    if (pa.truncated) warnings.push("Original has more than " + MAX_LINES.toLocaleString() + " lines. Only the first " + MAX_LINES.toLocaleString() + " were compared.");
+    if (pb.truncated) warnings.push("Changed text has more than " + MAX_LINES.toLocaleString() + " lines. Only the first " + MAX_LINES.toLocaleString() + " were compared.");
+
+    var A = pa.lines, B = pb.lines;
+
+    if (A.length === 0 && B.length === 0) {
+      S.rows = null;
+      els.results.hidden = true;
+      setNotice(opts.blank
+        ? "Both sides are blank once blank lines are ignored, so there is nothing to compare."
+        : "Both sides are empty, so there is nothing to compare.", "warn");
+      return;
+    }
+
+    // Intern lines to integers: comparing ints in the inner loop is far
+    // cheaper than comparing strings, and the diff runs N*D comparisons.
+    var map = new Map();
+    var next = 1;
+    var ka = new Int32Array(A.length), kb = new Int32Array(B.length);
+    var i, k, v;
+    for (i = 0; i < A.length; i++) {
+      k = keyOf(A[i].text, opts);
+      v = map.get(k); if (v === undefined) { v = next++; map.set(k, v); }
+      ka[i] = v;
+    }
+    for (i = 0; i < B.length; i++) {
+      k = keyOf(B[i].text, opts);
+      v = map.get(k); if (v === undefined) { v = next++; map.set(k, v); }
+      kb[i] = v;
+    }
+
+    var budget = { ops: LINE_OP_BUDGET, degraded: false, approx: false };
+    var matches = diffLines(ka, kb, next - 1, budget);
+
+    var ops = buildOps(A.length, B.length, matches);
+    var rows = buildRows(ops);
+
+    var counts = { add: 0, del: 0, mod: 0, eq: 0 };
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].k === "ins") counts.add++;
+      else if (rows[i].k === "del") counts.del++;
+      else if (rows[i].k === "mod") counts.mod++;
+      else counts.eq++;
+    }
+
+    S.A = A; S.B = B; S.ops = ops; S.rows = rows; S.counts = counts;
+    S.expanded = {}; S.renderAll = false;
+    S.degraded = budget.degraded;
+    S.optsUsed = opts;
+    S.patch = null;
+
+    if (budget.degraded) {
+      warnings.push("This comparison is too large to solve exactly, so part of it is shown as a straight remove&nbsp;+&nbsp;add rather than a minimal diff. The lines themselves are correct.");
+    } else if (budget.approx) {
+      warnings.push("This comparison was too large to solve exactly, so it was aligned on unique lines instead. Every line shown is correct, but the diff may not be the smallest possible.");
+    }
+    setNotice(warnings.length ? warnings.join("<br>") : "", warnings.length ? "warn" : "");
+
+    els.results.hidden = false;
+    renderSummary();
+    render();
+    save();
+  }
+
+  function renderSummary() {
+    var c = S.counts;
+    var total = c.add + c.del + c.mod;
+    var html = "";
+    if (total === 0) {
+      var note = "";
+      if (S.optsUsed && (S.optsUsed.ws || S.optsUsed.caseless || S.optsUsed.blank)) {
+        note = " under the current options";
+      }
+      html = '<div class="stat" style="border-color:var(--add-br);color:var(--add-fg);flex:1 1 100%">' +
+             "Identical" + esc(note) + "<b>0 changes</b></div>";
+    } else {
+      html =
+        '<div class="stat add">Added<b>' + c.add + "</b></div>" +
+        '<div class="stat del">Removed<b>' + c.del + "</b></div>" +
+        '<div class="stat mod">Changed<b>' + c.mod + "</b></div>" +
+        '<div class="stat">Unchanged<b>' + c.eq + "</b></div>";
+    }
+    els.summary.innerHTML = html;
+  }
+
+  /* =====================================================================
+     Render
+     ===================================================================== */
+  function render() {
+    if (!S.rows) { els.out.innerHTML = ""; return; }
+
+    var c = S.counts;
+    if (c.add + c.del + c.mod === 0) {
+      els.out.innerHTML = '<div class="msg ok">The two texts are identical' +
+        (S.optsUsed && (S.optsUsed.ws || S.optsUsed.caseless || S.optsUsed.blank)
+          ? " once the selected options are applied." : ".") + "</div>";
+      els.renderNote.className = "msg";
+      els.renderNote.innerHTML = "";
+      return;
+    }
+
+    var list = S.collapse ? collapseRows(S.rows, S.expanded)
+                          : S.rows.map(function (r) { return { type: "row", row: r }; });
+
+    var sbs = S.view === "sbs";
+
+    // Budget the CAP AGAINST EMITTED ROWS, not list entries: in unified view a
+    // modified line emits two rows (a "-" and a "+"), so a list of N entries
+    // can be 2N elements in the DOM. Counting entries would silently double
+    // the cap exactly on the heaviest input (a fully rewritten file).
+    var overflow = false;
+    if (!S.renderAll) {
+      var cost = 0, cut = -1;
+      for (var z = 0; z < list.length; z++) {
+        cost += (!sbs && list[z].type === "row" && list[z].row.k === "mod") ? 2 : 1;
+        if (cost > MAX_RENDER_ROWS) { cut = z; break; }
+      }
+      if (cut >= 0) { list = list.slice(0, cut); overflow = true; }
+    }
+
+    var A = S.A, B = S.B;
+
+    // Size the line-number gutter to the widest number actually present.
+    // A fixed 3.6ch silently clipped the last digit from 1000 onwards (the
+    // gutter is 10px text inside a 12.5px grid, so one digit is 0.8ch) and
+    // mangled five-digit numbers outright on long files.
+    var maxNo = 0;
+    if (A.length) maxNo = A[A.length - 1].no;
+    if (B.length && B[B.length - 1].no > maxNo) maxNo = B[B.length - 1].no;
+    var digits = String(Math.max(1, maxNo)).length;
+    var nw = Math.max(3.6, digits * 0.82 + 0.75).toFixed(2) + "ch";
+
+    var buf = [];
+    buf.push('<div class="' + (sbs ? "sbs" : "uni") + '" style="--nw:' + nw + '">');
+    buf.push('<div class="dhead">' + (sbs
+      ? "<span>#</span><span>Original</span><span>#</span><span>Changed</span>"
+      : "<span>#</span><span>#</span><span></span><span>Line</span>") + "</div>");
+    buf.push('<div class="dbody">');
+
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      if (item.type === "skip") {
+        buf.push('<button type="button" class="skip" aria-expanded="false" data-skip="' + item.id + '">' +
+                 "&#9662; " + item.count + " unchanged line" + (item.count === 1 ? "" : "s") +
+                 " (click to expand)</button>");
+        continue;
+      }
+      var r = item.row;
+      var aL = r.a >= 0 ? A[r.a] : null;
+      var bL = r.b >= 0 ? B[r.b] : null;
+
+      if (r.k === "mod" && r.intra === undefined) {
+        // Computed lazily so a 10k-row diff doesn't word-diff rows nobody sees.
+        r.intra = intraDiff(aL.text, bL.text, S.optsUsed.caseless);
+      }
+
+      var aHtml, bHtml;
+      if (r.k === "mod" && r.intra) {
+        aHtml = partsHtml(r.intra.a, "hi-del");
+        bHtml = partsHtml(r.intra.b, "hi-add");
+        if (aHtml === "") aHtml = "&#8203;";
+        if (bHtml === "") bHtml = "&#8203;";
+      } else {
+        aHtml = aL ? bodyHtml(aL.text) : "";
+        bHtml = bL ? bodyHtml(bL.text) : "";
+      }
+
+      // Marks a row that only matches because of an active option.
+      var nearly = (r.k === "eq" && aL && bL && aL.text !== bL.text);
+
+      if (sbs) {
+        var cls = r.k === "eq" ? "" : (r.k === "mod" ? " r-mod" : (r.k === "del" ? " r-del" : " r-ins"));
+        buf.push('<div class="r' + cls + '">');
+        buf.push('<i class="n' + (nearly ? " near" : "") + '">' + (aL ? aL.no : "") + "</i>");
+        buf.push('<span class="c cL' + (aL ? "" : " gap") + '">' + (aL ? aHtml : "") + "</span>");
+        buf.push('<i class="n' + (nearly ? " near" : "") + '">' + (bL ? bL.no : "") + "</i>");
+        buf.push('<span class="c cR' + (bL ? "" : " gap") + '">' + (bL ? bHtml : "") + "</span>");
+        buf.push("</div>");
+      } else {
+        if (r.k === "eq") {
+          buf.push('<div class="r"><i class="n' + (nearly ? " near" : "") + '">' + aL.no +
+                   '</i><i class="n' + (nearly ? " near" : "") + '">' + bL.no +
+                   '</i><i class="sg">' + (nearly ? "&asymp;" : "&nbsp;") + '</i><span class="c">' + aHtml + "</span></div>");
+        } else if (r.k === "del") {
+          buf.push('<div class="r r-del"><i class="n">' + aL.no +
+                   '</i><i class="n"></i><i class="sg">&minus;</i><span class="c">' + aHtml + "</span></div>");
+        } else if (r.k === "ins") {
+          buf.push('<div class="r r-ins"><i class="n"></i><i class="n">' + bL.no +
+                   '</i><i class="sg">+</i><span class="c">' + bHtml + "</span></div>");
+        } else {
+          buf.push('<div class="r r-del"><i class="n">' + aL.no +
+                   '</i><i class="n"></i><i class="sg">&minus;</i><span class="c">' + aHtml + "</span></div>");
+          buf.push('<div class="r r-ins"><i class="n"></i><i class="n">' + bL.no +
+                   '</i><i class="sg">+</i><span class="c">' + bHtml + "</span></div>");
+        }
+      }
+    }
+    buf.push("</div></div>");
+    els.out.innerHTML = buf.join("");
+
+    if (overflow) {
+      els.renderNote.className = "msg warn";
+      els.renderNote.innerHTML = "Showing the first " + MAX_RENDER_ROWS.toLocaleString() +
+        " rows to keep the page responsive. " +
+        '<button type="button" class="btn btn2 sm" id="renderAll" style="margin-top:8px">Render everything</button>';
+      var ra = $("renderAll");
+      if (ra) ra.addEventListener("click", function () { S.renderAll = true; render(); });
+    } else {
+      els.renderNote.className = "msg";
+      els.renderNote.innerHTML = "";
+    }
+  }
+
+  els.out.addEventListener("click", function (e) {
+    var t = e.target;
+    while (t && t !== els.out && !t.getAttribute) t = t.parentNode;
+    if (!t || t === els.out) return;
+    var id = t.getAttribute && t.getAttribute("data-skip");
+    if (id !== null && id !== undefined) {
+      S.expanded[id] = true;
+      render();
+    }
+  });
+
+  /* =====================================================================
+     Files
+     ===================================================================== */
+  /**
+   * Load one file into one side. `done(note, kind, loaded)` is called EXACTLY
+   * once on every path (success, refusal, reader error), so a caller waiting
+   * on several files can never be left hanging by one that failed.
+   *
+   * The message is handed to the caller rather than printed here, because the
+   * caller runs compare() and compare() rewrites the notice.
+   */
+  function readFileInto(file, which, done) {
+    done = done || function (note, kind, loaded) {
+      if (loaded) { compare(); addNotice(note, kind); }
+      // Nothing loaded and nothing to say (an empty file list from a cancelled
+      // picker) must not wipe whatever the notice already holds.
+      else if (note) setNotice(note, kind || "");
+    };
+    if (!file) { done(null, "", false); return; }
+    if (file.size > MAX_FILE_BYTES) {
+      done("&ldquo;" + esc(file.name) + "&rdquo; is " + (file.size / 1048576).toFixed(1) +
+           " MB. The limit is " + (MAX_FILE_BYTES / 1048576) + " MB. Load a smaller file or paste an excerpt.",
+           "warn", false);
+      return;
+    }
+    if (typeof FileReader === "undefined") {
+      done("This browser cannot read dropped files. Paste the text instead.", "warn", false);
+      return;
+    }
+    var fr = new FileReader();
+    fr.onerror = function () {
+      done("Could not read &ldquo;" + esc(file.name) + "&rdquo;: the browser refused it.", "warn", false);
+    };
+    fr.onload = function () {
+      var text = String(fr.result || "");
+      var note = null;
+      if (text.indexOf(String.fromCharCode(0)) !== -1) {
+        note = "&ldquo;" + esc(file.name) + "&rdquo; looks like a binary file (it contains NUL bytes). " +
+               "It was loaded anyway, but the diff will be meaningless.";
+      }
+      (which === "a" ? els.ta : els.tb).value = text;
+      updateMeta();
+      done(note, note ? "warn" : "", true);
+    };
+    fr.readAsText(file);
+  }
+
+  function wireDrop(el, which) {
+    ["dragenter", "dragover"].forEach(function (ev) {
+      el.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+        el.classList.add("drag");
+      });
+    });
+    ["dragleave", "dragend"].forEach(function (ev) {
+      el.addEventListener(ev, function () { el.classList.remove("drag"); });
+    });
+    el.addEventListener("drop", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove("drag");
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) {
+        setNotice("Nothing usable was dropped. Drop a text file.", "warn");
+        return;
+      }
+      if (files.length >= 2) {
+        // Two files at once: first becomes the original, second the changed.
+        // Both reads are async, so compare() runs once after BOTH have landed
+        // and the explanatory notice is written after that; writing it up
+        // front meant compare() erased it a few milliseconds later.
+        var lead = "Loaded &ldquo;" + esc(files[0].name) + "&rdquo; as the original and &ldquo;" +
+                   esc(files[1].name) + "&rdquo; as the changed version. Use <b>Swap sides</b> if that is backwards.";
+        var pending = 2, notes = [], anyWarn = false, anyLoaded = false;
+        var step = function (note, kind, loaded) {
+          if (note) { notes.push(note); if (kind === "warn") anyWarn = true; }
+          if (loaded) anyLoaded = true;
+          if (--pending > 0) return;
+          // Only claim the files were loaded if at least one actually was.
+          if (anyLoaded) { compare(); addNotice(lead, ""); } else setNotice("", "");
+          for (var q = 0; q < notes.length; q++) addNotice(notes[q], anyWarn ? "warn" : "");
+        };
+        readFileInto(files[0], "a", step);
+        readFileInto(files[1], "b", step);
+        return;
+      }
+      readFileInto(files[0], which);
+    });
+  }
+  wireDrop(els.paneA, "a");
+  wireDrop(els.paneB, "b");
+  // Dropping two files anywhere on the page fills both panels.
+  wireDrop(document.body, "a");
+
+  $("pickA").addEventListener("click", function () { els.fileA.click(); });
+  $("pickB").addEventListener("click", function () { els.fileB.click(); });
+  els.fileA.addEventListener("change", function () { readFileInto(els.fileA.files[0], "a"); els.fileA.value = ""; });
+  els.fileB.addEventListener("change", function () { readFileInto(els.fileB.files[0], "b"); els.fileB.value = ""; });
+
+  /* =====================================================================
+     Buttons
+     ===================================================================== */
+  $("run").addEventListener("click", function () { compare(); });
+
+  $("swap").addEventListener("click", function () {
+    var t = els.ta.value; els.ta.value = els.tb.value; els.tb.value = t;
+    updateMeta();
+    if (S.rows || els.ta.value || els.tb.value) compare();
+  });
+
+  $("clear").addEventListener("click", function () {
+    els.ta.value = ""; els.tb.value = "";
+    S.rows = null;
+    els.results.hidden = true;
+    els.out.innerHTML = "";
+    updateMeta();
+    setNotice("Cleared. Paste or drop text into both panels.", "");
+    save();
+  });
+
+  $("sample").addEventListener("click", function () {
+    els.ta.value =
+      'function greet(name) {\n' +
+      '  const greeting = "Hello, " + name;\n' +
+      '  console.log(greeting);\n' +
+      '  return greeting;\n' +
+      '}\n' +
+      '\n' +
+      '// TODO: add tests\n' +
+      'export default greet;\n';
+    els.tb.value =
+      'function greet(name, punctuation = "!") {\n' +
+      '  const greeting = `Hello, ${name}${punctuation}`;\n' +
+      '  console.log(greeting);\n' +
+      '  return greeting;\n' +
+      '}\n' +
+      '\n' +
+      'export default greet;\n' +
+      'export { greet };\n';
+    updateMeta();
+    compare();
+  });
+
+  function setView(v) {
+    S.view = v;
+    els.vUni.setAttribute("aria-pressed", v === "uni" ? "true" : "false");
+    els.vSbs.setAttribute("aria-pressed", v === "sbs" ? "true" : "false");
+    render();
+    save();
+  }
+  els.vUni.addEventListener("click", function () { setView("uni"); });
+  els.vSbs.addEventListener("click", function () { setView("sbs"); });
+
+  els.tCollapse.addEventListener("click", function () {
+    S.collapse = !S.collapse;
+    els.tCollapse.setAttribute("aria-pressed", S.collapse ? "true" : "false");
+    els.tCollapse.textContent = S.collapse ? "Collapse unchanged" : "Showing all lines";
+    render();
+    save();
+  });
+
+  els.tWide.addEventListener("click", function () {
+    S.wide = !S.wide;
+    document.body.classList.toggle("wide", S.wide);
+    els.tWide.setAttribute("aria-pressed", S.wide ? "true" : "false");
+    save();
+  });
+
+  els.copy.addEventListener("click", function () {
+    if (!S.ops) return;
+    if (!S.patch) S.patch = toPatch(S.ops, S.A, S.B, S.optsUsed);
+    var text = S.patch;
+
+    function fallback() {
+      // Clipboard APIs are frequently blocked inside a sandboxed iframe.
+      // Rather than fail silently, show the text ready to select.
+      els.patchbox.hidden = false;
+      els.patchbox.value = text;
+      try { els.patchbox.focus(); els.patchbox.select(); } catch (e) {}
+      setNotice("Copying was blocked by the browser. The patch is shown below: select it and copy manually.", "warn");
+    }
+
+    var done = function () { setNotice("Unified patch copied to the clipboard.", "ok"); els.patchbox.hidden = true; };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {
+        try {
+          els.patchbox.hidden = false;
+          els.patchbox.value = text;
+          els.patchbox.select();
+          if (document.execCommand && document.execCommand("copy")) { done(); }
+          else fallback();
+        } catch (e) { fallback(); }
+      });
+    } else {
+      try {
+        els.patchbox.hidden = false;
+        els.patchbox.value = text;
+        els.patchbox.select();
+        if (document.execCommand && document.execCommand("copy")) done();
+        else fallback();
+      } catch (e) { fallback(); }
+    }
+  });
+
+  /* =====================================================================
+     Auto-compare
+     ===================================================================== */
+  var timer = null;
+  function scheduleCompare() {
+    var total = updateMeta();
+    // Cancel first, always: a run queued while the input was small must not
+    // fire after the input has grown past the limit (or after auto-compare was
+    // switched off). That is exactly the heavy run the limit exists to avoid.
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (!els.optAuto.checked) { saveSoon(); return; }
+    if (total > AUTO_LINE_LIMIT) {
+      setNotice("Large input (" + total.toLocaleString() + " lines). Automatic comparison is paused. Press <b>Compare</b> when ready.", "");
+      saveSoon();
+      return;
+    }
+    timer = setTimeout(function () { timer = null; compare(); }, 320);
+  }
+  els.ta.addEventListener("input", scheduleCompare);
+  els.tb.addEventListener("input", scheduleCompare);
+
+  [els.optWs, els.optCase, els.optBlank].forEach(function (el) {
+    el.addEventListener("change", function () {
+      updateHint();
+      if (S.rows || els.ta.value || els.tb.value) compare(); else save();
+    });
+  });
+  els.optAuto.addEventListener("change", function () {
+    // Ticking the box has to do something now, not at the next keystroke;
+    // otherwise the control reads as dead.
+    if (els.optAuto.checked) scheduleCompare();
+    else { if (timer) { clearTimeout(timer); timer = null; } save(); }
+  });
+
+  function updateHint() {
+    var bits = [];
+    if (els.optBlank.checked) bits.push("blank lines are hidden from the output");
+    if (els.optCase.checked) bits.push("case differences are treated as equal");
+    if (els.optWs.checked) bits.push("leading/trailing spaces and tabs are ignored");
+    els.optHint.textContent = bits.length
+      ? "Note: " + bits.join("; ") + "."
+      : "Edge whitespace = leading and trailing spaces/tabs only.";
+  }
+
+  /* =====================================================================
+     Persistence (never required; the app works with storage off)
+     ===================================================================== */
+  var saveTimer = null;
+  /** Keystroke-rate saves: coalesce them. setItem is synchronous. */
+  function saveSoon() {
+    if (!storageOK) return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { saveTimer = null; save(); }, 500);
+  }
+  function save() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (!storageOK) return;
+    try {
+      // Measure the RAW text before serialising. The old order stringified
+      // several MB and only then discovered it was too big, once per
+      // keystroke, on the main thread.
+      var a = els.ta.value, b = els.tb.value;
+      var tooBig = (a.length + b.length) > STORE_MAX;
+      window.localStorage.setItem(STORE_KEY, JSON.stringify({
+        a: tooBig ? "" : a, b: tooBig ? "" : b,
+        ws: els.optWs.checked, cs: els.optCase.checked,
+        bl: els.optBlank.checked, au: els.optAuto.checked,
+        view: S.view, collapse: S.collapse, wide: S.wide
+      }));
+      // Say so rather than quietly returning an empty page next visit.
+      els.storeNote.textContent = tooBig
+        ? "Offline · too large to autosave (settings only)"
+        : "Offline · nothing leaves this page";
+    } catch (e) {
+      storageOK = false;
+      els.storeNote.textContent = "Offline · autosave unavailable in this browser";
+    }
+  }
+
+  function load() {
+    var raw = null;
+    try { raw = window.localStorage.getItem(STORE_KEY); }
+    catch (e) {
+      storageOK = false;
+      els.storeNote.textContent = "Offline · autosave unavailable in this browser";
+      return false;
+    }
+    if (!raw) return false;
+    try {
+      var p = JSON.parse(raw);
+      if (typeof p !== "object" || p === null) return false;
+      els.ta.value = typeof p.a === "string" ? p.a : "";
+      els.tb.value = typeof p.b === "string" ? p.b : "";
+      els.optWs.checked = !!p.ws;
+      els.optCase.checked = !!p.cs;
+      els.optBlank.checked = !!p.bl;
+      els.optAuto.checked = p.au !== false;
+      if (p.view === "sbs" || p.view === "uni") S.view = p.view;
+      if (typeof p.collapse === "boolean") S.collapse = p.collapse;
+      if (typeof p.wide === "boolean") S.wide = p.wide;
+      return !!(els.ta.value || els.tb.value);
+    } catch (e) { return false; }
+  }
+
+  /* =====================================================================
+     Boot
+     ===================================================================== */
+  var restored = load();
+
+  // Side-by-side is unreadable on a phone; default to unified unless the
+  // user already chose otherwise.
+  if (!restored && window.innerWidth < 700) S.view = "uni";
+
+  els.vUni.setAttribute("aria-pressed", S.view === "uni" ? "true" : "false");
+  els.vSbs.setAttribute("aria-pressed", S.view === "sbs" ? "true" : "false");
+  els.tCollapse.setAttribute("aria-pressed", S.collapse ? "true" : "false");
+  els.tCollapse.textContent = S.collapse ? "Collapse unchanged" : "Showing all lines";
+  els.tWide.setAttribute("aria-pressed", S.wide ? "true" : "false");
+  document.body.classList.toggle("wide", S.wide);
+
+  updateHint();
+  updateMeta();
+
+  if (restored) {
+    compare();
+  } else {
+    setNotice("Paste text into both panels, or drop two files anywhere on this page. " +
+              "Press <b>Load sample</b> to see it work.", "");
+  }
+
+  // Ctrl/Cmd+Enter runs the comparison from either textarea.
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); compare(); }
+  });
+})();
+</script>
+</body>
+</html>
+<style>
+/* mobile: each option is a full-width .opt label already min-height:44 (the real tap
+   target that toggles the checkbox); kill the 300ms tap delay and lift the tiny box to 24px */
+@media (max-width: 900px), (pointer: coarse) {
+  .opt { touch-action: manipulation; }
+  .opt input { width: 24px; height: 24px; }
+}
+</style>

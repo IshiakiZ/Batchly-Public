@@ -1,0 +1,20 @@
+{
+  "folder": "admin/backgrounds",
+  "title": "Stillroom Backgrounds",
+  "description": "Six living backgrounds for your screen: northern lights, desert dusk, ocean, orbit, rain and embers. Go fullscreen, dim the scene, or add a clock.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/backgrounds",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 22729,
+      "sha256": "3661872c4676714fcdb34a9ed77b8cd5fe1c45765eb0fea029fa5f85ff7e72d2",
+      "source": "published catalog HTML"
+    }
+  ]
+}

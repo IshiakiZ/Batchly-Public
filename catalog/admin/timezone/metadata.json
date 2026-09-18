@@ -1,0 +1,20 @@
+{
+  "folder": "admin/timezone",
+  "title": "Timezone",
+  "description": "A world clock and meeting planner across time zones, with working hours and DST handled properly.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/timezone",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 71051,
+      "sha256": "95541b222f0f8e4d9ad622ff202d3bdf87abc8938210d355908b9cae339cdd72",
+      "source": "published catalog HTML"
+    }
+  ]
+}

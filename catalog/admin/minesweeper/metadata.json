@@ -1,0 +1,20 @@
+{
+  "folder": "admin/minesweeper",
+  "title": "Minesweeper",
+  "description": "Classic minesweeper with a twist: the faster you clear a safe board, the higher your leaderboard score. First click is always safe.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/minesweeper",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 37150,
+      "sha256": "fd42515c3da0de052cb93e7d35b46f6caf3b2e457a16c59e27bd7ce0282ce1b6",
+      "source": "published catalog HTML"
+    }
+  ]
+}

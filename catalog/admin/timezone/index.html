@@ -1,0 +1,1867 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>World Clock &amp; Meeting Planner</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  /* The UA rule for [hidden] is display:none, but ANY author display rule
+     outranks it; .chip{display:inline-block} and the textarea's
+     display:block below would both leave "hidden" elements on screen. */
+  [hidden] { display: none !important; }
+
+  body {
+    background: #10100e;
+    color: #eee;
+    font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Courier New", monospace;
+    font-size: 15px;
+    line-height: 1.45;
+    padding: 20px 20px 72px;
+  }
+
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  /* ---------------- typography ---------------- */
+  h1 {
+    font-size: 19px; font-weight: 700; margin: 0 0 4px;
+    text-transform: uppercase; letter-spacing: .1em;
+  }
+  .sub { color: #888; font-size: 12px; margin: 0 0 20px; }
+
+  .lbl {
+    display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+    color: #888; margin: 0 0 6px;
+  }
+  .sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------------- panels ---------------- */
+  .panel {
+    border: 2px solid #eee; padding: 16px; margin: 0 0 16px; background: #10100e;
+  }
+  .panel > h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #888;
+    margin: 0 0 12px; font-weight: 700;
+  }
+  .panel > h2 .count { color: #8a8a84; }
+
+  /* ---------------- form controls ---------------- */
+  /* #3a3a36 is only 1.7:1 against the page, fine as a decorative rule, but a
+     form control's own boundary has to clear 3:1 (WCAG 1.4.11) or the field
+     edge is invisible. #66665f is 3.3:1 and still reads as a quiet border. */
+  input[type="text"], input[type="search"], input[type="date"],
+  input[type="number"], select, textarea {
+    width: 100%; min-width: 0; display: block;
+    background: #171715; color: #eee;
+    border: 2px solid #66665f;
+    font: inherit; font-size: 15px;
+    padding: 10px 12px; min-height: 44px;
+    border-radius: 0; appearance: none; -webkit-appearance: none;
+  }
+  input[type="date"] { min-height: 44px; }
+  select {
+    /* room for the arrow we draw ourselves */
+    padding-right: 34px;
+    background-image:
+      linear-gradient(45deg, transparent 50%, #888 50%),
+      linear-gradient(135deg, #888 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+  input::placeholder { color: #8a8a84; }
+  input:focus, select:focus, textarea:focus { border-color: #eee; }
+  textarea { line-height: 1.5; font-size: 13px; resize: vertical; }
+
+  /* visible focus everywhere, on top of the border change */
+  :focus-visible { outline: 3px solid #ff3b30; outline-offset: 2px; }
+  .btn:focus-visible { outline-color: #eee; }
+
+  .btn, .btn2 {
+    font: inherit; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .1em;
+    min-height: 44px; padding: 10px 16px;
+    border-radius: 0; cursor: pointer; appearance: none; -webkit-appearance: none;
+  }
+  .btn { background: #ff3b30; color: #10100e; border: 2px solid #ff3b30; }
+  .btn2 { background: transparent; color: #ff3b30; border: 2px solid #ff3b30; }
+  .btn2[aria-pressed="true"] { background: #ff3b30; color: #10100e; }
+  .btn:hover, .btn2:hover { filter: brightness(1.12); }
+  .btn:disabled, .btn2:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row > * { flex: 1 1 auto; }
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 480px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+  .field { min-width: 0; }
+  .mt12 { margin-top: 12px; }
+  .mt16 { margin-top: 16px; }
+
+  /* ---------------- messages ---------------- */
+  .msg { font-size: 12px; line-height: 1.5; margin: 10px 0 0; color: #888; }
+  .msg:empty { display: none; margin: 0; }
+  .msg.warn { color: #ff3b30; }
+  .msg.ok { color: #eee; }
+  .note {
+    font-size: 11px; color: #888; line-height: 1.55;
+    border-left: 2px solid #3a3a36; padding-left: 10px; margin: 12px 0 0;
+  }
+  .note.warn { border-left-color: #ff3b30; color: #eee; }
+
+  /* ---------------- search results ---------------- */
+  .results { list-style: none; margin: 12px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
+  .results li { margin: 0 0 6px; }
+  .zbtn {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: #171715; border: 2px solid #66665f; color: #eee;
+    font: inherit; text-align: left; padding: 8px 10px; min-height: 44px;
+    cursor: pointer; border-radius: 0;
+  }
+  .zbtn:hover { border-color: #ff3b30; }
+  .zbtn .zmain { flex: 1 1 auto; min-width: 0; }
+  .zbtn .zcity {
+    font-size: 14px; display: block;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .zbtn .zreg {
+    font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .08em;
+    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .zbtn .zright { flex: 0 0 auto; text-align: right; }
+  .zbtn .ztime { font-size: 14px; display: block; }
+  .zbtn .zoff { font-size: 10px; color: #888; display: block; }
+
+  /* ---------------- clock cards ---------------- */
+  .cards { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @media (min-width: 520px) { .cards { grid-template-columns: 1fr 1fr; } }
+
+  .card { border: 2px solid #3a3a36; padding: 12px; position: relative; min-width: 0; }
+  .card.home { border-color: #eee; }
+  .card .chead { display: flex; align-items: flex-start; gap: 8px; }
+  .card .cname {
+    flex: 1 1 auto; min-width: 0;
+    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card .creg {
+    font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .08em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card .ctime {
+    font-size: 30px; line-height: 1.1; letter-spacing: -.02em;
+    margin: 8px 0 2px; font-variant-numeric: tabular-nums;
+  }
+  .card .cap { font-size: 13px; color: #888; margin-left: 4px; }
+  .card .cdate { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #eee; }
+  .card .cmeta { font-size: 10px; letter-spacing: .06em; color: #888; margin-top: 4px; text-transform: uppercase; }
+  .card .cdst { font-size: 10px; letter-spacing: .06em; color: #888; margin-top: 3px; text-transform: uppercase; }
+
+  .chip {
+    display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; padding: 2px 5px; border: 1px solid currentColor;
+    vertical-align: 2px; margin-left: 6px; white-space: nowrap;
+  }
+  .chip.acc { color: #ff3b30; }
+  .chip.dim { color: #888; }
+  .chip.solid { background: #eee; color: #10100e; border-color: #eee; }
+
+  .xbtn {
+    flex: 0 0 auto; width: 44px; height: 44px; margin: -12px -12px 0 0;
+    background: transparent; border: 0; color: #888; cursor: pointer;
+    font: inherit; font-size: 18px; line-height: 1; border-radius: 0;
+  }
+  .xbtn:hover { color: #ff3b30; }
+
+  .empty {
+    border: 2px dashed #3a3a36; padding: 16px; text-align: center;
+    color: #888; font-size: 12px; line-height: 1.6;
+  }
+
+  /* ---------------- planner band ---------------- */
+  .bandwrap { margin-top: 14px; }
+  .bandrow { margin: 0 0 10px; }
+  .bandhead {
+    display: flex; align-items: baseline; gap: 8px; margin: 0 0 3px;
+  }
+  .bandhead .bname {
+    flex: 1 1 auto; min-width: 0; font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bandhead .bval {
+    flex: 0 0 auto; font-size: 12px; font-variant-numeric: tabular-nums; color: #eee;
+  }
+  .bandhead .bval .bday { color: #ff3b30; font-size: 10px; letter-spacing: .06em; }
+
+  .band {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 24), minmax(0, 1fr));
+    gap: 1px; background: #2a2a28; border: 1px solid #2a2a28;
+  }
+  .cell {
+    height: 26px; background: #141412; position: relative;
+    font-size: 9px; line-height: 26px; text-align: center; color: #9a9a94;
+    overflow: hidden;
+  }
+  .cell.work  { background: #eee; color: #10100e; }
+  .cell.awake { background: #46464180; color: #cfcfc9; }
+  /* #5a5a56 on #141412 was 2.7:1, unreadable at 9px. #8a8a84 is 5.3:1. */
+  .cell.sleep { background: #141412; color: #8a8a84; }
+  .cell.sel   { box-shadow: inset 0 0 0 2px #ff3b30; z-index: 2; }
+  .cell .hn { display: none; }
+  @media (min-width: 520px) { .cell .hn { display: inline; } }
+
+  /* consensus / overlap strip */
+  .band.cons .cell { background: #141412; display: flex; align-items: flex-end; }
+  .band.cons .bar { width: 100%; background: #46464180; }
+  .band.cons .cell.best .bar { background: #eee; }
+  .band.cons .cell.sel { box-shadow: inset 0 0 0 2px #ff3b30; }
+
+  /* ruler */
+  .band.ruler { background: transparent; border-color: transparent; }
+  .band.ruler .cell {
+    height: 16px; line-height: 16px; background: transparent; color: #888;
+    font-size: 9px; letter-spacing: 0;
+  }
+  .band.ruler .cell.tick { border-left: 1px solid #3a3a36; }
+  .band.ruler .cell.now { color: #ff3b30; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;
+    font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .08em;
+  }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .swatch { width: 12px; height: 12px; display: inline-block; border: 1px solid #2a2a28; }
+  .swatch.work { background: #eee; }
+  .swatch.awake { background: #464641; }
+  .swatch.sleep { background: #141412; }
+  .swatch.sel { background: #10100e; box-shadow: inset 0 0 0 2px #ff3b30; }
+
+  /* ---------------- range slider ---------------- */
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 44px; background: transparent; margin: 0; padding: 0;
+    display: block; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px; background: #66665f; border: 0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 30px; background: #ff3b30; border: 2px solid #10100e;
+    margin-top: -12px; border-radius: 0;
+  }
+  input[type="range"]::-moz-range-track { height: 6px; background: #66665f; border: 0; }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 30px; background: #ff3b30; border: 2px solid #10100e; border-radius: 0;
+  }
+
+  /* ---------------- planner results ---------------- */
+  .plist { list-style: none; margin: 14px 0 0; padding: 0; }
+  .plist li {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 8px 0; border-top: 1px solid #2a2a28; min-width: 0;
+  }
+  .plist li:first-child { border-top: 0; }
+  .plist .pname {
+    flex: 1 1 auto; min-width: 0; font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .plist .ptime {
+    flex: 0 0 auto; font-size: 15px; font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .plist .pdate { font-size: 10px; color: #888; letter-spacing: .06em; text-transform: uppercase; display: block; }
+  .plist .pst { font-size: 9px; }
+
+  .foot { color: #8a8a84; font-size: 10px; line-height: 1.7; margin: 20px 0 0; text-align: center; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn, .btn2, .zbtn { transition: filter .12s linear, border-color .12s linear; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>World Clock</h1>
+    <p class="sub">Live times across zones, plus a meeting planner that gets DST right.</p>
+  </header>
+
+  <noscript>
+    <div class="panel"><p class="msg warn">This tool needs JavaScript to run. Nothing here works without it.</p></div>
+  </noscript>
+
+  <!-- ============ ADD A ZONE ============ -->
+  <section class="panel" aria-labelledby="h-add">
+    <h2 id="h-add">Add a zone</h2>
+    <label class="lbl" for="q">Search a city, country or zone</label>
+    <input id="q" type="text" autocomplete="off" autocorrect="off" spellcheck="false"
+           placeholder="tokyo, india, utc, america/…" aria-describedby="qmsg">
+    <p class="msg" id="qmsg" role="status"></p>
+    <ul class="results" id="qlist"></ul>
+  </section>
+
+  <!-- ============ CLOCKS ============ -->
+  <section class="panel" aria-labelledby="h-clocks">
+    <h2 id="h-clocks">Your clocks <span class="count" id="clockCount"></span></h2>
+    <div class="cards" id="cards"></div>
+    <div class="empty" id="cardsEmpty" hidden>
+      No zones yet. Search above, or start with one of these.
+      <div class="row mt12" id="quickAdd"></div>
+    </div>
+    <div class="row mt12">
+      <button type="button" class="btn2" id="fmtBtn" aria-pressed="false">12-hour</button>
+      <button type="button" class="btn2" id="secBtn" aria-pressed="true">Seconds</button>
+      <button type="button" class="btn2" id="sortBtn">Sort west&rarr;east</button>
+    </div>
+    <p class="msg" id="storeMsg"></p>
+  </section>
+
+  <!-- ============ MEETING PLANNER ============ -->
+  <section class="panel" aria-labelledby="h-plan">
+    <h2 id="h-plan">Meeting planner</h2>
+
+    <div class="empty" id="planEmpty" hidden>Add at least one zone to plan a meeting.</div>
+
+    <div id="planBody">
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl" for="pdate">Date</label>
+          <input type="date" id="pdate">
+        </div>
+        <div class="field">
+          <label class="lbl" for="pzone">Chosen in</label>
+          <select id="pzone"></select>
+        </div>
+      </div>
+
+      <div class="mt12">
+        <label class="lbl" for="phour" id="phourLbl">Time: <span id="phourVal">-</span></label>
+        <!-- No aria-describedby here: the <label> above is already this
+             control's accessible NAME, so pointing a description at it too
+             makes every screen reader say the same sentence twice. The live
+             value is carried by aria-valuetext, set on each render. -->
+        <input type="range" id="phour" min="0" max="23" step="1" value="9">
+      </div>
+
+      <div class="row mt12">
+        <button type="button" class="btn2" id="dayPrev" aria-label="Previous day">&larr; Day</button>
+        <button type="button" class="btn2" id="nowBtn">Now</button>
+        <button type="button" class="btn2" id="dayNext" aria-label="Next day">Day &rarr;</button>
+        <div class="field" style="flex:0 0 108px">
+          <label class="sr" for="pmin">Minutes</label>
+          <select id="pmin">
+            <option value="0">:00</option>
+            <option value="15">:15</option>
+            <option value="30">:30</option>
+            <option value="45">:45</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="msg" id="dstMsg"></p>
+
+      <!-- The band duplicates, visually, what the list below states in text.
+           It is hidden from assistive tech so screen readers get the clean list
+           instead of 300 unlabelled cells. -->
+      <div class="bandwrap" id="band" aria-hidden="true"></div>
+
+      <div class="legend" aria-hidden="true">
+        <span><i class="swatch work"></i>Working</span>
+        <span><i class="swatch awake"></i>Awake</span>
+        <span><i class="swatch sleep"></i>Unsociable</span>
+        <span><i class="swatch sel"></i>Chosen</span>
+      </div>
+
+      <div class="grid2 mt16">
+        <div class="field">
+          <label class="lbl" for="ws">Work starts</label>
+          <input type="number" id="ws" min="0" max="23" step="1" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label class="lbl" for="we">Work ends</label>
+          <input type="number" id="we" min="0" max="23" step="1" inputmode="numeric">
+        </div>
+      </div>
+      <p class="msg" id="whMsg"></p>
+
+      <!-- The per-zone list is NOT a live region. It re-renders on every step
+           of the hour slider, and announcing a twelve-row table on each
+           keypress buries the one number the user is actually changing: the
+           slider's own aria-valuetext. Only the one-line verdict is live. -->
+      <div id="planOut">
+        <ul class="plist" id="plist"></ul>
+        <p class="note" id="bestNote" aria-live="polite"></p>
+      </div>
+
+      <div class="row mt16">
+        <button type="button" class="btn" id="copyBtn">Copy summary</button>
+      </div>
+      <p class="msg" id="copyMsg" role="status"></p>
+      <label class="sr" for="copyTa">Meeting summary text</label>
+      <textarea id="copyTa" class="mt12" rows="8" readonly hidden></textarea>
+    </div>
+  </section>
+
+  <p class="foot" id="foot">Times come from your device clock and its IANA time-zone database.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     STORAGE: every access guarded. The app is fully usable without it
+     (localStorage throws outright in some sandboxed iframes).
+     ===================================================================== */
+  var LS = (function () {
+    var ok = false;
+    try {
+      var k = '__wc_probe__';
+      localStorage.setItem(k, '1');
+      localStorage.removeItem(k);
+      ok = true;
+    } catch (e) { ok = false; }
+    return {
+      ok: ok,
+      get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set: function (k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+    };
+  })();
+  var KEY = 'batchly.worldclock.v1';
+
+  /* =====================================================================
+     ZONE DATA
+     ===================================================================== */
+
+  /* Used only when Intl.supportedValuesOf('timeZone') is missing (older
+     Safari / Firefox). Covers every UTC offset in current use. */
+  var FALLBACK_ZONES = [
+    'Africa/Accra', 'Africa/Cairo', 'Africa/Casablanca', 'Africa/Johannesburg', 'Africa/Lagos',
+    'Africa/Nairobi', 'America/Anchorage', 'America/Argentina/Buenos_Aires', 'America/Bogota',
+    'America/Chicago', 'America/Denver', 'America/Halifax', 'America/Lima', 'America/Los_Angeles',
+    'America/Mexico_City', 'America/New_York', 'America/Phoenix', 'America/Santiago',
+    'America/Sao_Paulo', 'America/St_Johns', 'America/Toronto', 'America/Vancouver',
+    'Asia/Baghdad', 'Asia/Bangkok', 'Asia/Colombo', 'Asia/Dhaka', 'Asia/Dubai', 'Asia/Hong_Kong',
+    'Asia/Jakarta', 'Asia/Jerusalem', 'Asia/Kabul', 'Asia/Karachi', 'Asia/Kathmandu', 'Asia/Kolkata',
+    'Asia/Kuala_Lumpur', 'Asia/Manila', 'Asia/Riyadh', 'Asia/Seoul', 'Asia/Shanghai',
+    'Asia/Singapore', 'Asia/Taipei', 'Asia/Tashkent', 'Asia/Tehran', 'Asia/Tokyo', 'Asia/Yangon',
+    'Atlantic/Azores', 'Atlantic/Cape_Verde', 'Atlantic/Reykjavik', 'Australia/Adelaide',
+    'Australia/Brisbane', 'Australia/Darwin', 'Australia/Lord_Howe', 'Australia/Melbourne',
+    'Australia/Perth', 'Australia/Sydney', 'Europe/Amsterdam', 'Europe/Athens', 'Europe/Berlin',
+    'Europe/Brussels', 'Europe/Bucharest', 'Europe/Budapest', 'Europe/Copenhagen', 'Europe/Dublin',
+    'Europe/Helsinki', 'Europe/Istanbul', 'Europe/Kyiv', 'Europe/Lisbon', 'Europe/London',
+    'Europe/Madrid', 'Europe/Moscow', 'Europe/Oslo', 'Europe/Paris', 'Europe/Prague', 'Europe/Rome',
+    'Europe/Stockholm', 'Europe/Vienna', 'Europe/Warsaw', 'Europe/Zurich', 'Pacific/Apia',
+    'Pacific/Auckland', 'Pacific/Chatham', 'Pacific/Fiji', 'Pacific/Guam', 'Pacific/Honolulu',
+    'Pacific/Kiritimati', 'Pacific/Midway', 'Pacific/Port_Moresby', 'UTC'
+  ];
+
+  /* Extra search words per zone. The zone id alone does not match "india",
+     "uk" or "pst", and those are exactly what people type. */
+  var ALIASES = {
+    'America/New_York': 'nyc new york usa united states america east coast eastern est edt boston miami atlanta',
+    'America/Chicago': 'usa united states america central cst cdt texas dallas houston chicago',
+    'America/Denver': 'usa united states america mountain mst mdt colorado utah',
+    'America/Phoenix': 'usa united states america arizona mst no dst',
+    'America/Los_Angeles': 'usa united states america west coast pacific pst pdt california san francisco sf la seattle portland silicon valley',
+    'America/Anchorage': 'usa united states alaska akst',
+    'Pacific/Honolulu': 'usa united states hawaii hst',
+    'America/Toronto': 'canada ontario eastern',
+    'America/Vancouver': 'canada british columbia pacific',
+    'America/Sao_Paulo': 'brazil brasil brt',
+    'America/Argentina/Buenos_Aires': 'argentina',
+    'America/Mexico_City': 'mexico cdmx',
+    'America/Bogota': 'colombia',
+    'America/Santiago': 'chile',
+    'America/Lima': 'peru',
+    'Europe/London': 'uk united kingdom england britain gb gmt bst scotland wales',
+    'Europe/Dublin': 'ireland eire',
+    'Europe/Paris': 'france cet cest',
+    'Europe/Berlin': 'germany deutschland cet cest munich frankfurt',
+    'Europe/Madrid': 'spain espana',
+    'Europe/Rome': 'italy italia',
+    'Europe/Amsterdam': 'netherlands holland dutch',
+    'Europe/Zurich': 'switzerland swiss geneva',
+    'Europe/Stockholm': 'sweden',
+    'Europe/Oslo': 'norway',
+    'Europe/Copenhagen': 'denmark',
+    'Europe/Helsinki': 'finland',
+    'Europe/Warsaw': 'poland',
+    'Europe/Lisbon': 'portugal',
+    'Europe/Athens': 'greece',
+    'Europe/Istanbul': 'turkey turkiye',
+    'Europe/Moscow': 'russia msk',
+    'Europe/Kyiv': 'ukraine kiev',
+    'Asia/Kolkata': 'india indian ist calcutta delhi mumbai bangalore bengaluru hyderabad chennai pune',
+    'Asia/Karachi': 'pakistan',
+    'Asia/Dhaka': 'bangladesh',
+    'Asia/Colombo': 'sri lanka',
+    'Asia/Kathmandu': 'nepal',
+    'Asia/Shanghai': 'china chinese beijing cst shenzhen guangzhou',
+    'Asia/Hong_Kong': 'hk china hkt',
+    'Asia/Taipei': 'taiwan',
+    'Asia/Tokyo': 'japan japanese jst osaka',
+    'Asia/Seoul': 'korea south korea kst',
+    'Asia/Singapore': 'singapore sgt',
+    'Asia/Kuala_Lumpur': 'malaysia',
+    'Asia/Jakarta': 'indonesia',
+    'Asia/Bangkok': 'thailand',
+    'Asia/Manila': 'philippines',
+    'Asia/Dubai': 'uae emirates abu dhabi gst',
+    'Asia/Riyadh': 'saudi arabia',
+    'Asia/Jerusalem': 'israel tel aviv',
+    'Asia/Tehran': 'iran',
+    'Australia/Sydney': 'australia aest aedt nsw',
+    'Australia/Melbourne': 'australia aest aedt victoria',
+    'Australia/Brisbane': 'australia queensland aest',
+    'Australia/Perth': 'australia western awst',
+    'Australia/Adelaide': 'australia south acst',
+    'Pacific/Auckland': 'new zealand nz nzst nzdt',
+    'Africa/Lagos': 'nigeria wat',
+    'Africa/Nairobi': 'kenya eat',
+    'Africa/Johannesburg': 'south africa sast',
+    'Africa/Cairo': 'egypt',
+    'UTC': 'utc gmt zulu z coordinated universal'
+  };
+
+  /* Engines disagree about which spelling of a renamed zone they list:
+     this machine's ICU offers Asia/Calcutta and Europe/Kiev, others offer
+     Asia/Kolkata and Europe/Kyiv. Both spellings must search alike, and the
+     modern name is the one worth showing. Keyed legacy -> modern. */
+  var RENAMED = {
+    'Asia/Calcutta': 'Asia/Kolkata',
+    'Asia/Katmandu': 'Asia/Kathmandu',
+    'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+    'Asia/Rangoon': 'Asia/Yangon',
+    'Asia/Thimbu': 'Asia/Thimphu',
+    'Asia/Dacca': 'Asia/Dhaka',
+    'Europe/Kiev': 'Europe/Kyiv',
+    'America/Godthab': 'America/Nuuk',
+    'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+    'America/Coral_Harbour': 'America/Atikokan',
+    'Africa/Asmera': 'Africa/Asmara',
+    'Atlantic/Faeroe': 'Atlantic/Faroe',
+    'Pacific/Truk': 'Pacific/Chuuk',
+    'Pacific/Ponape': 'Pacific/Pohnpei',
+    'Pacific/Samoa': 'Pacific/Pago_Pago'
+  };
+  var RENAMED_REV = {};
+  (function () { for (var k in RENAMED) if (RENAMED.hasOwnProperty(k)) RENAMED_REV[RENAMED[k]] = k; })();
+  function modernId(tz) { return RENAMED[tz] || tz; }
+
+  /* One identity per zone regardless of spelling, so Kolkata and Calcutta
+     cannot both be added as separate cards showing the same time. */
+  var _canon = {};
+  function canonZone(tz) {
+    if (_canon[tz]) return _canon[tz];
+    var c;
+    try { c = new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone || tz; }
+    catch (e) { c = tz; }
+    return (_canon[tz] = modernId(c));
+  }
+
+  var POPULAR = [
+    'America/Los_Angeles', 'America/New_York', 'Europe/London',
+    'Europe/Berlin', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'UTC'
+  ];
+
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var MAX_ZONES = 12;
+
+  /* =====================================================================
+     ZONE MATHS: everything below is derived from an instant + a zone id.
+     No offset is ever stored or reused, which is what makes DST correct.
+     ===================================================================== */
+  /*<math>*/
+
+  var _partsFmt = {};
+  function partsFmt(tz) {
+    var f = _partsFmt[tz];
+    if (!f) {
+      f = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      _partsFmt[tz] = f;
+    }
+    return f;
+  }
+
+  /* Wall-clock fields shown by zone `tz` at instant `ts` (ms since epoch). */
+  function wallParts(ts, tz) {
+    var ps = partsFmt(tz).formatToParts(new Date(ts));
+    var o = {}, i, p;
+    for (i = 0; i < ps.length; i++) {
+      p = ps[i];
+      if (p.type !== 'literal') o[p.type] = p.value;
+    }
+    var h = +o.hour;
+    /* Some engines render midnight as "24" under hour12:false (hourCycle h24). */
+    if (h === 24) h = 0;
+    return { y: +o.year, mo: +o.month, d: +o.day, h: h, mi: +o.minute, s: +o.second };
+  }
+
+  /* Date.UTC, but correct for years 0-99 (Date.UTC maps those onto 1900+y). */
+  function utcMs(y, mo, d, h, mi, s) {
+    var t = Date.UTC(y, mo - 1, d, h || 0, mi || 0, s || 0, 0);
+    if (y >= 0 && y < 100) {
+      var dd = new Date(t);
+      dd.setUTCFullYear(y);
+      t = dd.getTime();
+    }
+    return t;
+  }
+
+  /* Offset of `tz` from UTC, in minutes east, AT INSTANT ts.
+     Derived by formatting the instant in the zone and re-reading those
+     fields as if they were UTC; the gap between the two IS the offset.
+     Must be called per instant; caching one value per zone is the DST bug. */
+  function offsetAt(ts, tz) {
+    var w = wallParts(ts, tz);
+    var asUTC = utcMs(w.y, w.mo, w.d, w.h, w.mi, w.s);
+    var tsSec = Math.floor(ts / 1000) * 1000;   /* parts have no ms */
+    return Math.round((asUTC - tsSec) / 60000);
+  }
+
+  /* Whole days since epoch for a wall date, used only to compare calendar
+     days between zones, never to do arithmetic on instants. */
+  function dayIndex(w) {
+    return Math.floor(utcMs(w.y, w.mo, w.d, 0, 0, 0) / 86400000);
+  }
+
+  /* Inverse of the above: a wall-clock time in `tz` -> a UTC instant.
+     Two wall times per year are pathological in every zone that observes DST:
+       'gap':       the clock jumps over it (spring forward). It never happens.
+       'ambiguous': the clock repeats it (fall back). It happens twice.
+     Returns { ts, status:'ok'|'gap'|'ambiguous', alt }.
+       gap       -> ts is the instant the clock reaches after the jump.
+       ambiguous -> ts is the FIRST occurrence, alt is the second. */
+  function resolveWall(y, mo, d, h, mi, tz) {
+    var wall = utcMs(y, mo, d, h, mi, 0);
+    /* Probing +/- 24h brackets any transition near this wall time: the true
+       instant is at most ~14h from `wall`, and offsets only ever step once. */
+    var probes = [wall - 86400000, wall, wall + 86400000];
+    var offs = [], i, o, ts;
+    for (i = 0; i < probes.length; i++) {
+      o = offsetAt(probes[i], tz);
+      if (offs.indexOf(o) < 0) offs.push(o);
+    }
+    /* A candidate is valid only if the zone really is at that offset there. */
+    var cand = [];
+    for (i = 0; i < offs.length; i++) {
+      ts = wall - offs[i] * 60000;
+      if (offsetAt(ts, tz) === offs[i] && cand.indexOf(ts) < 0) cand.push(ts);
+    }
+    cand.sort(function (a, b) { return a - b; });
+
+    if (cand.length === 0) {
+      /* No offset round-trips => the local time is inside a spring-forward
+         gap. The smallest offset yields the largest instant, i.e. the moment
+         just after the clocks jump, which is what a calendar would book. */
+      var minOff = Math.min.apply(null, offs);
+      return { ts: wall - minOff * 60000, status: 'gap' };
+    }
+    if (cand.length > 1) {
+      return { ts: cand[0], status: 'ambiguous', alt: cand[cand.length - 1] };
+    }
+    return { ts: cand[0], status: 'ok' };
+  }
+
+  /* Is `tz` on summer time at `ts`? Compare against the smaller of the
+     January and July offsets. Heuristic: a zone that changed its standard
+     offset permanently part-way through the year can read wrong for a while;
+     it is right for every zone that actually observes DST. */
+  var _dstCache = {};
+  function isDST(ts, tz) {
+    var y = wallParts(ts, tz).y;
+    var k = tz + '|' + y;
+    var std = _dstCache[k];
+    if (std === undefined) {
+      var jan = offsetAt(utcMs(y, 1, 1, 12, 0, 0), tz);
+      var jul = offsetAt(utcMs(y, 7, 1, 12, 0, 0), tz);
+      std = _dstCache[k] = Math.min(jan, jul);
+    }
+    return offsetAt(ts, tz) > std;
+  }
+
+  /* Next UTC instant at which `tz` changes offset, or null within the window.
+     Coarse 4-day scan (transitions are never that close together) then a
+     binary search down to the minute. */
+  function nextTransition(fromTs, tz) {
+    var STEP = 4 * 86400000;
+    var LIMIT = fromTs + 400 * 86400000;
+    var o0 = offsetAt(fromTs, tz);
+    var a = fromTs, b, ob, t;
+    for (t = fromTs + STEP; t <= LIMIT; t += STEP) {
+      ob = offsetAt(t, tz);
+      if (ob !== o0) { b = t; break; }
+      a = t;
+    }
+    if (b === undefined) return null;
+    /* invariant: offsetAt(a) === o0, offsetAt(b) !== o0.
+       Narrow to one second, then floor to the minute: offsets only ever change
+       on a whole minute, so this lands exactly on the transition rather than
+       up to a minute past it. */
+    while (b - a > 1000) {
+      var m = a + Math.floor((b - a) / 2);
+      if (offsetAt(m, tz) === o0) a = m; else b = m;
+    }
+    var ts = Math.floor(b / 60000) * 60000;
+    return { ts: ts, from: o0, to: offsetAt(b, tz) };
+  }
+
+  /*</math>*/
+
+  /* nextTransition scans ~130 formatted instants per zone. The planner asks it
+     for every zone on every slider move, which on twelve zones was ~1150
+     Intl formats per pointermove, janky on a phone. The answer is stable
+     until the transition it found actually passes, so memoise it per zone.
+     Cache entries carry the window they are valid for, so a page left open
+     overnight (or a clock that jumps) still recomputes rather than lying. */
+  var _nextTrCache = {};
+  function nextTransitionCached(fromTs, tz) {
+    var c = _nextTrCache[tz];
+    if (c && fromTs >= c.from && fromTs < c.until) return c.val;
+    var v = nextTransition(fromTs, tz);
+    _nextTrCache[tz] = {
+      from: fromTs,
+      /* valid right up to the transition; when there is none in the search
+         window, re-check once a day so the answer cannot go stale */
+      until: v ? v.ts : fromTs + 86400000,
+      val: v
+    };
+    return v;
+  }
+
+  var _abbrFmt = {};
+  /* Short zone name (EDT, JST, AEST). Returns '' when the platform only has
+     a numeric name like "GMT+5:30"; we already print a precise offset. */
+  function zoneAbbr(ts, tz) {
+    try {
+      var f = _abbrFmt[tz];
+      if (!f) {
+        f = _abbrFmt[tz] = new Intl.DateTimeFormat('en-US', {
+          timeZone: tz, timeZoneName: 'short', hour: 'numeric', hour12: false
+        });
+      }
+      var ps = f.formatToParts(new Date(ts));
+      for (var i = 0; i < ps.length; i++) {
+        if (ps[i].type === 'timeZoneName') {
+          var v = ps[i].value;
+          if (/^(GMT|UTC)/i.test(v)) return '';
+          return v;
+        }
+      }
+    } catch (e) { /* fall through */ }
+    return '';
+  }
+
+  function validZone(tz) {
+    if (typeof tz !== 'string' || !tz) return false;
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }
+    catch (e) { return false; }
+  }
+
+  /* =====================================================================
+     FORMATTING
+     ===================================================================== */
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function fmtOffset(min) {
+    var sign = min < 0 ? '-' : '+';
+    var a = Math.abs(min);
+    return 'UTC' + sign + pad2(Math.floor(a / 60)) + ':' + pad2(a % 60);
+  }
+
+  /* Difference vs the home zone, e.g. "+5:30h", "-3h", "same time". */
+  function fmtDelta(min) {
+    if (min === 0) return 'same time';
+    var sign = min < 0 ? '-' : '+';
+    var a = Math.abs(min);
+    var hh = Math.floor(a / 60), mm = a % 60;
+    return sign + hh + (mm ? ':' + pad2(mm) : '') + 'h';
+  }
+
+  /* Returns { t:'09:05:03', suf:'AM'|'' } so the caller can style the suffix
+     separately, with no in-band delimiter characters. */
+  function clockText(w, withSecs) {
+    var h = w.h, suf = '';
+    if (S.h12) {
+      suf = h < 12 ? 'AM' : 'PM';
+      h = h % 12;
+      if (h === 0) h = 12;
+    }
+    return {
+      t: (S.h12 ? String(h) : pad2(h)) + ':' + pad2(w.mi) + (withSecs ? ':' + pad2(w.s) : ''),
+      suf: suf
+    };
+  }
+
+  function weekdayOf(w) {
+    return DAYS[new Date(utcMs(w.y, w.mo, w.d, 12, 0, 0)).getUTCDay()];
+  }
+  function fmtDate(w) {
+    return weekdayOf(w) + ' ' + pad2(w.d) + ' ' + MONTHS[w.mo - 1];
+  }
+  function fmtDateLong(w) {
+    return weekdayOf(w) + ' ' + pad2(w.d) + ' ' + MONTHS[w.mo - 1] + ' ' + w.y;
+  }
+  function isoDate(w) { return w.y + '-' + pad2(w.mo) + '-' + pad2(w.d); }
+
+  function cityOf(tz) {
+    if (tz === 'UTC' || tz === 'Etc/UTC') return 'UTC';
+    var seg = modernId(tz).split('/');
+    return seg[seg.length - 1].replace(/_/g, ' ');
+  }
+  function regionOf(tz) {
+    var seg = modernId(tz).split('/');
+    if (seg.length < 2) return 'Universal';
+    var r = seg[0].replace(/_/g, ' ');
+    if (seg.length > 2) r += ' / ' + seg[1].replace(/_/g, ' ');
+    return r;
+  }
+
+  /* =====================================================================
+     ZONE LIST (platform first, embedded shortlist as the documented fallback)
+     ===================================================================== */
+  var ZONES, ZONES_FROM_PLATFORM = false;
+  (function () {
+    var list = null;
+    try {
+      if (typeof Intl.supportedValuesOf === 'function') {
+        var v = Intl.supportedValuesOf('timeZone');
+        if (v && v.length) { list = v.slice(); ZONES_FROM_PLATFORM = true; }
+      }
+    } catch (e) { list = null; }
+    if (!list) list = FALLBACK_ZONES.slice();
+    if (list.indexOf('UTC') < 0) list.push('UTC');
+    /* de-dupe, keep only zones this engine can actually format */
+    var seen = {}, out = [];
+    for (var i = 0; i < list.length; i++) {
+      var z = list[i];
+      if (seen[z]) continue;
+      seen[z] = 1;
+      if (validZone(z)) out.push(z);
+    }
+    out.sort();
+    ZONES = out;
+  })();
+
+  function deviceZone() {
+    try {
+      var z = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (z && validZone(z)) return z;
+    } catch (e) { /* ignore */ }
+    return 'UTC';
+  }
+
+  /* =====================================================================
+     STATE
+     ===================================================================== */
+  var S = {
+    zones: [],
+    home: deviceZone(),
+    h12: false,
+    secs: true,
+    ws: 9,
+    we: 17,
+    ref: null,       /* reference zone for the planner */
+    mt: 0,           /* the meeting INSTANT, the single source of truth */
+    date: '',        /* selected date, as it reads in the reference zone */
+    col: 9,          /* selected column in the band */
+    min: 0           /* minutes past the column's hour */
+  };
+
+  function save() {
+    if (!LS.ok) return;
+    LS.set(KEY, JSON.stringify({
+      zones: S.zones, home: S.home, h12: S.h12, secs: S.secs,
+      ws: S.ws, we: S.we, ref: S.ref
+    }));
+  }
+
+  function load() {
+    var raw = LS.get(KEY), o = null, dropped = 0;
+    if (raw) { try { o = JSON.parse(raw); } catch (e) { o = null; } }
+    if (o && Object.prototype.toString.call(o.zones) === '[object Array]') {
+      var seen = {};
+      for (var i = 0; i < o.zones.length; i++) {
+        var z = o.zones[i];
+        if (typeof z !== 'string' || seen[z]) continue;
+        /* A zone saved on another device/browser may not exist here. */
+        if (!validZone(z)) { dropped++; continue; }
+        seen[z] = 1;
+        S.zones.push(z);
+      }
+      if (typeof o.home === 'string' && validZone(o.home)) S.home = o.home;
+      if (typeof o.h12 === 'boolean') S.h12 = o.h12;
+      if (typeof o.secs === 'boolean') S.secs = o.secs;
+      if (typeof o.ws === 'number' && o.ws >= 0 && o.ws <= 23) S.ws = o.ws | 0;
+      if (typeof o.we === 'number' && o.we >= 0 && o.we <= 23) S.we = o.we | 0;
+      if (S.ws === S.we) { S.ws = 9; S.we = 17; }
+      if (typeof o.ref === 'string' && validZone(o.ref)) S.ref = o.ref;
+    } else {
+      /* First run: something immediately useful rather than an empty page. */
+      var seed = [S.home, 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
+      for (var j = 0; j < seed.length; j++) {
+        if (validZone(seed[j]) && S.zones.indexOf(seed[j]) < 0) S.zones.push(seed[j]);
+      }
+    }
+    if (S.zones.length > MAX_ZONES) S.zones.length = MAX_ZONES;
+    return dropped;
+  }
+
+  /* =====================================================================
+     DOM
+     ===================================================================== */
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function setMsg(node, text, kind) {
+    node.textContent = text || '';
+    node.className = 'msg' + (kind ? ' ' + kind : '');
+  }
+
+  var elQ = $('q'), elQMsg = $('qmsg'), elQList = $('qlist'),
+      elCards = $('cards'), elCardsEmpty = $('cardsEmpty'), elQuickAdd = $('quickAdd'),
+      elClockCount = $('clockCount'), elStoreMsg = $('storeMsg'),
+      elFmtBtn = $('fmtBtn'), elSecBtn = $('secBtn'), elSortBtn = $('sortBtn'),
+      elPlanEmpty = $('planEmpty'), elPlanBody = $('planBody'),
+      elPDate = $('pdate'), elPZone = $('pzone'), elPHour = $('phour'),
+      elPHourVal = $('phourVal'), elPMin = $('pmin'),
+      elDayPrev = $('dayPrev'), elDayNext = $('dayNext'), elNowBtn = $('nowBtn'),
+      elDstMsg = $('dstMsg'), elBand = $('band'), elPList = $('plist'),
+      elBestNote = $('bestNote'), elWs = $('ws'), elWe = $('we'), elWhMsg = $('whMsg'),
+      elCopyBtn = $('copyBtn'), elCopyMsg = $('copyMsg'), elCopyTa = $('copyTa'),
+      elFoot = $('foot');
+
+  /* =====================================================================
+     SEARCH
+     ===================================================================== */
+  function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+
+  var _idx = {};
+  function zoneIndex(tz) {
+    var x = _idx[tz];
+    if (!x) {
+      /* index BOTH spellings of a renamed zone, and both alias entries */
+      var alt = RENAMED[tz] || RENAMED_REV[tz] || '';
+      var ids = modernId(tz) + ' ' + tz + (alt ? ' ' + alt : '');
+      var aliasWords = norm((ALIASES[tz] || '') + ' ' + (alt ? (ALIASES[alt] || '') : ''));
+      x = _idx[tz] = {
+        city: norm(cityOf(tz)),
+        alias: ' ' + aliasWords + ' ',
+        hay: norm(ids.replace(/[\/_]/g, ' ')) + ' ' + aliasWords
+      };
+    }
+    return x;
+  }
+
+  function searchZones(q) {
+    var tokens = norm(q).split(' ').filter(Boolean);
+    if (!tokens.length) return POPULAR.filter(validZone);
+    var scored = [];
+    for (var i = 0; i < ZONES.length; i++) {
+      var tz = ZONES[i];
+      var x = zoneIndex(tz);
+      var ok = true, score = 0;
+      for (var t = 0; t < tokens.length; t++) {
+        var tk = tokens[t];
+        /* A curated alias is a deliberate statement of intent, so an exact
+           alias word ("india") must beat an accidental city prefix
+           ("Indianapolis"); otherwise the obvious query buries the answer. */
+        if (x.city === tk) score += 8;
+        else if (x.alias.indexOf(' ' + tk + ' ') >= 0) score += 6;
+        else if (x.city.indexOf(tk) === 0) score += 5;
+        else if ((' ' + x.hay).indexOf(' ' + tk) >= 0) score += 2;
+        else if (x.hay.indexOf(tk) >= 0) score += 1;
+        else { ok = false; break; }
+      }
+      if (ok) scored.push([score, tz]);
+    }
+    scored.sort(function (a, b) {
+      if (b[0] !== a[0]) return b[0] - a[0];
+      return a[1] < b[1] ? -1 : 1;
+    });
+    return scored.map(function (p) { return p[1]; });
+  }
+
+  var LIST_LIMIT = 40;
+  function renderSearch() {
+    var q = elQ.value;
+    var hits = searchZones(q);
+    elQList.textContent = '';
+
+    if (!hits.length) {
+      setMsg(elQMsg, 'No zone matches "' + q.trim() + '". Try a city (tokyo), a country (india) ' +
+        'or part of the zone id (america/).', 'warn');
+      return;
+    }
+
+    var shown = hits.slice(0, LIST_LIMIT);
+    var now = Date.now();
+    for (var i = 0; i < shown.length; i++) {
+      elQList.appendChild(searchRow(shown[i], now));
+    }
+
+    var msg;
+    if (!norm(q)) msg = 'Popular zones. Type to search all ' + ZONES.length + '.';
+    else if (hits.length > shown.length) msg = 'Showing ' + shown.length + ' of ' + hits.length + ' matches.';
+    else msg = hits.length + (hits.length === 1 ? ' match.' : ' matches.');
+    setMsg(elQMsg, msg);
+  }
+
+  function searchRow(tz, now) {
+    var li = el('li');
+    var b = el('button', 'zbtn');
+    b.type = 'button';
+    var already = hasZone(tz);
+
+    var main = el('div', 'zmain');
+    main.appendChild(el('span', 'zcity', cityOf(tz)));
+    main.appendChild(el('span', 'zreg', regionOf(tz)));
+
+    var right = el('div', 'zright');
+    var w = wallParts(now, tz);
+    var ct = clockText(w, false);
+    right.appendChild(el('span', 'ztime', ct.t + (ct.suf ? ' ' + ct.suf : '')));
+    right.appendChild(el('span', 'zoff', fmtOffset(offsetAt(now, tz))));
+
+    b.appendChild(main);
+    b.appendChild(right);
+    if (already) {
+      var chip = el('span', 'chip dim', 'Added');
+      right.appendChild(chip);
+      b.setAttribute('aria-label', cityOf(tz) + ' (already added)');
+    } else {
+      b.setAttribute('aria-label', 'Add ' + cityOf(tz) + ', ' + regionOf(tz));
+    }
+    b.addEventListener('click', function () { addZone(tz); });
+    li.appendChild(b);
+    return li;
+  }
+
+  /* Matches on canonical identity, so Asia/Kolkata and Asia/Calcutta count
+     as the same clock however the engine spelled them. */
+  function hasZone(tz) {
+    var c = canonZone(tz);
+    for (var i = 0; i < S.zones.length; i++) if (canonZone(S.zones[i]) === c) return true;
+    return false;
+  }
+
+  function addZone(tz) {
+    if (hasZone(tz)) {
+      setMsg(elQMsg, cityOf(tz) + ' is already in your clocks.', 'warn');
+      return;
+    }
+    if (S.zones.length >= MAX_ZONES) {
+      setMsg(elQMsg, 'That is the limit of ' + MAX_ZONES + ' zones. Remove one first.', 'warn');
+      return;
+    }
+    if (!validZone(tz)) {
+      setMsg(elQMsg, 'This browser cannot resolve the zone "' + tz + '".', 'warn');
+      return;
+    }
+    S.zones.push(tz);
+    save();
+    renderAll();
+    setMsg(elQMsg, 'Added ' + cityOf(tz) + '.', 'ok');
+  }
+
+  function removeZone(tz) {
+    var i = S.zones.indexOf(tz);
+    if (i < 0) return;
+    S.zones.splice(i, 1);
+    if (S.ref === tz) S.ref = S.zones[0] || null;
+    save();
+    renderAll();
+  }
+
+  /* =====================================================================
+     CLOCK CARDS
+     ===================================================================== */
+  var cardRefs = [];   /* keep node handles so the 1s tick touches text only */
+
+  function renderCards() {
+    elCards.textContent = '';
+    cardRefs = [];
+
+    var has = S.zones.length > 0;
+    elCardsEmpty.hidden = has;
+    elCards.hidden = !has;
+    elClockCount.textContent = has ? '(' + S.zones.length + '/' + MAX_ZONES + ')' : '';
+    if (!has) { renderQuickAdd(); return; }
+
+    for (var i = 0; i < S.zones.length; i++) {
+      elCards.appendChild(buildCard(S.zones[i]));
+    }
+    tickCards();
+  }
+
+  function renderQuickAdd() {
+    elQuickAdd.textContent = '';
+    for (var i = 0; i < POPULAR.length && i < 6; i++) {
+      (function (tz) {
+        var b = el('button', 'btn2', cityOf(tz));
+        b.type = 'button';
+        b.style.flex = '0 0 auto';
+        b.addEventListener('click', function () { addZone(tz); });
+        elQuickAdd.appendChild(b);
+      })(POPULAR[i]);
+    }
+  }
+
+  function buildCard(tz) {
+    var isHome = tz === S.home;
+    var card = el('div', 'card' + (isHome ? ' home' : ''));
+
+    var head = el('div', 'chead');
+    var nameWrap = el('div');
+    nameWrap.style.cssText = 'flex:1 1 auto;min-width:0';
+    var name = el('div', 'cname', cityOf(tz));
+    if (isHome) name.appendChild(el('span', 'chip solid', 'Home'));
+    nameWrap.appendChild(name);
+    nameWrap.appendChild(el('div', 'creg', regionOf(tz)));
+    head.appendChild(nameWrap);
+
+    var x = el('button', 'xbtn', '×');
+    x.type = 'button';
+    x.setAttribute('aria-label', 'Remove ' + cityOf(tz));
+    x.addEventListener('click', function () { removeZone(tz); });
+    head.appendChild(x);
+    card.appendChild(head);
+
+    var time = el('div', 'ctime');
+    var tSpan = el('span');
+    var apSpan = el('span', 'cap');
+    time.appendChild(tSpan);
+    time.appendChild(apSpan);
+    card.appendChild(time);
+
+    var dateLine = el('div', 'cdate');
+    var dateTxt = el('span');
+    var dayChip = el('span', 'chip acc');
+    dayChip.hidden = true;
+    dateLine.appendChild(dateTxt);
+    dateLine.appendChild(dayChip);
+    card.appendChild(dateLine);
+
+    var meta = el('div', 'cmeta');
+    card.appendChild(meta);
+    var dst = el('div', 'cdst');
+    card.appendChild(dst);
+
+    cardRefs.push({
+      tz: tz, t: tSpan, ap: apSpan, date: dateTxt, chip: dayChip,
+      meta: meta, dst: dst, last: {}
+    });
+    return card;
+  }
+
+  /* Cheap per-second update: only writes a node when its text changed. */
+  function tickCards() {
+    var now = Date.now();
+    var homeW = wallParts(now, S.home);
+    var homeDay = dayIndex(homeW);
+    var homeOff = offsetAt(now, S.home);
+
+    for (var i = 0; i < cardRefs.length; i++) {
+      var r = cardRefs[i];
+      var w = wallParts(now, r.tz);
+      var ct = clockText(w, S.secs);
+
+      if (r.last.t !== ct.t) { r.t.textContent = ct.t; r.last.t = ct.t; }
+      if (r.last.ap !== ct.suf) { r.ap.textContent = ct.suf; r.last.ap = ct.suf; }
+
+      var dstr = fmtDate(w);
+      if (r.last.d !== dstr) { r.date.textContent = dstr; r.last.d = dstr; }
+
+      var dd = dayIndex(w) - homeDay;
+      var chipTxt = dd === 0 ? '' : (dd === 1 ? 'Tomorrow' : dd === -1 ? 'Yesterday'
+                    : (dd > 0 ? '+' + dd + ' days' : dd + ' days'));
+      if (r.last.chip !== chipTxt) {
+        r.chip.textContent = chipTxt;
+        r.chip.hidden = !chipTxt;
+        r.last.chip = chipTxt;
+      }
+
+      var off = offsetAt(now, r.tz);
+      var ab = zoneAbbr(now, r.tz);
+      var bits = [fmtOffset(off)];
+      if (ab) bits.push(ab);
+      if (isDST(now, r.tz)) bits.push('DST');
+      if (r.tz !== S.home) bits.push(fmtDelta(off - homeOff) + ' vs ' + cityOf(S.home));
+      var metaTxt = bits.join(' · ');
+      if (r.last.meta !== metaTxt) { r.meta.textContent = metaTxt; r.last.meta = metaTxt; }
+
+      /* Next clock change, computed once per zone, then cached. */
+      if (r.last.dst === undefined) {
+        var txt = '';
+        try {
+          var nx = nextTransitionCached(now, r.tz);
+          if (nx) {
+            var nw = wallParts(nx.ts, r.tz);
+            var delta = (nx.to - nx.from) / 60;
+            txt = 'Clocks ' + (delta > 0 ? 'forward ' : 'back ') +
+                  Math.abs(delta) + 'h on ' + fmtDate(nw);
+          } else {
+            txt = 'No clock change in the next year';
+          }
+        } catch (e) { txt = ''; }
+        r.dst.textContent = txt;
+        r.last.dst = txt;
+      }
+    }
+  }
+
+  /* =====================================================================
+     MEETING PLANNER
+     ===================================================================== */
+  function refZone() {
+    if (S.ref && S.zones.indexOf(S.ref) >= 0) return S.ref;
+    S.ref = S.zones.indexOf(S.home) >= 0 ? S.home : (S.zones[0] || null);
+    return S.ref;
+  }
+
+  function parseISO(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    /* reject 31 Feb and friends */
+    var probe = new Date(Date.UTC(y, mo - 1, d));
+    if (probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d) return null;
+    return { y: y, mo: mo, d: d };
+  }
+
+  function shiftISO(s, days) {
+    var p = parseISO(s);
+    if (!p) return s;
+    var t = utcMs(p.y, p.mo, p.d, 12, 0, 0) + days * 86400000;
+    var dd = new Date(t);
+    return dd.getUTCFullYear() + '-' + pad2(dd.getUTCMonth() + 1) + '-' + pad2(dd.getUTCDate());
+  }
+
+  /* The band spans one real calendar day in the reference zone. Its length is
+     23, 24 or 25 hours on DST days, so the column count is measured, not
+     assumed. Column k is the instant dayStart + k hours. */
+  function dayFrame() {
+    var tz = refZone();
+    var p = parseISO(S.date);
+    if (!tz || !p) return null;
+    var a = resolveWall(p.y, p.mo, p.d, 0, 0, tz);
+    var nx = parseISO(shiftISO(S.date, 1));
+    var b = resolveWall(nx.y, nx.mo, nx.d, 0, 0, tz);
+    var n = Math.round((b.ts - a.ts) / 3600000);
+    if (!(n > 0)) n = 24;
+    n = Math.max(1, Math.min(26, n));
+    return { tz: tz, t0: a.ts, n: n, midnightStatus: a.status };
+  }
+
+  function colInstant(f, col) { return f.t0 + col * 3600000; }
+
+  /* Which column contains instant `ts`. Must be measured off the frame, never
+     taken from the wall hour: on a spring-forward day the band has 23 columns
+     and every hour after the gap sits one column below its own clock reading
+     (14:00 is column 13). Using the hour there opens the planner an hour late. */
+  function colForInstant(ts) {
+    var f = dayFrame();
+    if (!f) return 0;
+    var c = Math.floor((ts - f.t0) / 3600000);
+    return Math.max(0, Math.min(f.n - 1, c));
+  }
+
+  /* work / awake / unsociable for a local hour */
+  function inRange(h, a, b) { return a < b ? (h >= a && h < b) : (h >= a || h < b); }
+  function hourClass(h) {
+    if (inRange(h, S.ws, S.we)) return 'work';
+    if (h >= 7 && h < 22) return 'awake';
+    return 'sleep';
+  }
+  var CLASS_WORD = { work: 'working', awake: 'awake', sleep: 'unsociable' };
+
+  /* Recompute the meeting instant from date + column + minutes. */
+  function syncInstantFromControls() {
+    var f = dayFrame();
+    if (!f) return;
+    if (S.col > f.n - 1) S.col = f.n - 1;
+    if (S.col < 0) S.col = 0;
+    S.mt = colInstant(f, S.col) + S.min * 60000;
+  }
+
+  /* Re-express the current meeting instant in a (possibly new) reference zone. */
+  function syncControlsFromInstant() {
+    var tz = refZone();
+    if (!tz) return;
+    var w = wallParts(S.mt, tz);
+    S.date = isoDate(w);
+    var f = dayFrame();
+    if (!f) return;
+    var diff = S.mt - f.t0;
+    var col = Math.floor(diff / 3600000);
+    if (col < 0) col = 0;
+    if (col > f.n - 1) col = f.n - 1;
+    S.col = col;
+    var rem = Math.round((diff - col * 3600000) / 60000);
+    /* every zone offset is a multiple of 15 minutes, so this always lands */
+    S.min = [0, 15, 30, 45].indexOf(rem) >= 0 ? rem : 0;
+  }
+
+  function renderPlannerControls() {
+    /* reference-zone select */
+    elPZone.textContent = '';
+    for (var i = 0; i < S.zones.length; i++) {
+      var o = el('option', null, cityOf(S.zones[i]));
+      o.value = S.zones[i];
+      if (S.zones[i] === refZone()) o.selected = true;
+      elPZone.appendChild(o);
+    }
+    elPDate.value = S.date;
+    elWs.value = S.ws;
+    elWe.value = S.we;
+
+    var f = dayFrame();
+    elPHour.max = f ? String(f.n - 1) : '23';
+    elPHour.value = String(S.col);
+    elPMin.value = String(S.min);
+  }
+
+  function renderPlanner() {
+    var has = S.zones.length > 0;
+    elPlanEmpty.hidden = has;
+    elPlanBody.hidden = !has;
+    if (!has) return;
+
+    var f = dayFrame();
+    if (!f) {
+      setMsg(elDstMsg, 'That date is not valid. Pick another.', 'warn');
+      elBand.textContent = '';
+      elPList.textContent = '';
+      return;
+    }
+
+    var tz = f.tz;
+    var mt = S.mt;
+    var refW = wallParts(mt, tz);
+    var refCT = clockText(refW, false);
+
+    /* slider label + accessible value text */
+    var label = refCT.t + (refCT.suf ? ' ' + refCT.suf : '') + ' ' + cityOf(tz) +
+                ', ' + fmtDate(refW);
+    elPHourVal.textContent = label;
+    elPHour.max = String(f.n - 1);
+    elPHour.value = String(S.col);
+    elPHour.setAttribute('aria-valuetext', label);
+
+    renderBand(f, mt);
+    renderResults(f, mt);
+    renderDstNotes(f, mt);
+  }
+
+  function renderBand(f, mt) {
+    elBand.textContent = '';
+
+    var n = f.n, k, inst, w;
+
+    /* --- ruler of reference-zone hours --- */
+    var rulerRow = el('div', 'bandrow');
+    var rh = el('div', 'bandhead');
+    rh.appendChild(el('div', 'bname', cityOf(f.tz) + ' hours'));
+    rulerRow.appendChild(rh);
+    var ruler = el('div', 'band ruler');
+    ruler.style.setProperty('--cols', n);
+
+    var now = Date.now();
+    var nowCol = Math.floor((now - f.t0) / 3600000);
+    for (k = 0; k < n; k++) {
+      w = wallParts(colInstant(f, k), f.tz);
+      var rc = el('div', 'cell' + (k % 3 === 0 ? ' tick' : '') + (k === nowCol ? ' now' : ''));
+      /* Labels are read back from the formatter, so a spring-forward day
+         visibly reads 01, 03, 04 … rather than lying about a missing hour. */
+      if (k % 3 === 0 || k === nowCol) rc.textContent = pad2(w.h);
+      ruler.appendChild(rc);
+    }
+    rulerRow.appendChild(ruler);
+    elBand.appendChild(rulerRow);
+
+    /* --- one band per zone --- */
+    var counts = [];
+    for (k = 0; k < n; k++) counts.push(0);
+
+    for (var z = 0; z < S.zones.length; z++) {
+      var tz = S.zones[z];
+      var row = el('div', 'bandrow');
+
+      var head = el('div', 'bandhead');
+      head.appendChild(el('div', 'bname', cityOf(tz)));
+      var mw = wallParts(mt, tz);
+      var mct = clockText(mw, false);
+      var val = el('div', 'bval', mct.t + (mct.suf ? ' ' + mct.suf : ''));
+      var refDay = dayIndex(wallParts(mt, f.tz));
+      var dd = dayIndex(mw) - refDay;
+      if (dd !== 0) val.appendChild(el('span', 'bday', dd > 0 ? ' +' + dd + 'd' : ' ' + dd + 'd'));
+      head.appendChild(val);
+      row.appendChild(head);
+
+      var band = el('div', 'band');
+      band.style.setProperty('--cols', n);
+      for (k = 0; k < n; k++) {
+        inst = colInstant(f, k);
+        w = wallParts(inst, tz);
+        var cls = hourClass(w.h);
+        if (cls === 'work') counts[k]++;
+        var cell = el('div', 'cell ' + cls + (k === S.col ? ' sel' : ''));
+        var hn = el('span', 'hn', pad2(w.h));
+        cell.appendChild(hn);
+        cell.setAttribute('data-col', k);
+        band.appendChild(cell);
+      }
+      row.appendChild(band);
+      elBand.appendChild(row);
+    }
+
+    /* --- overlap strip --- */
+    var total = S.zones.length;
+    var maxCount = 0;
+    for (k = 0; k < n; k++) if (counts[k] > maxCount) maxCount = counts[k];
+
+    var consRow = el('div', 'bandrow');
+    var ch = el('div', 'bandhead');
+    ch.appendChild(el('div', 'bname', 'Overlap'));
+    ch.appendChild(el('div', 'bval', maxCount + ' of ' + total + ' best'));
+    consRow.appendChild(ch);
+    var cons = el('div', 'band cons');
+    cons.style.setProperty('--cols', n);
+    for (k = 0; k < n; k++) {
+      var cc = el('div', 'cell' + (counts[k] === total && total > 0 ? ' best' : '') +
+                 (k === S.col ? ' sel' : ''));
+      var bar = el('div', 'bar');
+      bar.style.height = (total ? Math.round(counts[k] / total * 100) : 0) + '%';
+      cc.appendChild(bar);
+      cc.setAttribute('data-col', k);
+      cons.appendChild(cc);
+    }
+    consRow.appendChild(cons);
+    elBand.appendChild(consRow);
+
+    /* Best window text: the one thing the band says that the list does not,
+       so it lives outside the aria-hidden region. */
+    var best = bestRun(counts, maxCount);
+    if (!total) elBestNote.textContent = '';
+    else if (maxCount === 0) {
+      elBestNote.textContent = 'No hour on this day falls inside working hours anywhere. ' +
+        'Widen the working hours below, or try another date.';
+      elBestNote.className = 'note warn';
+    } else {
+      var a = wallParts(colInstant(f, best.start), f.tz);
+      var b2 = wallParts(colInstant(f, best.end), f.tz);
+      var ca = clockText(a, false), cb = clockText(b2, false);
+      var span = best.start === best.end
+        ? ca.t + (ca.suf ? ' ' + ca.suf : '')
+        : ca.t + (ca.suf ? ' ' + ca.suf : '') + '–' + cb.t + (cb.suf ? ' ' + cb.suf : '');
+      elBestNote.textContent = 'Best overlap: ' + span + ' in ' + cityOf(f.tz) + ', ' +
+        maxCount + ' of ' + total + ' zone' + (total === 1 ? '' : 's') +
+        ' inside working hours' + (maxCount === total ? ' (everyone).' : '.');
+      elBestNote.className = maxCount === total ? 'note' : 'note warn';
+    }
+  }
+
+  /* Longest run of columns at the peak count; returns inclusive start/end. */
+  function bestRun(counts, peak) {
+    var bs = 0, be = 0, bl = 0, i, s = -1;
+    for (i = 0; i < counts.length; i++) {
+      if (counts[i] === peak) {
+        if (s < 0) s = i;
+        if (i - s + 1 > bl) { bl = i - s + 1; bs = s; be = i; }
+      } else s = -1;
+    }
+    return { start: bs, end: be };
+  }
+
+  function renderResults(f, mt) {
+    elPList.textContent = '';
+    var refDay = dayIndex(wallParts(mt, f.tz));
+
+    for (var i = 0; i < S.zones.length; i++) {
+      var tz = S.zones[i];
+      var w = wallParts(mt, tz);
+      var ct = clockText(w, false);
+      var cls = hourClass(w.h);
+      var dd = dayIndex(w) - refDay;
+
+      var li = el('li');
+      var nm = el('div', 'pname', cityOf(tz));
+      if (tz === f.tz) nm.appendChild(el('span', 'chip dim', 'Chosen'));
+      else if (tz === S.home) nm.appendChild(el('span', 'chip dim', 'Home'));
+      li.appendChild(nm);
+
+      var tw = el('div', 'ptime');
+      tw.appendChild(document.createTextNode(ct.t + (ct.suf ? ' ' + ct.suf : '')));
+      var dl = el('span', 'pdate', fmtDate(w) +
+        (dd === 0 ? '' : dd === 1 ? ' (next day)' : dd === -1 ? ' (prev day)' :
+         (dd > 0 ? ' (+' + dd + 'd)' : ' (' + dd + 'd)')));
+      var st = el('span', 'chip pst ' + (cls === 'work' ? 'solid' : cls === 'sleep' ? 'acc' : 'dim'),
+                  CLASS_WORD[cls]);
+      dl.appendChild(st);
+      tw.appendChild(dl);
+      li.appendChild(tw);
+      elPList.appendChild(li);
+    }
+  }
+
+  function renderDstNotes(f, mt) {
+    var notes = [];
+
+    /* The chosen wall time itself may not exist / may be doubled. */
+    var p = parseISO(S.date);
+    if (p) {
+      var w = wallParts(mt, f.tz);
+      var chosen = resolveWall(w.y, w.mo, w.d, w.h, w.mi, f.tz);
+      if (chosen.status === 'ambiguous') {
+        notes.push('Clocks go back in ' + cityOf(f.tz) + ' that night, so this local time ' +
+          'happens twice. The earlier one is used.');
+      }
+    }
+    if (f.midnightStatus === 'gap') {
+      notes.push('Midnight does not exist in ' + cityOf(f.tz) + ' on this date; the day starts ' +
+        'an hour late because the clocks jump forward.');
+    }
+    if (f.n !== 24) {
+      notes.push('This day is ' + f.n + ' hours long in ' + cityOf(f.tz) + ' because the clocks change.');
+    }
+
+    /* A clock change between now and the meeting is the classic way a
+       recurring call silently moves by an hour. */
+    var now = Date.now();
+    if (mt > now) {
+      var movers = [];
+      for (var i = 0; i < S.zones.length; i++) {
+        try {
+          var nx = nextTransitionCached(now, S.zones[i]);
+          if (nx && nx.ts <= mt) movers.push(cityOf(S.zones[i]));
+        } catch (e) { /* ignore */ }
+      }
+      if (movers.length) {
+        notes.push('Heads up: clocks change in ' + movers.join(', ') +
+          ' between now and this date, so the usual gap will shift.');
+      }
+    }
+
+    if (notes.length) setMsg(elDstMsg, notes.join(' '), 'warn');
+    else setMsg(elDstMsg, '');
+  }
+
+  /* =====================================================================
+     COPY SUMMARY
+     ===================================================================== */
+  function buildSummary() {
+    var f = dayFrame();
+    if (!f) return '';
+    var mt = S.mt;
+    var refW = wallParts(mt, f.tz);
+    var lines = [];
+    lines.push('MEETING: ' + fmtDateLong(refW) + ' (' + cityOf(f.tz) + ' time)');
+    lines.push('');
+
+    var width = 0, i;
+    for (i = 0; i < S.zones.length; i++) width = Math.max(width, cityOf(S.zones[i]).length);
+
+    var refDay = dayIndex(refW);
+    for (i = 0; i < S.zones.length; i++) {
+      var tz = S.zones[i];
+      var w = wallParts(mt, tz);
+      var ct = clockText(w, false);
+      var time = ct.t + (ct.suf ? ' ' + ct.suf : '');
+      var name = cityOf(tz);
+      while (name.length < width) name += ' ';
+      while (time.length < 8) time += ' ';
+      var dd = dayIndex(w) - refDay;
+      lines.push('  ' + name + '  ' + time + '  ' + fmtDate(w) +
+        (dd === 0 ? '' : dd > 0 ? ' (+' + dd + 'd)' : ' (' + dd + 'd)') +
+        '  [' + CLASS_WORD[hourClass(w.h)] + ']');
+    }
+    lines.push('');
+    lines.push('  UTC' + new Array(Math.max(1, width - 2)).join(' ') + '  ' +
+      new Date(mt).toISOString().slice(11, 16) + '     ' +
+      fmtDate(wallParts(mt, 'UTC')));
+    return lines.join('\n');
+  }
+
+  function doCopy() {
+    var txt = buildSummary();
+    if (!txt) {
+      setMsg(elCopyMsg, 'Nothing to copy yet.', 'warn');
+      return;
+    }
+    var done = function () {
+      setMsg(elCopyMsg, 'Summary copied to the clipboard.', 'ok');
+      elCopyTa.hidden = true;
+    };
+    var manual = function (why) {
+      elCopyTa.value = txt;
+      elCopyTa.hidden = false;
+      try { elCopyTa.focus(); elCopyTa.select(); } catch (e) { /* ignore */ }
+      setMsg(elCopyMsg, why + ' The text is below; select it and copy manually.', 'warn');
+    };
+
+    /* Clipboard access is often blocked inside a sandboxed frame; fall back
+       twice, then show the text rather than failing silently. */
+    var legacy = function () {
+      elCopyTa.value = txt;
+      elCopyTa.hidden = false;
+      try {
+        elCopyTa.focus();
+        elCopyTa.select();
+        if (document.execCommand && document.execCommand('copy')) { done(); return; }
+      } catch (e) { /* ignore */ }
+      manual('Copying was blocked by the browser.');
+    };
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done, legacy);
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    legacy();
+  }
+
+  /* =====================================================================
+     EVENTS
+     ===================================================================== */
+  function renderAll() {
+    renderCards();
+    if (S.zones.length) {
+      if (!S.mt) {
+        /* first render: today, on the hour the user is currently living in */
+        var now0 = Date.now();
+        S.date = isoDate(wallParts(now0, refZone()));
+        S.min = 0;
+        S.col = colForInstant(now0);
+        syncInstantFromControls();
+      } else {
+        syncControlsFromInstant();
+      }
+    }
+    renderPlannerControls();
+    renderPlanner();
+    renderSearch();
+  }
+
+  elQ.addEventListener('input', renderSearch);
+  elQ.addEventListener('keydown', function (e) {
+    /* Enter adds the top hit, the obvious expectation when typing a city. */
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      /* An empty box lists POPULAR, whose first entry is Los Angeles, so a
+         bare Enter used to add a zone the user never asked for. */
+      if (!norm(elQ.value)) {
+        setMsg(elQMsg, 'Type a city, country or zone first, then press Enter.', 'warn');
+        return;
+      }
+      var hits = searchZones(elQ.value);
+      if (hits.length) addZone(hits[0]);
+      else setMsg(elQMsg, 'Nothing to add: no zone matches that.', 'warn');
+    }
+  });
+
+  elFmtBtn.addEventListener('click', function () {
+    S.h12 = !S.h12;
+    elFmtBtn.setAttribute('aria-pressed', String(S.h12));
+    elFmtBtn.textContent = S.h12 ? '24-hour' : '12-hour';
+    save();
+    renderAll();
+  });
+
+  elSecBtn.addEventListener('click', function () {
+    S.secs = !S.secs;
+    elSecBtn.setAttribute('aria-pressed', String(S.secs));
+    save();
+    for (var i = 0; i < cardRefs.length; i++) cardRefs[i].last.t = null;
+    tickCards();
+  });
+
+  elSortBtn.addEventListener('click', function () {
+    var now = Date.now();
+    S.zones.sort(function (a, b) {
+      var d = offsetAt(now, a) - offsetAt(now, b);
+      if (d) return d;
+      return cityOf(a) < cityOf(b) ? -1 : 1;
+    });
+    save();
+    renderAll();
+  });
+
+  elPZone.addEventListener('change', function () {
+    var tz = elPZone.value;
+    if (S.zones.indexOf(tz) < 0) return;
+    S.ref = tz;
+    /* keep the same instant; just re-express it in the new zone */
+    syncControlsFromInstant();
+    save();
+    renderPlannerControls();
+    renderPlanner();
+  });
+
+  elPDate.addEventListener('change', function () {
+    var v = elPDate.value;
+    if (!parseISO(v)) {
+      /* Clearing the field used to leave it blank while the plan below kept
+         running on the old date; put the date the planner is actually using
+         back in the box so the two never disagree. */
+      elPDate.value = S.date;
+      setMsg(elDstMsg, 'That date could not be read, so ' + (S.date || 'the previous date') +
+        ' is still in use.', 'warn');
+      return;
+    }
+    S.date = v;
+    syncInstantFromControls();
+    renderPlannerControls();
+    renderPlanner();
+  });
+
+  elPHour.addEventListener('input', function () {
+    S.col = parseInt(elPHour.value, 10) || 0;
+    syncInstantFromControls();
+    renderPlanner();
+  });
+
+  elPMin.addEventListener('change', function () {
+    S.min = parseInt(elPMin.value, 10) || 0;
+    syncInstantFromControls();
+    renderPlanner();
+  });
+
+  function shiftDay(n) {
+    S.date = shiftISO(S.date, n);
+    syncInstantFromControls();
+    renderPlannerControls();
+    renderPlanner();
+  }
+  elDayPrev.addEventListener('click', function () { shiftDay(-1); });
+  elDayNext.addEventListener('click', function () { shiftDay(1); });
+
+  elNowBtn.addEventListener('click', function () {
+    var tz = refZone();
+    if (!tz) return;
+    var now1 = Date.now();
+    var w = wallParts(now1, tz);
+    S.date = isoDate(w);
+    S.min = 0;
+    S.col = colForInstant(now1);
+    /* snap to the nearest quarter hour so "now" is bookable */
+    S.min = [0, 15, 30, 45][Math.min(3, Math.floor(w.mi / 15))];
+    syncInstantFromControls();
+    renderPlannerControls();
+    renderPlanner();
+  });
+
+  function onWorkHours() {
+    var a = parseInt(elWs.value, 10), b = parseInt(elWe.value, 10);
+    /* On every reject, put the accepted values back in the fields. Leaving a
+       rejected number on screen while the bands below are still drawn from the
+       old one is the same lie as the date field had. */
+    var restore = function () { elWs.value = S.ws; elWe.value = S.we; };
+    if (isNaN(a) || isNaN(b) || a < 0 || a > 23 || b < 0 || b > 23) {
+      restore();
+      setMsg(elWhMsg, 'Working hours must be whole hours from 0 to 23. Previous values kept.', 'warn');
+      return;
+    }
+    if (a === b) {
+      restore();
+      setMsg(elWhMsg, 'Start and end cannot be the same hour. Previous values kept.', 'warn');
+      return;
+    }
+    S.ws = a; S.we = b;
+    setMsg(elWhMsg, a > b ? 'Overnight shift: ' + pad2(a) + ':00 to ' + pad2(b) + ':00 the next day.' : '');
+    save();
+    renderPlanner();
+  }
+  elWs.addEventListener('change', onWorkHours);
+  elWe.addEventListener('change', onWorkHours);
+
+  /* Tapping the band is a pointer convenience; the slider is the keyboard
+     path, so nothing here is keyboard-only functionality. */
+  elBand.addEventListener('click', function (e) {
+    var n = e.target;
+    while (n && n !== elBand && !n.hasAttribute('data-col')) n = n.parentNode;
+    if (!n || n === elBand) return;
+    var c = parseInt(n.getAttribute('data-col'), 10);
+    if (isNaN(c)) return;
+    S.col = c;
+    syncInstantFromControls();
+    elPHour.value = String(S.col);
+    renderPlanner();
+  });
+
+  elCopyBtn.addEventListener('click', doCopy);
+
+  /* =====================================================================
+     BOOT
+     ===================================================================== */
+  function boot() {
+    var dropped = load();
+
+    elFmtBtn.setAttribute('aria-pressed', String(S.h12));
+    elFmtBtn.textContent = S.h12 ? '24-hour' : '12-hour';
+    elSecBtn.setAttribute('aria-pressed', String(S.secs));
+
+    renderAll();
+
+    var msgs = [];
+    if (!LS.ok) msgs.push('Storage is blocked here, so your zones will reset when this page reloads.');
+    if (dropped) msgs.push(dropped + ' saved zone' + (dropped === 1 ? '' : 's') +
+      ' could not be resolved by this browser and were removed.');
+    setMsg(elStoreMsg, msgs.join(' '), msgs.length ? 'warn' : '');
+
+    elFoot.textContent = 'Home zone: ' + S.home + ' · ' +
+      (ZONES_FROM_PLATFORM
+        ? ZONES.length + ' zones from your browser’s IANA database.'
+        : 'Your browser does not expose the full zone list, so a built-in shortlist of ' +
+          ZONES.length + ' zones is in use.');
+
+    /* Self-correcting tick: aligned to the second boundary so the clocks
+       change on the second, and it cannot drift the way setInterval does. */
+    (function loop() {
+      if (!document.hidden) {
+        try { tickCards(); } catch (e) { /* never let one bad zone stop the clock */ }
+      }
+      var delay = 1000 - (Date.now() % 1000);
+      setTimeout(loop, delay < 40 ? delay + 1000 : delay);
+    })();
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) {
+        try { tickCards(); renderPlanner(); } catch (e) { /* ignore */ }
+      }
+    });
+  }
+
+  try {
+    boot();
+  } catch (err) {
+    /* Absolute last resort: say something rather than render a dead page. */
+    var p = document.createElement('p');
+    p.className = 'msg warn';
+    p.textContent = 'This tool failed to start: ' + (err && err.message ? err.message : String(err));
+    document.querySelector('.wrap').appendChild(p);
+  }
+})();
+</script>
+</body>
+</html>

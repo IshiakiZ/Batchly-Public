@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Encode: encoder / decoder toolbox</title>
+<style>
+  :root{
+    --bg:#10100e;
+    --fg:#eee;
+    --muted:#888;
+    --accent:#ff3b30;
+    --panel:#161614;
+    --ok:#5fd38d;
+    --warn:#ffb02e;
+  }
+  *{box-sizing:border-box}
+  /* An author `display` declaration outranks the UA sheet's [hidden]{display:none}
+     (cascade origin beats specificity), which silently un-hid .detect (display:flex).
+     This makes the hidden attribute mean hidden everywhere, now and for anything added later. */
+  [hidden]{display:none!important}
+  html,body{margin:0;padding:0}
+  html{background:var(--bg);-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:14px;
+    line-height:1.5;
+    overflow-x:hidden;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px;padding-bottom:56px}
+
+  /* ---------- type ---------- */
+  h1{
+    font-size:18px;margin:0;letter-spacing:.16em;text-transform:uppercase;font-weight:700;
+  }
+  h1 .dot{color:var(--accent)}
+  .lede{color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:8px 0 0}
+  .label{
+    display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 8px;
+  }
+  .label strong{color:var(--fg);font-weight:700}
+  .note{font-size:11px;line-height:1.6;color:var(--muted)}
+  .mono-sm{font-size:12px}
+
+  /* ---------- panels ---------- */
+  .panel{border:2px solid var(--fg);padding:16px;margin:20px 0;background:transparent}
+  .panel.accent{border-color:var(--accent)}
+  .panel h2{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;
+    color:var(--accent);font-weight:700;
+  }
+  hr.rule{border:0;border-top:2px solid var(--fg);margin:20px 0}
+
+  /* ---------- controls ---------- */
+  button{font-family:inherit}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:44px;padding:0 16px;
+    background:var(--accent);color:var(--bg);
+    border:2px solid var(--accent);
+    font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    cursor:pointer;
+  }
+  .btn.sec{background:transparent;color:var(--accent)}
+  .btn.ghost{background:transparent;color:var(--fg);border-color:var(--fg)}
+  .btn:active{transform:translate(1px,1px)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn-row{display:flex;flex-wrap:wrap;gap:8px}
+  .btn-row .btn{flex:1 1 auto;min-width:96px}
+
+  /* tabs */
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 4px}
+  .tab{
+    flex:1 1 auto;min-width:88px;min-height:44px;padding:0 10px;
+    background:transparent;color:var(--fg);border:2px solid var(--fg);
+    font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+  /* segmented radio group */
+  .seg{display:flex;gap:0;border:2px solid var(--fg);width:100%}
+  .seg button{
+    flex:1 1 0;min-height:44px;padding:0 8px;
+    background:transparent;color:var(--fg);border:0;
+    font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .seg button + button{border-left:2px solid var(--fg)}
+  .seg button[aria-checked="true"]{background:var(--accent);color:var(--bg)}
+
+  /* checkbox / select rows */
+  .opt{
+    display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg);
+  }
+  .opt input[type=checkbox]{
+    width:20px;height:20px;flex:0 0 auto;accent-color:var(--accent);margin:0;cursor:pointer;
+  }
+  .opt .hint{color:var(--muted);text-transform:none;letter-spacing:0;font-size:11px}
+  select{
+    width:100%;min-height:44px;padding:0 10px;
+    background:var(--bg);color:var(--fg);border:2px solid var(--fg);
+    font-family:inherit;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+  }
+  .field{margin:0 0 12px}
+  /* encode-only switches, greyed while decoding instead of sitting there as live no-ops */
+  .opt.off,.field.off .label{opacity:.5}
+  .opt.off,.opt.off input{cursor:not-allowed}
+  select[disabled]{opacity:.5;cursor:not-allowed}
+
+  /* text areas */
+  textarea{
+    width:100%;display:block;
+    background:var(--panel);color:var(--fg);
+    border:2px solid var(--fg);
+    padding:12px;
+    font-family:inherit;
+    font-size:16px;      /* >=16px stops iOS zooming on focus */
+    line-height:1.5;
+    resize:vertical;
+    overflow-wrap:anywhere;
+  }
+  textarea#in{min-height:120px}
+  textarea#out{min-height:120px;color:var(--fg)}
+  textarea[wrap="off"]{overflow-wrap:normal;white-space:pre;overflow-x:auto}
+
+  /* focus */
+  :focus{outline:none}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  textarea:focus-visible,select:focus-visible{outline-offset:0}
+
+  /* status + meta */
+  .meta{
+    display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  }
+  .status{
+    margin-top:12px;padding:10px 12px;border:2px solid var(--muted);
+    font-size:12px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;
+  }
+  .status.ok{border-color:var(--ok);color:var(--ok)}
+  .status.err{border-color:var(--accent);color:var(--accent)}
+  .status.warn{border-color:var(--warn);color:var(--warn)}
+
+  .detect{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+    border:2px dashed var(--muted);padding:10px 12px;margin:0 0 16px;
+    font-size:11px;letter-spacing:.06em;color:var(--muted);
+  }
+  .detect b{color:var(--accent);letter-spacing:.1em;text-transform:uppercase}
+  .detect .why{text-transform:none;letter-spacing:0}
+  .detect.idle b{color:var(--muted)}
+  .toggle{
+    min-height:44px;padding:0 12px;background:transparent;border:2px solid var(--muted);
+    color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+
+  /* JWT output */
+  .seg-title{
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);
+    font-weight:700;margin:18px 0 8px;
+  }
+  pre.code{
+    margin:0;padding:12px;border:2px solid var(--fg);background:var(--panel);
+    font-family:inherit;font-size:13px;line-height:1.5;
+    white-space:pre-wrap;overflow-wrap:anywhere;
+  }
+  .banner{border:2px solid var(--muted);padding:12px;margin:0 0 14px;font-size:12px;line-height:1.55;color:var(--muted)}
+  .banner.err{border-color:var(--accent);color:var(--accent)}
+  .banner.ok{border-color:var(--ok);color:var(--ok)}
+  .banner.warn{border-color:var(--warn);color:var(--warn)}
+  .banner b{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+  dl.claims{margin:0 0 12px;font-size:12px}
+  dl.claims div{
+    display:block;border-bottom:1px solid #2a2a26;padding:8px 0;
+  }
+  dl.claims div:last-child{border-bottom:0}
+  dl.claims dt{
+    color:var(--accent);font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  }
+  dl.claims dd{margin:4px 0 0;color:var(--fg);overflow-wrap:anywhere}
+  dl.claims dd .sub{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+
+  .sr{
+    position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+  }
+  footer{margin-top:28px;border-top:2px solid #2a2a26;padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Encode<span class="dot">.</span></h1>
+    <p class="lede">Encoder / decoder toolbox</p>
+    <p class="note" style="margin-top:10px">
+      Every conversion below runs in this page, on your device. Nothing you type is uploaded,
+      logged, or saved: the input box is deliberately <em>not</em> remembered between visits.
+    </p>
+  </header>
+
+  <!-- ------------------------------------------------------------------ INPUT -->
+  <section class="panel" aria-labelledby="inLbl">
+    <label class="label" id="inLbl" for="in">Input</label>
+    <textarea id="in" spellcheck="false" autocapitalize="off" autocorrect="off"
+      placeholder="Paste a string, a URL, a token, some hex&hellip;"></textarea>
+    <div class="meta" id="inMeta">
+      <span id="cChars">0 chars</span>
+      <span id="cBytes">0 bytes utf-8</span>
+      <span id="cLines">1 line</span>
+    </div>
+    <div class="btn-row" style="margin-top:12px">
+      <button type="button" class="btn ghost" id="btnClear">Clear</button>
+      <button type="button" class="btn ghost" id="btnSwap" title="Move the output back into the input">&#8593; Use output</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ DETECT -->
+  <!-- Always on screen: the Auto-detect toggle lives here and "off" is remembered
+       across reloads, so hiding the bar on an empty box would strand the user. -->
+  <div class="detect idle" id="detectBar">
+    <span>Detected&nbsp;<b id="detectName">-</b></span>
+    <span class="why" id="detectWhy">nothing in the box yet</span>
+    <button type="button" class="toggle" id="btnAuto" aria-pressed="true">Auto-detect: on</button>
+  </div>
+
+  <!-- ------------------------------------------------------------------ TABS -->
+  <div class="tabs" role="tablist" aria-label="Encoding">
+    <button type="button" class="tab" role="tab" id="tab-base64" aria-controls="opts-base64" aria-selected="true"  data-tab="base64">Base64</button>
+    <button type="button" class="tab" role="tab" id="tab-url"    aria-controls="opts-url"    aria-selected="false" data-tab="url" tabindex="-1">URL</button>
+    <button type="button" class="tab" role="tab" id="tab-html"   aria-controls="opts-html"   aria-selected="false" data-tab="html" tabindex="-1">HTML</button>
+    <button type="button" class="tab" role="tab" id="tab-hex"    aria-controls="opts-hex"    aria-selected="false" data-tab="hex" tabindex="-1">Hex</button>
+    <button type="button" class="tab" role="tab" id="tab-jwt"    aria-controls="opts-jwt"    aria-selected="false" data-tab="jwt" tabindex="-1">JWT</button>
+  </div>
+
+  <!-- ------------------------------------------------------------------ OPTIONS -->
+  <section class="panel" id="optPanel">
+
+    <!-- direction (hidden on the JWT tab) -->
+    <div class="field" id="dirField">
+      <span class="label" id="dirLbl">Direction</span>
+      <div class="seg" role="radiogroup" aria-labelledby="dirLbl" id="dirGroup">
+        <button type="button" role="radio" aria-checked="true"  data-v="enc">Encode</button>
+        <button type="button" role="radio" aria-checked="false" data-v="dec" tabindex="-1">Decode</button>
+      </div>
+    </div>
+
+    <div id="opts-base64" role="tabpanel" aria-labelledby="tab-base64">
+      <label class="opt"><input type="checkbox" id="b64Url"> URL-safe <span class="hint">(-&nbsp;_&nbsp;instead of&nbsp;+&nbsp;/, no padding; encode only. Decoding accepts either alphabet)</span></label>
+      <label class="opt"><input type="checkbox" id="b64Wrap"> Wrap at 76 cols <span class="hint">(MIME style, encode only)</span></label>
+      <p class="note">Text is encoded through its UTF-8 bytes, so accents, CJK and emoji survive intact.
+        Decoding accepts standard <em>and</em> URL-safe alphabets, with or without padding, and ignores line breaks.</p>
+    </div>
+
+    <div id="opts-url" role="tabpanel" aria-labelledby="tab-url" hidden>
+      <div class="field">
+        <label class="label" for="urlMode">Variant</label>
+        <select id="urlMode">
+          <option value="component">Component: encodeURIComponent</option>
+          <option value="uri">Full URI: encodeURI</option>
+          <option value="form">Form: x-www-form-urlencoded (+)</option>
+        </select>
+      </div>
+      <p class="note" id="urlNote"></p>
+    </div>
+
+    <div id="opts-html" role="tabpanel" aria-labelledby="tab-html" hidden>
+      <label class="opt"><input type="checkbox" id="htmlAll"> Escape non-ASCII too <span class="hint">(as &amp;#NNN;, encode only)</span></label>
+      <p class="note">Encoding escapes <code>&amp; &lt; &gt; &quot; '</code>, the five characters that can break out of
+        HTML text or an attribute. Decoding understands every named reference the browser knows
+        (<code>&amp;nbsp;</code>, <code>&amp;hellip;</code>, &hellip;) plus numeric and hex forms.</p>
+    </div>
+
+    <div id="opts-hex" role="tabpanel" aria-labelledby="tab-hex" hidden>
+      <div class="field">
+        <label class="label" for="hexSep">Separator <span style="text-transform:none;letter-spacing:0">(encode only)</span></label>
+        <select id="hexSep">
+          <option value="">None: 48656c6c6f</option>
+          <option value=" ">Space: 48 65 6c 6c 6f</option>
+          <option value=":">Colon: 48:65:6c:6c:6f</option>
+        </select>
+      </div>
+      <label class="opt"><input type="checkbox" id="hexUp"> Uppercase <span class="hint">(encode only)</span></label>
+      <p class="note">Hex here means the UTF-8 bytes of the text, two digits per byte.
+        Decoding ignores whitespace, <code>:</code>, <code>,</code>, <code>-</code> and <code>0x</code> / <code>\x</code> prefixes.</p>
+    </div>
+
+    <div id="opts-jwt" role="tabpanel" aria-labelledby="tab-jwt" hidden>
+      <div class="banner err">
+        <b>Decode only: the signature is never checked</b>
+        This tool splits the token and base64url-decodes it. It does <strong>not</strong> verify the
+        signature, the issuer, or the audience. A token that parses cleanly here can still be forged,
+        tampered with, or expired. Never make a trust decision from what you see below; only your
+        server, holding the key, can say a token is genuine.
+      </div>
+      <div class="banner warn">
+        <b>Don't paste production tokens</b>
+        A JWT payload is not encrypted; it is readable by anyone who has the string, and the token
+        itself is a live credential until it expires. Nothing leaves this page, but the safest habit
+        is to use expired or test tokens here.
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ OUTPUT -->
+  <section class="panel" id="outPanel" aria-labelledby="outLbl">
+    <label class="label" id="outLbl" for="out">Output</label>
+    <textarea id="out" readonly spellcheck="false" placeholder="Result appears here"></textarea>
+    <div class="meta" id="outMeta"><span id="oChars">0 chars</span></div>
+    <div class="btn-row" style="margin-top:12px">
+      <button type="button" class="btn" id="btnCopy">Copy</button>
+      <button type="button" class="btn sec" id="btnSelect">Select all</button>
+    </div>
+  </section>
+
+  <!-- JWT rendered output lives here instead of the textarea -->
+  <section id="jwtPanel" hidden aria-labelledby="jwtLbl">
+    <span class="label" id="jwtLbl">Decoded token</span>
+    <div id="jwtOut"></div>
+    <div class="btn-row" style="margin-top:14px">
+      <button type="button" class="btn" id="btnCopyJwt">Copy JSON</button>
+    </div>
+  </section>
+
+  <div class="status" id="status" role="status" aria-live="polite">Enter or paste something above.</div>
+
+  <footer>
+    <p class="note">
+      Offline by design: no network requests, no analytics, no third-party code. Your last tab and
+      option choices are kept in this browser's local storage; the text you type never is.
+    </p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ==================================================================
+     0. Environment guard: fail loudly rather than half-working.
+     ================================================================== */
+  var HAS_CODEC = (typeof TextEncoder === "function" && typeof TextDecoder === "function");
+
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, txt){
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;   // textContent, never innerHTML, for anything user-supplied
+    return e;
+  }
+
+  var inEl      = $("in"),
+      outEl     = $("out"),
+      statusEl  = $("status"),
+      outPanel  = $("outPanel"),
+      jwtPanel  = $("jwtPanel"),
+      jwtOut    = $("jwtOut"),
+      dirField  = $("dirField"),
+      detectBar = $("detectBar");
+
+  if (!HAS_CODEC) {
+    setStatus("This browser is missing TextEncoder / TextDecoder, which this tool needs to handle "
+      + "UTF-8 correctly. Nothing here will work reliably. Please use a newer browser.", "err");
+    inEl.disabled = true;
+  }
+
+  var ENC = HAS_CODEC ? new TextEncoder() : null;
+  // fatal:true makes an invalid byte sequence THROW instead of silently producing U+FFFD.
+  // Silent replacement is how "decoded" garbage gets mistaken for real text.
+  var DEC_STRICT = HAS_CODEC ? new TextDecoder("utf-8", { fatal: true }) : null;
+
+  /* ==================================================================
+     1. Persisted preferences (never the input text)
+     ================================================================== */
+  var SKEY = "batchly.encode.v1";
+  var state = {
+    tab: "base64",
+    dir: "enc",
+    auto: true,
+    b64Url: false,
+    b64Wrap: false,
+    urlMode: "component",
+    htmlAll: false,
+    hexSep: "",
+    hexUp: false
+  };
+
+  // Matching types is not enough. A stale key from an older build, or anything
+  // hand-edited in devtools, used to sail through: tab:"wat" left every options
+  // pane hidden, no tab highlighted and both direction radios at tabindex -1
+  // (so the group was unreachable by keyboard) with no way back but clearing
+  // storage. Anything outside these sets is dropped in favour of the default.
+  var ALLOWED = {
+    tab:     ["base64", "url", "html", "hex", "jwt"],
+    dir:     ["enc", "dec"],
+    urlMode: ["component", "uri", "form"],
+    hexSep:  ["", " ", ":"]
+  };
+
+  function loadPrefs(){
+    try {
+      var raw = window.localStorage.getItem(SKEY);
+      if (!raw) return;
+      var o = JSON.parse(raw);
+      if (!o || typeof o !== "object") return;
+      for (var k in state) {
+        if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+        if (typeof o[k] !== typeof state[k]) continue;
+        if (ALLOWED[k] && ALLOWED[k].indexOf(o[k]) < 0) continue;
+        state[k] = o[k];
+      }
+    } catch (e) { /* storage blocked / quota / private mode; defaults are fine */ }
+  }
+  function savePrefs(){
+    try { window.localStorage.setItem(SKEY, JSON.stringify(state)); }
+    catch (e) { /* nothing to do; the app works without persistence */ }
+  }
+
+  /* ==================================================================
+     2. Byte helpers
+     ================================================================== */
+  function toBytes(str){ return ENC.encode(str); }
+
+  // String.fromCharCode.apply blows the argument stack past ~100k entries,
+  // so walk the array in chunks. This is the difference between "works on a
+  // tweet" and "works on a 5 MB file".
+  function bytesToBinary(bytes){
+    var CHUNK = 0x8000, out = "";
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return out;
+  }
+
+  function decodeUtf8Strict(bytes){ return DEC_STRICT.decode(bytes); }
+
+  function hexdump(bytes, maxBytes){
+    var lines = [], n = Math.min(bytes.length, maxBytes), i, j;
+    for (i = 0; i < n; i += 8) {
+      var hex = "", asc = "";
+      for (j = 0; j < 8; j++) {
+        var idx = i + j;
+        if (idx < n) {
+          var b = bytes[idx];
+          hex += (b < 16 ? "0" : "") + b.toString(16) + " ";
+          asc += (b >= 0x20 && b <= 0x7e) ? String.fromCharCode(b) : ".";
+        } else { hex += "   "; }
+      }
+      var off = i.toString(16);
+      while (off.length < 8) off = "0" + off;
+      lines.push(off + "  " + hex + " |" + asc + "|");
+    }
+    if (bytes.length > n) lines.push("… " + (bytes.length - n) + " more bytes not shown");
+    return lines.join("\n");
+  }
+
+  /* ==================================================================
+     3. Base64
+     ================================================================== */
+  function b64Encode(str, urlSafe, wrap){
+    // btoa() takes a *binary string*, one char per byte. Handing it a JS string
+    // with any code point above U+00FF throws InvalidCharacterError, which is the
+    // classic broken-on-emoji bug. Going through UTF-8 bytes first is the fix.
+    var out = btoa(bytesToBinary(toBytes(str)));
+    if (urlSafe) {
+      out = out.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+    if (wrap) {
+      var parts = out.match(/.{1,76}/g);
+      out = parts ? parts.join("\n") : out;
+    }
+    return out;
+  }
+
+  function b64ToBytes(s){
+    var t = s.replace(/[\s ]+/g, "");           // line breaks are legal in MIME base64
+    t = t.replace(/-/g, "+").replace(/_/g, "/");     // accept the URL-safe alphabet
+    t = t.replace(/=+$/, "");                        // drop padding, we re-add it correctly below
+    if (t === "") return new Uint8Array(0);
+    var bad = /[^A-Za-z0-9+/]/.exec(t);
+    if (bad) {
+      throw new Error('Not valid Base64: the character "' + bad[0] + '" at position ' + (bad.index + 1)
+        + " is not in the Base64 alphabet, which is A-Z a-z 0-9 plus + and / "
+        + "(the URL-safe variant uses - and _ instead). Did you mean to Encode rather than Decode?");
+    }
+    if (t.length % 4 === 1) {
+      throw new Error("Not valid Base64: " + t.length + " characters after removing padding. "
+        + "A Base64 body can never leave a remainder of 1 when divided by 4: a character is missing or extra.");
+    }
+    var pad = t.length % 4 === 0 ? 0 : 4 - (t.length % 4);
+    var bin;
+    try { bin = atob(t + new Array(pad + 1).join("=")); }
+    catch (e) { throw new Error("Not valid Base64: the browser refused to decode it (" + (e && e.message ? e.message : "unknown error") + ")."); }
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) & 0xff;
+    return bytes;
+  }
+
+  /* ==================================================================
+     4. URL encoding
+     ================================================================== */
+  // application/x-www-form-urlencoded keeps only A-Z a-z 0-9 * - . _ and turns
+  // space into '+'. encodeURIComponent additionally leaves ! ' ( ) ~ alone, so
+  // those five have to be escaped by hand to match what a real form (and
+  // URLSearchParams) produces.
+  function formEncode(s){
+    return encodeURIComponent(s)
+      .replace(/[!'()~]/g, function(c){ return "%" + c.charCodeAt(0).toString(16).toUpperCase(); })
+      .replace(/%20/g, "+");
+  }
+
+  function explainUriError(s){
+    var m = /%(?![0-9A-Fa-f]{2})/.exec(s);
+    if (m) {
+      return 'Malformed percent-encoding: the "%" at position ' + (m.index + 1)
+        + " is not followed by two hex digits. Every % must be %XX (a literal percent sign is %25).";
+    }
+    return "Malformed percent-encoding: the escaped bytes are not a valid UTF-8 sequence "
+      + "(for example %C3 with nothing after it, or a byte from a different character set such as Latin-1). "
+      + "Try the Hex tab to inspect the raw bytes.";
+  }
+
+  function urlRun(str, mode, dir){
+    if (dir === "enc") {
+      if (mode === "component") return encodeURIComponent(str);
+      if (mode === "uri")       return encodeURI(str);
+      return formEncode(str);
+    }
+    try {
+      if (mode === "component") return decodeURIComponent(str);
+      if (mode === "uri")       return decodeURI(str);
+      // '+' means space only in form encoding; decoding it elsewhere corrupts real plus signs.
+      return decodeURIComponent(str.replace(/\+/g, "%20"));
+    } catch (e) {
+      throw new Error(explainUriError(str));
+    }
+  }
+
+  var URL_NOTES = {
+    component: "encodeURIComponent escapes everything except A-Z a-z 0-9 - _ . ! ~ * ' ( ). "
+             + "Use it for one query value, one path segment, or one form field: anything that must not be read as structure.",
+    uri:       "encodeURI leaves the URL's own punctuation intact: ; / ? : @ & = + $ , #. "
+             + "Use it to clean up a whole URL, never for a single value (a & inside a value would silently become a separator). "
+             + "Note the matching decodeURI deliberately leaves those same escapes encoded, so %26 stays %26.",
+    form:      "Form encoding is what a browser sends for a <form> POST or builds with URLSearchParams: "
+             + "space becomes + rather than %20, and ! ' ( ) ~ are escaped too."
+  };
+
+  /* ==================================================================
+     5. HTML entities
+     ================================================================== */
+  var HTML_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+  function htmlEncode(str, allNonAscii){
+    // & has to go first, otherwise the & of &lt; would itself get escaped.
+    // The single regex over the character class does that in one pass.
+    var out = str.replace(/[&<>"']/g, function(c){ return HTML_MAP[c]; });
+    if (allNonAscii) {
+      // Array.from iterates by CODE POINT. Using charCodeAt/split('') here would
+      // cut an emoji into its two surrogate halves and emit &#55357;&#56842;,
+      // which no parser turns back into the original character.
+      out = Array.from(out).map(function(ch){
+        var cp = ch.codePointAt(0);
+        return cp > 126 ? "&#" + cp + ";" : ch;
+      }).join("");
+    }
+    return out;
+  }
+
+  // Decoding named references by hand would need the full 2200-entry HTML5 table.
+  // Instead: hand the string to the parser in RCDATA context. A <textarea>'s
+  // innerHTML resolves character references but does NOT create elements or run
+  // scripts, and this element is never attached to the document, so a script tag
+  // or an img/onerror in the input stays inert text, not markup. (Verified: an
+  // "&lt;img src=x onerror=...&gt;" payload comes back out as literal characters.)
+  var decoderTA = document.createElement("textarea");
+  function htmlDecode(str){
+    // The 'x' prefix sidesteps the HTML rule that swallows a newline directly
+    // after a <textarea> start tag, which would eat a leading line break.
+    decoderTA.innerHTML = "x" + str;
+    var v = (typeof decoderTA.value === "string" ? decoderTA.value : decoderTA.textContent) || "";
+    decoderTA.innerHTML = "";
+    return v.slice(1);
+  }
+
+  /* ==================================================================
+     6. Hex
+     ================================================================== */
+  function hexEncode(str, sep, upper){
+    var b = toBytes(str), parts = [], i;
+    for (i = 0; i < b.length; i++) parts.push((b[i] < 16 ? "0" : "") + b[i].toString(16));
+    var s = parts.join(sep);
+    return upper ? s.toUpperCase() : s;
+  }
+
+  function hexToBytes(s){
+    var t = s.replace(/0[xX]|\\[xX]/g, "").replace(/[\s ,:;_\-]+/g, "");
+    if (t === "") return new Uint8Array(0);
+    var bad = /[^0-9A-Fa-f]/.exec(t);
+    if (bad) {
+      throw new Error('Not valid hex: "' + bad[0] + '" at position ' + (bad.index + 1)
+        + " is not a hex digit (0-9, a-f).");
+    }
+    if (t.length % 2 !== 0) {
+      throw new Error("Not valid hex: " + t.length + " digits. Each byte needs exactly two, "
+        + "so an odd count means one digit is missing (a leading zero is often the culprit).");
+    }
+    var bytes = new Uint8Array(t.length / 2);
+    for (var i = 0; i < bytes.length; i++) bytes[i] = parseInt(t.substr(i * 2, 2), 16);
+    return bytes;
+  }
+
+  /* ==================================================================
+     7. JWT
+     ================================================================== */
+  var CLAIM_NAMES = {
+    iss: "Issuer", sub: "Subject", aud: "Audience", exp: "Expiration time",
+    nbf: "Not valid before", iat: "Issued at", jti: "JWT ID",
+    azp: "Authorized party", scope: "Scope", scp: "Scope", client_id: "Client ID",
+    auth_time: "Authentication time", nonce: "Nonce", act: "Actor",
+    email: "Email", email_verified: "Email verified", name: "Name",
+    preferred_username: "Preferred username", role: "Role", roles: "Roles",
+    sid: "Session ID", typ: "Type", alg: "Algorithm", kid: "Key ID",
+    cty: "Content type", enc: "Encryption algorithm", ver: "Version"
+  };
+  var TIME_CLAIMS = ["iat", "nbf", "exp", "auth_time", "updated_at"];
+
+  function relTime(deltaMs){
+    var future = deltaMs > 0, abs = Math.abs(deltaMs);
+    var units = [["year",31557600000],["month",2629800000],["day",86400000],
+                 ["hour",3600000],["minute",60000],["second",1000]];
+    for (var i = 0; i < units.length; i++) {
+      if (abs >= units[i][1]) {
+        var n = Math.round(abs / units[i][1]);
+        var word = units[i][0] + (n === 1 ? "" : "s");
+        return future ? ("in " + n + " " + word) : (n + " " + word + " ago");
+      }
+    }
+    return future ? "in under a second" : "just now";
+  }
+
+  function describeTimestamp(raw){
+    var note = "", num = raw;
+    if (typeof raw === "string" && /^\d+$/.test(raw)) {
+      num = Number(raw);
+      note = "sent as a JSON string; RFC 7519 says NumericDate must be a number";
+    }
+    if (typeof num !== "number" || !isFinite(num)) {
+      return { text: String(raw), sub: "not a number, so it cannot be read as a date", bad: true };
+    }
+    var ms = num * 1000, unitNote = "";
+    // NumericDate is SECONDS since the epoch. A value in the 1e12 range is almost
+    // certainly milliseconds, which would otherwise render as a date ~50,000 years out.
+    if (num > 1e11) { ms = num; unitNote = "value looks like milliseconds, not seconds; reading it as milliseconds"; }
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return { text: String(raw), sub: "not a representable date", bad: true };
+    var sub = d.toISOString() + "  ·  " + relTime(ms - Date.now());
+    if (unitNote) sub += "  ·  " + unitNote;
+    if (note) sub += "  ·  " + note;
+    return { text: d.toLocaleString(), sub: sub, ms: ms };
+  }
+
+  function parseJwt(tokenRaw){
+    var t = String(tokenRaw).trim()
+      .replace(/^["'`]|["'`]$/g, "")          // stray quotes from a JSON blob
+      .replace(/^Bearer\s+/i, "")             // an Authorization header pasted whole
+      .replace(/\s+/g, "");                   // wrapped lines
+    if (!t) throw new Error("Paste a token above.");
+
+    var parts = t.split(".");
+    if (parts.length === 5) {
+      return { kind: "jwe", parts: parts, header: readJson(parts[0], "header") };
+    }
+    if (parts.length !== 3) {
+      if (parts.length === 2) {
+        return { kind: "jws", parts: [parts[0], parts[1], ""], header: readJson(parts[0], "header"),
+                 payloadSeg: parts[1], missingSig: true };
+      }
+      throw new Error("This is not a JWT: a JWT has 3 dot-separated segments (header.payload.signature); "
+        + "this string has " + parts.length + ". An encrypted JWE has 5.");
+    }
+    return { kind: "jws", parts: parts, header: readJson(parts[0], "header"), payloadSeg: parts[1] };
+  }
+
+  function readJson(seg, what){
+    var hint = what === "header" ? " This does not look like a JWT." : "";
+    var bytes, text;
+    try { bytes = b64ToBytes(seg); }
+    catch (e) { throw new Error("The " + what + " segment is not valid base64url: " + e.message.replace(/^Not valid Base64: /, "") + hint); }
+    try { text = decodeUtf8Strict(bytes); }
+    catch (e) { throw new Error("The " + what + " segment decodes to " + bytes.length + " bytes that are not valid UTF-8 text." + hint); }
+    var obj;
+    try { obj = JSON.parse(text); }
+    catch (e) { throw new Error("The " + what + " segment decodes to text that is not valid JSON: " + text.slice(0, 120) + hint); }
+    if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
+      throw new Error("The " + what + " segment is valid JSON but not a JSON object." + hint);
+    }
+    return { obj: obj, text: text };
+  }
+
+  function renderJwt(src){
+    jwtOut.textContent = "";
+    var info;
+    try { info = parseJwt(src); }
+    catch (e) {
+      var b = el("div", "banner err");
+      b.appendChild(el("b", null, "Could not decode"));
+      b.appendChild(document.createTextNode(e.message));
+      jwtOut.appendChild(b);
+      lastJwtJson = "";
+      setStatus(e.message, "err");
+      return;
+    }
+
+    var frag = document.createDocumentFragment();
+    var alg = info.header.obj.alg;
+    var summaryBits = [];
+
+    if (info.kind === "jwe") {
+      var jb = el("div", "banner warn");
+      jb.appendChild(el("b", null, "This is a JWE: the payload is encrypted"));
+      jb.appendChild(document.createTextNode(
+        "Five segments means JSON Web Encryption. Only the protected header below is readable; "
+        + "the content is ciphertext and cannot be recovered without the decryption key."));
+      frag.appendChild(jb);
+    }
+
+    if (info.missingSig) {
+      var mb = el("div", "banner warn");
+      mb.appendChild(el("b", null, "Only 2 segments"));
+      mb.appendChild(document.createTextNode("The signature segment is missing entirely. "
+        + "An unsecured JWT is normally written with a trailing dot, e.g. header.payload."));
+      frag.appendChild(mb);
+    }
+
+    if (alg === "none" || alg === "None" || alg === "NONE") {
+      var ab = el("div", "banner err");
+      ab.appendChild(el("b", null, 'alg is "none"'));
+      ab.appendChild(document.createTextNode('This token claims to need no signature at all. '
+        + 'Any system that accepts alg:"none" can be handed a token forged by anyone.'));
+      frag.appendChild(ab);
+    }
+
+    /* ---- payload + validity window ---- */
+    var payload = null;
+    if (info.kind === "jws") {
+      try { payload = readJson(info.payloadSeg, "payload"); }
+      catch (e) {
+        var pb = el("div", "banner err");
+        pb.appendChild(el("b", null, "Payload could not be read"));
+        pb.appendChild(document.createTextNode(e.message));
+        frag.appendChild(pb);
+      }
+    }
+
+    if (payload) {
+      var now = Date.now();
+      var expInfo = ("exp" in payload.obj) ? describeTimestamp(payload.obj.exp) : null;
+      var nbfInfo = ("nbf" in payload.obj) ? describeTimestamp(payload.obj.nbf) : null;
+      var vb, cls = "ok", title = "Inside its validity window", msg = "", timeCompared = true;
+
+      if (expInfo && !expInfo.bad && expInfo.ms <= now) {
+        cls = "err"; title = "Expired";
+        msg = "exp was " + new Date(expInfo.ms).toLocaleString() + " (" + relTime(expInfo.ms - now) + ").";
+      } else if (nbfInfo && !nbfInfo.bad && nbfInfo.ms > now) {
+        cls = "warn"; title = "Not valid yet";
+        msg = "nbf is " + new Date(nbfInfo.ms).toLocaleString() + " (" + relTime(nbfInfo.ms - now) + ").";
+      } else if (expInfo && !expInfo.bad && expInfo.ms - now < 5 * 60 * 1000) {
+        cls = "warn"; title = "Expiring shortly";
+        msg = "exp is " + relTime(expInfo.ms - now) + ".";
+      } else if (expInfo && !expInfo.bad) {
+        msg = "exp is " + relTime(expInfo.ms - now) + " (" + new Date(expInfo.ms).toLocaleString() + ").";
+      } else if (expInfo) {
+        // exp is PRESENT but unreadable. Falling through to "No exp claim" here told
+        // the reader the opposite of the truth about the one claim they came to check.
+        cls = "warn"; title = "exp is unreadable"; timeCompared = false;
+        msg = "This token does carry an exp claim, but its value (" + JSON.stringify(payload.obj.exp)
+            + ") is not a NumericDate, so no expiry can be read from it. Whether it is expired "
+            + "is unknown here; only the server that issued it can say.";
+      } else {
+        cls = "warn"; title = "No exp claim"; timeCompared = false;
+        msg = "This token carries no expiry, so it stays usable until it is revoked some other way.";
+      }
+      if (timeCompared) msg += " Times are compared against this device's clock, which may be wrong.";
+      vb = el("div", "banner " + cls);
+      vb.appendChild(el("b", null, title));
+      vb.appendChild(document.createTextNode(msg));
+      frag.appendChild(vb);
+      summaryBits.push(title.toLowerCase());
+    }
+
+    /* ---- header ---- */
+    frag.appendChild(el("div", "seg-title", "Segment 1 · Header"));
+    frag.appendChild(claimList(info.header.obj));
+    frag.appendChild(el("pre", "code", JSON.stringify(info.header.obj, null, 2)));
+
+    /* ---- payload render ---- */
+    if (payload) {
+      frag.appendChild(el("div", "seg-title", "Segment 2 · Payload"));
+      frag.appendChild(claimList(payload.obj));
+      frag.appendChild(el("pre", "code", JSON.stringify(payload.obj, null, 2)));
+    }
+
+    /* ---- signature ---- */
+    if (info.kind === "jws") {
+      frag.appendChild(el("div", "seg-title", "Segment 3 · Signature"));
+      var sig = info.parts[2] || "";
+      var sigTxt = sig
+        ? sig + "\n\n" + sig.length + " base64url characters"
+          + (alg ? ", produced with " + String(alg) : "")
+          + ". NOT verified by this tool."
+        : "(empty). The token is unsigned.";
+      frag.appendChild(el("pre", "code", sigTxt));
+    } else {
+      frag.appendChild(el("div", "seg-title", "Segments 2-5 · Encrypted"));
+      frag.appendChild(el("pre", "code",
+        "encrypted key   " + (info.parts[1] || "(empty)") + "\n" +
+        "iv              " + (info.parts[2] || "(empty)") + "\n" +
+        "ciphertext      " + (info.parts[3] ? info.parts[3].length + " base64url chars" : "(empty)") + "\n" +
+        "auth tag        " + (info.parts[4] || "(empty)")));
+    }
+
+    var foot = el("div", "banner");
+    foot.appendChild(el("b", null, "Reminder"));
+    foot.appendChild(document.createTextNode(
+      "Everything above came from decoding, not verifying. The payload of a JWT is signed, not "
+      + "encrypted. Treat it as public data, and treat the whole token as a password."));
+    frag.appendChild(foot);
+
+    jwtOut.appendChild(frag);
+
+    lastJwtJson = JSON.stringify({
+      header: info.header.obj,
+      payload: payload ? payload.obj : null
+    }, null, 2);
+
+    setStatus("Decoded " + (info.kind === "jwe" ? "JWE header" : "JWT")
+      + (alg ? " · alg " + String(alg) : "")
+      + (summaryBits.length ? " · " + summaryBits.join(", ") : "")
+      + " · signature NOT verified.",
+      summaryBits.indexOf("expired") >= 0 ? "err" : "ok");
+  }
+
+  function claimList(obj){
+    var dl = el("dl", "claims"), keys = Object.keys(obj), any = false;
+    keys.forEach(function(k){
+      var isTime = TIME_CLAIMS.indexOf(k) >= 0;
+      var known = Object.prototype.hasOwnProperty.call(CLAIM_NAMES, k);
+      if (!isTime && !known) return;             // unknown keys are already visible in the raw JSON
+      any = true;
+      var row = el("div");
+      row.appendChild(el("dt", null, k + (known ? ": " + CLAIM_NAMES[k] : "")));
+      var dd = el("dd");
+      if (isTime) {
+        var t = describeTimestamp(obj[k]);
+        dd.appendChild(document.createTextNode(t.text));
+        dd.appendChild(el("span", "sub", t.sub));
+      } else {
+        var v = obj[k];
+        dd.appendChild(document.createTextNode(typeof v === "string" ? v : JSON.stringify(v)));
+      }
+      row.appendChild(dd);
+      dl.appendChild(row);
+    });
+    if (!any) { dl.appendChild(el("div", null, "")); dl.lastChild.appendChild(el("dd", null, "No registered claims recognised.")); }
+    return dl;
+  }
+
+  /* ==================================================================
+     8. Auto-detection
+     ================================================================== */
+  var TAB_LABEL = { base64: "Base64", url: "URL encoding", html: "HTML entities", hex: "Hex", jwt: "JWT" };
+
+  function detect(raw){
+    var t = String(raw).trim();
+    if (!t) return null;
+    if (!HAS_CODEC) return null;
+
+    // --- JWT / JWE: dot-separated base64url segments whose first part is a JSON header
+    var jwtCand = t.replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "");
+    if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]*){1,3}$/.test(jwtCand)) {
+      try {
+        var h = JSON.parse(decodeUtf8Strict(b64ToBytes(jwtCand.split(".")[0])));
+        if (h && typeof h === "object" && (h.alg || h.typ || h.enc)) {
+          return { tab: "jwt", why: "three base64url segments; the first decodes to a JSON header with “alg”" };
+        }
+      } catch (e) { /* not a JWT after all */ }
+    }
+
+    // --- percent-encoding
+    if (/%[0-9A-Fa-f]{2}/.test(t)) {
+      return { tab: "url", dir: "dec", why: "contains %XX escape sequences" };
+    }
+
+    // --- HTML character references
+    if (/&(#\d+|#[xX][0-9A-Fa-f]+|[a-zA-Z][a-zA-Z0-9]{1,31});/.test(t)) {
+      return { tab: "html", dir: "dec", why: "contains HTML character references such as &amp; or &#233;" };
+    }
+
+    // --- hex: pure hex digits (plus separators), even count, and at least one a-f
+    //     so that a plain number like 12345678 isn't grabbed as a byte string.
+    var hexBody = t.replace(/0[xX]|\\[xX]/g, "").replace(/[\s,:;_\-]+/g, "");
+    if (hexBody.length >= 8 && hexBody.length % 2 === 0 &&
+        /^[0-9A-Fa-f]+$/.test(hexBody) && /[A-Fa-f]/.test(hexBody) && /\d/.test(hexBody)) {
+      return { tab: "hex", dir: "dec", why: "only hex digits, an even number of them" };
+    }
+
+    // --- base64: allow line breaks but not spaces, then confirm it really decodes
+    if (/^[A-Za-z0-9+/=_\-\r\n]+$/.test(t)) {
+      var body = t.replace(/[\s]+/g, "");
+      if (body.length >= 8) {
+        try {
+          var bytes = b64ToBytes(body);
+          if (bytes.length) {
+            var txt = null;
+            try { txt = decodeUtf8Strict(bytes); } catch (e) { txt = null; }
+            // "Readable" = decodes as UTF-8 AND has no C0 control bytes (tab/LF/CR excepted).
+            // Random bytes almost always trip this, which keeps hex/binary out of the Base64 branch.
+            var clean = txt !== null && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(txt);
+            if (clean) return { tab: "base64", dir: "dec", why: "Base64 alphabet, and it decodes to readable text" };
+            if (/=$/.test(t)) return { tab: "base64", dir: "dec", why: "Base64 alphabet with = padding (decodes to binary, not text)" };
+          }
+        } catch (e) { /* not base64 */ }
+      }
+    }
+
+    // --- plain text that would need escaping in HTML
+    if (/[<>&"]/.test(t)) {
+      return { tab: "html", dir: "enc", why: "plain text containing characters that break HTML" };
+    }
+
+    return { tab: "base64", dir: "enc", why: "plain text; nothing looks encoded" };
+  }
+
+  /* ==================================================================
+     9. UI plumbing
+     ================================================================== */
+  var lastJwtJson = "";
+
+  function setStatus(msg, kind){
+    statusEl.textContent = msg;
+    statusEl.className = "status" + (kind && kind !== "muted" ? " " + kind : "");
+  }
+
+  function setOut(text, asHexdump){
+    outEl.value = text;
+    if (asHexdump) outEl.setAttribute("wrap", "off"); else outEl.removeAttribute("wrap");
+    $("oChars").textContent = text.length + (text.length === 1 ? " char" : " chars");
+  }
+
+  function updateCounts(){
+    var s = inEl.value;
+    $("cChars").textContent = s.length + (s.length === 1 ? " char" : " chars");
+    var bytes = 0;
+    try { bytes = HAS_CODEC ? toBytes(s).length : s.length; } catch (e) { bytes = 0; }
+    $("cBytes").textContent = bytes + " bytes utf-8";
+    var lines = s === "" ? 1 : s.split(/\r\n|\r|\n/).length;
+    $("cLines").textContent = lines + (lines === 1 ? " line" : " lines");
+  }
+
+  // Every encode-only switch. While decoding they change nothing, so leaving them
+  // live means clicking one re-runs the conversion and produces an identical result:
+  // a control that looks connected and isn't.
+  var ENCODE_ONLY = ["b64Url", "b64Wrap", "htmlAll", "hexSep", "hexUp"];
+  function syncOptionAvailability(){
+    var decoding = state.dir === "dec" && state.tab !== "jwt";
+    for (var i = 0; i < ENCODE_ONLY.length; i++) {
+      var c = $(ENCODE_ONLY[i]);
+      if (!c) continue;
+      c.disabled = decoding;
+      var holder = c.closest ? c.closest("label.opt, .field") : null;
+      if (holder) { if (decoding) holder.classList.add("off"); else holder.classList.remove("off"); }
+    }
+  }
+
+  function selectTab(tab, fromUser){
+    if (!Object.prototype.hasOwnProperty.call(TAB_LABEL, tab)) tab = "base64";
+    state.tab = tab;
+    var buttons = document.querySelectorAll(".tab");
+    for (var i = 0; i < buttons.length; i++) {
+      var on = buttons[i].getAttribute("data-tab") === tab;
+      buttons[i].setAttribute("aria-selected", on ? "true" : "false");
+      buttons[i].tabIndex = on ? 0 : -1;
+      var pane = $(buttons[i].getAttribute("aria-controls"));
+      if (pane) pane.hidden = !on;
+    }
+    var isJwt = tab === "jwt";
+    dirField.hidden = isJwt;
+    outPanel.hidden = isJwt;
+    jwtPanel.hidden = !isJwt;
+    // Don't leave a decoded token sitting in the DOM once the tab is gone.
+    if (!isJwt) { jwtOut.textContent = ""; lastJwtJson = ""; }
+    syncOptionAvailability();
+    if (fromUser) {
+      // The user has an opinion now. Stop yanking the tab out from under them.
+      if (state.auto) { state.auto = false; syncAuto(); }
+      savePrefs();
+    }
+    run();
+  }
+
+  function setDir(dir, fromUser){
+    if (dir !== "enc" && dir !== "dec") dir = "enc";
+    state.dir = dir;
+    var rs = document.querySelectorAll("#dirGroup button");
+    for (var i = 0; i < rs.length; i++) {
+      var on = rs[i].getAttribute("data-v") === dir;
+      rs[i].setAttribute("aria-checked", on ? "true" : "false");
+      rs[i].tabIndex = on ? 0 : -1;
+    }
+    syncOptionAvailability();
+    if (fromUser) savePrefs();
+    run();
+  }
+
+  function syncAuto(){
+    var b = $("btnAuto");
+    b.setAttribute("aria-pressed", state.auto ? "true" : "false");
+    b.textContent = "Auto-detect: " + (state.auto ? "on" : "off");
+  }
+
+  /* ---- main dispatch ---- */
+  function run(){
+    updateCounts();
+    var src = inEl.value;
+
+    if (state.tab === "jwt") {
+      if (!src.trim()) {
+        jwtOut.textContent = "";
+        var b = el("div", "banner");
+        b.appendChild(el("b", null, "Nothing to decode"));
+        b.appendChild(document.createTextNode("Paste a JWT above: three segments separated by dots. "
+          + "Use an expired or test token; a live one is a working credential."));
+        jwtOut.appendChild(b);
+        lastJwtJson = "";
+        setStatus("Paste a token above.", "muted");
+        return;
+      }
+      renderJwt(src);
+      return;
+    }
+
+    if (!src) {
+      setOut("");
+      setStatus("Enter or paste something above.", "muted");
+      return;
+    }
+    if (!HAS_CODEC) return;
+
+    var enc = state.dir === "enc";
+    try {
+      if (state.tab === "base64") {
+        if (enc) {
+          var e64 = b64Encode(src, state.b64Url, state.b64Wrap);
+          setOut(e64);
+          setStatus("Encoded " + toBytes(src).length + " UTF-8 bytes to " + e64.replace(/\n/g, "").length
+            + " Base64 characters" + (state.b64Url ? " (URL-safe, unpadded)." : "."), "ok");
+        } else {
+          var bytes = b64ToBytes(src);
+          if (!bytes.length) { setOut(""); setStatus("That decodes to zero bytes.", "warn"); return; }
+          try {
+            var text = decodeUtf8Strict(bytes);
+            setOut(text);
+            setStatus("Decoded " + bytes.length + " bytes to " + text.length + " characters of UTF-8 text.", "ok");
+          } catch (e2) {
+            setOut(hexdump(bytes, 4096), true);
+            setStatus("Valid Base64, but the " + bytes.length + " bytes it produces are not valid UTF-8 text: "
+              + "this is probably binary data (an image, a key, a compressed blob). Showing a hex dump instead.", "warn");
+          }
+        }
+      }
+
+      else if (state.tab === "url") {
+        var r = urlRun(src, state.urlMode, state.dir);
+        setOut(r);
+        if (!enc && r === src) {
+          setStatus("Decoded, but nothing changed: there were no escape sequences this variant decodes."
+            + (state.urlMode === "uri" ? " decodeURI deliberately leaves reserved escapes such as %26 and %2F alone; try Component." : ""), "warn");
+        } else {
+          setStatus((enc ? "Encoded" : "Decoded") + " " + src.length + " → " + r.length + " characters.", "ok");
+        }
+      }
+
+      else if (state.tab === "html") {
+        var h = enc ? htmlEncode(src, state.htmlAll) : htmlDecode(src);
+        setOut(h);
+        if (h === src) {
+          setStatus((enc ? "Encoded" : "Decoded") + ", but nothing changed: "
+            + (enc ? "there is nothing in this text that needs escaping."
+                   : "no character references (&amp;name; or &amp;#NNN;) were found."), "warn");
+        } else {
+          setStatus((enc ? "Escaped" : "Unescaped") + " " + src.length + " → " + h.length + " characters.", "ok");
+        }
+      }
+
+      else if (state.tab === "hex") {
+        if (enc) {
+          var hx = hexEncode(src, state.hexSep, state.hexUp);
+          setOut(hx);
+          setStatus("Encoded " + toBytes(src).length + " UTF-8 bytes as hex.", "ok");
+        } else {
+          var hb = hexToBytes(src);
+          if (!hb.length) { setOut(""); setStatus("That decodes to zero bytes.", "warn"); return; }
+          try {
+            var ht = decodeUtf8Strict(hb);
+            setOut(ht);
+            setStatus("Decoded " + hb.length + " bytes to " + ht.length + " characters of UTF-8 text.", "ok");
+          } catch (e3) {
+            setOut(hexdump(hb, 4096), true);
+            setStatus("Valid hex, but those " + hb.length + " bytes are not valid UTF-8 text. Showing a hex dump instead.", "warn");
+          }
+        }
+      }
+    } catch (err) {
+      setOut("");
+      setStatus(err && err.message ? err.message : "Something went wrong converting that input.", "err");
+    }
+  }
+
+  /* ---- clipboard, with an honest failure path ---- */
+  function copyText(txt){
+    if (!txt) { setStatus("Nothing to copy: the output is empty.", "warn"); return; }
+    var done = function(){ setStatus("Copied " + txt.length + " characters to the clipboard.", "ok"); };
+    var fail = function(){
+      setStatus("Copy was blocked in this frame (clipboard permission denied). "
+        + "Press “Select all”, then Ctrl+C · Cmd+C.", "err");
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+        navigator.clipboard.writeText(txt).then(done, function(){ legacyCopy(txt) ? done() : fail(); });
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    if (legacyCopy(txt)) done(); else fail();
+  }
+
+  function legacyCopy(txt){
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "0";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, txt.length);
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
+  }
+
+  /* ==================================================================
+     10. Wiring
+     ================================================================== */
+  loadPrefs();
+
+  $("b64Url").checked  = state.b64Url;
+  $("b64Wrap").checked = state.b64Wrap;
+  $("htmlAll").checked = state.htmlAll;
+  $("hexUp").checked   = state.hexUp;
+  $("urlMode").value   = state.urlMode;
+  $("hexSep").value    = state.hexSep;
+  $("urlNote").textContent = URL_NOTES[state.urlMode];
+  syncAuto();
+
+  var tabs = document.querySelectorAll(".tab");
+  Array.prototype.forEach.call(tabs, function(btn){
+    btn.addEventListener("click", function(){ selectTab(btn.getAttribute("data-tab"), true); });
+  });
+  // Arrow-key navigation across the tab strip (expected for role="tablist")
+  document.querySelector(".tabs").addEventListener("keydown", function(ev){
+    var keys = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -1, ArrowDown: 1 };
+    var list = Array.prototype.slice.call(tabs);
+    var cur = list.indexOf(document.activeElement);
+    if (cur < 0) return;
+    var next = null;
+    if (ev.key in keys) next = (cur + keys[ev.key] + list.length) % list.length;
+    else if (ev.key === "Home") next = 0;
+    else if (ev.key === "End") next = list.length - 1;
+    if (next === null) return;
+    ev.preventDefault();
+    list[next].focus();
+    selectTab(list[next].getAttribute("data-tab"), true);
+  });
+
+  var dirBtns = document.querySelectorAll("#dirGroup button");
+  Array.prototype.forEach.call(dirBtns, function(btn){
+    btn.addEventListener("click", function(){ setDir(btn.getAttribute("data-v"), true); });
+  });
+  $("dirGroup").addEventListener("keydown", function(ev){
+    var list = Array.prototype.slice.call(dirBtns);
+    var cur = list.indexOf(document.activeElement);
+    if (cur < 0) return;
+    var d = (ev.key === "ArrowLeft" || ev.key === "ArrowUp") ? -1
+          : (ev.key === "ArrowRight" || ev.key === "ArrowDown") ? 1 : 0;
+    if (!d) return;
+    ev.preventDefault();
+    var n = (cur + d + list.length) % list.length;
+    list[n].focus();
+    setDir(list[n].getAttribute("data-v"), true);
+  });
+
+  function bindOpt(id, key, isCheckbox){
+    $(id).addEventListener("change", function(){
+      state[key] = isCheckbox ? $(id).checked : $(id).value;
+      if (key === "urlMode") $("urlNote").textContent = URL_NOTES[state.urlMode];
+      savePrefs();
+      run();
+    });
+  }
+  bindOpt("b64Url", "b64Url", true);
+  bindOpt("b64Wrap", "b64Wrap", true);
+  bindOpt("htmlAll", "htmlAll", true);
+  bindOpt("hexUp", "hexUp", true);
+  bindOpt("urlMode", "urlMode", false);
+  bindOpt("hexSep", "hexSep", false);
+
+  $("btnAuto").addEventListener("click", function(){
+    state.auto = !state.auto;
+    syncAuto();
+    savePrefs();
+    if (state.auto) {
+      // Forget what we last acted on, so turning it back on re-applies to the
+      // text that is already in the box rather than waiting for the next keystroke.
+      lastDetectedFor = null;
+      if (!applyDetection(true)) run();
+      setStatus("Auto-detect is on; the tab follows what you paste.", "muted");
+    } else {
+      setStatus("Auto-detect is off; the tab stays where you put it.", "muted");
+    }
+  });
+
+  $("btnClear").addEventListener("click", function(){
+    inEl.value = "";
+    inEl.focus();
+    applyDetection(false);
+    run();
+    setStatus("Cleared.", "muted");
+  });
+
+  $("btnSwap").addEventListener("click", function(){
+    var v = state.tab === "jwt" ? lastJwtJson : outEl.value;
+    if (!v) { setStatus("There is no output to move into the input yet.", "warn"); return; }
+    inEl.value = v;
+    applyDetection(true);
+    // run() reports what actually happened. Overwriting it with a cheerful
+    // "moved" line hid real failures: decoding "hello" throws, the output box
+    // empties, and the user was left reading a GREEN success message.
+    run();
+  });
+
+  $("btnCopy").addEventListener("click", function(){ copyText(outEl.value); });
+  $("btnCopyJwt").addEventListener("click", function(){ copyText(lastJwtJson); });
+  $("btnSelect").addEventListener("click", function(){
+    if (!outEl.value) { setStatus("Nothing to select: the output is empty.", "warn"); return; }
+    outEl.focus();
+    outEl.setSelectionRange(0, outEl.value.length);
+  });
+
+  var lastDetectedFor = null;
+  function applyDetection(allowSwitch){
+    var src = inEl.value;
+    var d = detect(src);
+    if (!d) {
+      detectBar.classList.add("idle");
+      $("detectName").textContent = "-";
+      $("detectWhy").textContent = "nothing in the box yet";
+      lastDetectedFor = null;
+      return false;
+    }
+    detectBar.classList.remove("idle");
+    $("detectName").textContent = TAB_LABEL[d.tab];
+    $("detectWhy").textContent = d.why;
+    if (state.auto && allowSwitch && lastDetectedFor !== d.tab + "|" + (d.dir || "")) {
+      lastDetectedFor = d.tab + "|" + (d.dir || "");
+      if (d.dir && d.tab !== "jwt") setDir(d.dir, false);
+      if (d.tab !== state.tab) { selectTab(d.tab, false); return true; }
+    }
+    return false;
+  }
+
+  var inputTimer = null;
+  inEl.addEventListener("input", function(){
+    // Detection trial-decodes the whole buffer, so detection and the conversion
+    // that follows it are debounced together; only the character/byte counters
+    // update on every keystroke.
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = setTimeout(function(){
+      var switched = applyDetection(true);
+      if (!switched) run();
+    }, 120);
+    updateCounts();
+  });
+
+  // Restore the saved tab/direction, then run once.
+  selectTab(state.tab, false);
+  setDir(state.dir, false);
+  applyDetection(false);
+  run();
+  setStatus("Enter or paste something above. Everything runs locally; nothing is uploaded.", "muted");
+})();
+</script>
+</body>
+</html>
+<style>
+/* mobile: .opt labels are already min-height:44 tap targets; add tap-delay fix + 24px box */
+@media (max-width: 900px), (pointer: coarse) {
+  .opt { touch-action: manipulation; }
+  .opt input[type=checkbox] { width: 24px; height: 24px; }
+}
+</style>

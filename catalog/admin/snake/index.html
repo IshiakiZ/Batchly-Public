@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark" />
+<meta name="description" content="Snake: steer the snake, eat apples, grow long. Speed ramps as you grow. Wrap-walls practice mode. Score = apples eaten." />
+<title>SNAKE</title>
+<!--
+  SNAKE: original grid-arcade implementation for Batchly.
+  ==========================================================================
+  DESIGN NOTES
+
+  Grid & fairness
+    The playfield is a FIXED 20x20 logical grid on every device. It is scaled to
+    the largest whole-pixel cell that fits and letter-boxed (centred) in the
+    arena, so a phone in portrait and a desktop in landscape face the exact same
+    board and the same ceiling. A device-dependent grid would make leaderboard
+    scores incomparable, so the grid never changes size, only its pixel scale.
+
+  Movement model
+    Discrete, one-cell-per-tick. Direction input is BUFFERED: up to two queued
+    turns, each validated against the last committed heading (not the pending
+    one) so a fast "up then left" can't fold the head back through the neck in a
+    single tick: the classic instant-death snake bug. The step reads a fresh
+    `interval` every frame, so the speed ramp takes effect immediately.
+
+  Speed ramp
+    interval = clamp(BASE - apples*RAMP, MIN, BASE). Starts slow (readable),
+    floors out fast enough to stay tense once the snake is long.
+
+  Wrap-walls mode
+    A toggle. In SOLID mode the border kills; in WRAP mode the head reappears on
+    the opposite edge. WRAP is deliberately EASIER, so (like Minesweeper only
+    submitting wins) WRAP runs are PRACTICE ONLY and are never submitted to the
+    leaderboard. The mode can only be changed between runs, never mid-run, so a
+    scored run can't be quietly turned into an easy one.
+
+  Leaderboard contract (host requires positive, finite, higher-is-better)
+    score = apples eaten (== the snake's growth). It is a non-negative integer,
+    strictly higher-is-better, submitted EXACTLY once, only on a genuine finish,
+    only in SOLID-walls mode, and only when apples > 0. A run where you die
+    without eating (0 apples) submits nothing, keeping the board free of trivial
+    entries. Nothing is ever submitted on load.
+
+  Rendering
+    One canvas, redrawn each rAF frame (the board is 400 cells; trivial). The
+    single loop also owns the fixed-timestep stepping and the brief death flash.
+    Movement is discrete, so there is no seam-streaking to worry about in WRAP.
+  ==========================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --inset:#0c0c0f;
+    --board:#0a0a0d;
+    --line:#2e2e36;
+    --line2:#3a3a46;
+    --bone:#f5f2e8;
+    --mute:#9a9aa8;
+    --red:#ef3a3a;
+    --green:#4ec86a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  }
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--bone);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-text-size-adjust:100%;
+  }
+
+  #app{
+    height:100%;
+    display:flex; flex-direction:column; gap:8px;
+    padding:8px;
+  }
+
+  /* ---------- top bar ---------- */
+  #bar{
+    flex:0 0 auto;
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    background:var(--panel); border:2px solid var(--line);
+    padding:6px;
+  }
+  #brand{
+    display:flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:700; letter-spacing:.16em;
+    padding:0 4px 0 2px; white-space:nowrap;
+  }
+  #brand i{ width:11px; height:11px; background:var(--red); display:block; }
+  .group{ display:flex; align-items:center; gap:6px; }
+  .spacer{ flex:1 1 auto; min-width:0; }
+
+  button{
+    font-family:var(--mono);
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    background:#22222a; color:var(--bone);
+    border:2px solid var(--bone); border-radius:0;
+    padding:6px 9px; margin:0; cursor:pointer;
+    box-shadow:3px 3px 0 0 #000;
+    transition:transform .06s ease, box-shadow .06s ease, background .1s ease;
+    white-space:nowrap;
+  }
+  button:hover{ background:#2f2f3a; }
+  button:active{ transform:translate(3px,3px); box-shadow:0 0 0 0 #000; }
+  button[aria-pressed="true"]{ background:var(--red); color:#10100e; }
+  button[aria-pressed="true"]:hover{ background:#ff4a4a; }
+  button:disabled{ opacity:.4; cursor:not-allowed; box-shadow:2px 2px 0 0 #000; }
+  button:disabled:hover{ background:#22222a; }
+  button:focus-visible{ outline:2px solid var(--red); outline-offset:3px; }
+
+  .count{
+    display:flex; align-items:center; gap:7px;
+    background:var(--inset); border:2px solid var(--line2);
+    padding:4px 9px;
+  }
+  .count span{ font-size:9px; letter-spacing:.14em; color:var(--mute); }
+  .count b{
+    font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--bone);
+    font-variant-numeric:tabular-nums; min-width:1ch; text-align:right;
+  }
+  .count.hero b{ color:var(--red); font-size:17px; }
+  .count b.bump{ animation:bump .22s ease; }
+  @keyframes bump{ 0%{ transform:scale(1); } 40%{ transform:scale(1.4); color:var(--green); } 100%{ transform:scale(1); } }
+
+  /* ---------- arena ---------- */
+  #wrap{
+    flex:1 1 auto; min-height:0;
+    display:flex;
+    background:var(--board); border:2px solid var(--line);
+    padding:6px;
+    overflow:hidden;
+  }
+  canvas{
+    display:block; margin:auto;
+    /* content-box so the 2px border doesn't squash the bitmap under the hit math */
+    box-sizing:content-box;
+    background:var(--board);
+    border:2px solid var(--line2);
+    touch-action:none;
+    user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+    outline:none;
+  }
+  canvas.wrapmode{ border-style:dashed; border-color:var(--green); }
+
+  /* ---------- footer / controls ---------- */
+  #foot{
+    flex:0 0 auto;
+    background:var(--panel); border:2px solid var(--line);
+    padding:7px 8px;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+
+  /* d-pad: clickable with mouse or touch; keyboard users use arrows/WASD */
+  #dpad{
+    flex:0 0 auto;
+    display:grid;
+    grid-template-columns:repeat(3, 42px);
+    grid-template-rows:repeat(3, 42px);
+    gap:5px;
+  }
+  #dpad button{
+    padding:0; box-shadow:2px 2px 0 0 #000;
+    display:flex; align-items:center; justify-content:center;
+    border-color:var(--line2); background:#20202a;
+  }
+  #dpad button:hover{ background:#2c2c38; }
+  #dpad button.live{ background:var(--red); border-color:var(--bone); }
+  #dpad button.live .tri{ filter:none; }
+  #dpad button.live .tri.up{ border-bottom-color:#10100e; }
+  #dpad button.live .tri.down{ border-top-color:#10100e; }
+  #dpad button.live .tri.left{ border-right-color:#10100e; }
+  #dpad button.live .tri.right{ border-left-color:#10100e; }
+  #d-up{ grid-column:2; grid-row:1; }
+  #d-left{ grid-column:1; grid-row:2; }
+  #d-right{ grid-column:3; grid-row:2; }
+  #d-down{ grid-column:2; grid-row:3; }
+  #dhub{
+    grid-column:2; grid-row:2;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--line2); font-size:9px; font-weight:700; letter-spacing:.1em;
+  }
+  #dhub i{ width:8px; height:8px; background:var(--line2); display:block; }
+  .tri{ width:0; height:0; }
+  .tri.up{ border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:12px solid var(--bone); }
+  .tri.down{ border-left:9px solid transparent; border-right:9px solid transparent; border-top:12px solid var(--bone); }
+  .tri.left{ border-top:9px solid transparent; border-bottom:9px solid transparent; border-right:12px solid var(--bone); }
+  .tri.right{ border-top:9px solid transparent; border-bottom:9px solid transparent; border-left:12px solid var(--bone); }
+
+  #metacol{ flex:1 1 200px; min-width:0; display:flex; flex-direction:column; gap:6px; }
+  #statusline{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #status{
+    font-size:11px; font-weight:700; letter-spacing:.09em;
+    display:flex; align-items:center; gap:8px;
+  }
+  #status .tag{ color:var(--mute); font-weight:400; letter-spacing:.05em; }
+  #status .ok{ color:var(--green); }
+  #status .bad{ color:var(--red); }
+  .meter{ display:flex; align-items:center; gap:6px; }
+  .meter em{ font-style:normal; font-size:9px; letter-spacing:.14em; color:var(--mute); }
+  .meter .bars{ display:flex; gap:2px; }
+  .meter .bars i{ width:6px; height:13px; background:var(--inset); border:1px solid var(--line2); display:block; }
+  .meter .bars i.on{ background:var(--green); border-color:var(--green); }
+  #help{
+    font-size:10px; line-height:1.55; color:var(--mute); letter-spacing:.02em;
+  }
+  #help b{ color:var(--bone); font-weight:700; }
+  #help kbd{
+    font-family:var(--mono); font-size:10px; color:var(--bone);
+    background:var(--inset); border:1px solid var(--line2);
+    padding:0 4px; margin:0 1px;
+  }
+  #help .sep{ color:#4d4d5c; padding:0 3px; }
+
+  /* ---------- overlay ---------- */
+  #over{
+    position:fixed; inset:0; z-index:20;
+    display:none; place-items:center;
+    background:rgba(8,8,10,.82);
+    padding:16px;
+  }
+  #over.show{ display:grid; }
+  #card{
+    width:100%; max-width:420px;
+    background:var(--panel);
+    border:2px solid var(--bone);
+    box-shadow:6px 6px 0 0 #000;
+    padding:18px 16px 16px;
+    text-align:center;
+  }
+  #ovTitle{ font-size:30px; font-weight:700; letter-spacing:.18em; margin:0 0 2px; }
+  #ovSub{ font-size:10px; letter-spacing:.16em; color:var(--mute); margin-bottom:14px; }
+  .rows{ border:2px solid var(--line2); background:var(--inset); margin-bottom:12px; text-align:left; }
+  .row{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 11px; }
+  .row + .row{ border-top:2px solid var(--line2); }
+  .row .k{ font-size:9px; letter-spacing:.16em; color:var(--mute); }
+  .row .v{ font-size:20px; font-weight:700; letter-spacing:.06em; font-variant-numeric:tabular-nums; }
+  .row .v.big{ color:var(--red); font-size:26px; }
+  #ovNote{ font-size:10px; line-height:1.6; color:var(--mute); letter-spacing:.03em; margin-bottom:13px; }
+  #ovNote b{ color:var(--bone); font-weight:700; }
+  #ovNote .ok{ color:var(--green); font-weight:700; }
+  #ovBtns{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  #ovBtns button{ font-size:12px; padding:9px 16px; }
+  #ovPrimary{ background:var(--red); color:#10100e; }
+  #ovPrimary:hover{ background:#ff4a4a; }
+
+  @media (max-width:560px){ #brand span{ display:none; } }
+  @media (max-width:430px){
+    #cntLen{ display:none; }
+    #dpad{ grid-template-columns:repeat(3, 46px); grid-template-rows:repeat(3, 46px); }
+  }
+  @media (prefers-reduced-motion:reduce){
+    button, .count b.bump{ transition:none; animation:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header id="bar">
+    <div id="brand"><i></i><span>SNAKE</span></div>
+
+    <div class="group">
+      <button id="mode" aria-pressed="false" title="Toggle wall behaviour (only between runs). WRAP is practice, not scored.">WALLS: SOLID</button>
+      <button id="pause" title="Pause / resume (P or Space)" disabled>PAUSE</button>
+      <button id="restart" title="New game (R)">NEW</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="count hero" title="Apples eaten this run; this is your leaderboard score"><span>SCORE</span><b id="cntScore">0</b></div>
+    <div class="count" title="Your best scored (solid-walls) run"><span>BEST</span><b id="cntBest">0</b></div>
+    <div class="count" id="cntLen" title="Current snake length in segments"><span>LEN</span><b id="cntLenV">3</b></div>
+  </header>
+
+  <main id="wrap">
+    <canvas id="board" aria-label="Snake playfield. Use arrow keys or WASD to steer."></canvas>
+  </main>
+
+  <footer id="foot">
+    <div id="dpad" role="group" aria-label="Direction pad">
+      <button id="d-up"    data-dir="up"    aria-label="Move up"><span class="tri up"></span></button>
+      <button id="d-left"  data-dir="left"  aria-label="Move left"><span class="tri left"></span></button>
+      <div id="dhub"><i></i></div>
+      <button id="d-right" data-dir="right" aria-label="Move right"><span class="tri right"></span></button>
+      <button id="d-down"  data-dir="down"  aria-label="Move down"><span class="tri down"></span></button>
+    </div>
+
+    <div id="metacol">
+      <div id="statusline">
+        <div id="status"></div>
+        <div class="meter" aria-hidden="true">
+          <em>SPD</em>
+          <div class="bars" id="spd">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+        </div>
+      </div>
+      <div id="help">
+        <b>MOVE</b> <kbd>&#8592;&#8593;&#8594;&#8595;</kbd> / <kbd>WASD</kbd> / swipe / d-pad
+        <span class="sep">&middot;</span> <b>PAUSE</b> <kbd>P</kbd><span class="sep">&middot;</span> <b>NEW</b> <kbd>R</kbd>
+        <br>
+        Eat apples to grow &amp; speed up; hitting a wall or your own tail ends the run.
+        <b>Score = apples eaten.</b> Leaderboard uses <b>SOLID</b> walls; WRAP is practice.
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<div id="over" role="dialog" aria-modal="false" aria-labelledby="ovTitle">
+  <div id="card">
+    <div id="ovTitle">SNAKE</div>
+    <div id="ovSub">ARCADE</div>
+    <div class="rows" id="ovRows"></div>
+    <div id="ovNote"></div>
+    <div id="ovBtns">
+      <button id="ovPrimary">START</button>
+      <button id="ovSecondary" hidden>RESTART</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ==================================================================
+  // Config
+  // ==================================================================
+  var COLS = 20, ROWS = 20;      // fixed logical grid (same on every device)
+  var INIT_LEN = 3;
+  var BASE_INTERVAL = 140;       // ms per step at 0 apples
+  var MIN_INTERVAL  = 60;        // fastest step (floor)
+  var RAMP = 3;                  // ms faster per apple
+  var DEATH_MS = 460;            // death-flash duration before the overlay
+
+  var UP    = { x:0,  y:-1 };
+  var DOWN  = { x:0,  y:1  };
+  var LEFT  = { x:-1, y:0  };
+  var RIGHT = { x:1,  y:0  };
+
+  var BOARD_BG = '#0a0a0d';
+  var BEST_KEY = 'batchly-snake-best';
+
+  var REDUCE = false;
+  try { REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+
+  // ==================================================================
+  // Elements
+  // ==================================================================
+  var canvas   = document.getElementById('board');
+  var ctx      = canvas.getContext('2d');
+  var wrap     = document.getElementById('wrap');
+  var app      = document.getElementById('app');
+  var elScore  = document.getElementById('cntScore');
+  var elBest   = document.getElementById('cntBest');
+  var elLen    = document.getElementById('cntLenV');
+  var elStatus = document.getElementById('status');
+  var elSpd    = document.getElementById('spd');
+  var btnMode  = document.getElementById('mode');
+  var btnPause = document.getElementById('pause');
+  var btnNew   = document.getElementById('restart');
+  var over     = document.getElementById('over');
+  var ovTitle  = document.getElementById('ovTitle');
+  var ovSub    = document.getElementById('ovSub');
+  var ovRows   = document.getElementById('ovRows');
+  var ovNote   = document.getElementById('ovNote');
+  var ovPrimary   = document.getElementById('ovPrimary');
+  var ovSecondary = document.getElementById('ovSecondary');
+  var spdBars  = elSpd.getElementsByTagName('i');
+  var dpadBtns = { up:document.getElementById('d-up'), down:document.getElementById('d-down'),
+                   left:document.getElementById('d-left'), right:document.getElementById('d-right') };
+
+  // ==================================================================
+  // State
+  // ==================================================================
+  var snake, dir, queue, food, apples, interval, wrapMode = false;
+  var state = 'ready';           // ready | playing | paused | dying | over
+  var cause = '';                // wall | self | perfect
+  var submitted = false, sent = false;
+  var best = 0;
+  var cell = 20, dpr = 1;
+  var acc = 0, lastT = 0, deathStart = 0, raf = null;
+
+  try { var b = parseInt(localStorage.getItem(BEST_KEY), 10); if(isFinite(b) && b > 0) best = b; } catch(e){}
+
+  // ==================================================================
+  // Game setup / reset
+  // ==================================================================
+  function reset(startNow){
+    snake = [];
+    var cx = COLS >> 1, cy = ROWS >> 1;
+    for(var i = 0; i < INIT_LEN; i++) snake.push({ x:cx - i, y:cy }); // head first, body to the left
+    dir = RIGHT;
+    queue = [];
+    apples = 0;
+    interval = BASE_INTERVAL;
+    cause = '';
+    submitted = false; sent = false;
+    acc = 0;
+    placeFood();
+    updateHud();
+    updateSpeed();
+    if(startNow){
+      state = 'playing';
+      hideOverlay();
+    } else {
+      state = 'ready';
+      showReady();
+    }
+    lastT = now();
+    updateControls();
+    draw(lastT);
+  }
+
+  function occupied(x, y){
+    for(var i = 0; i < snake.length; i++) if(snake[i].x === x && snake[i].y === y) return true;
+    return false;
+  }
+
+  // Place food on a random empty cell. If the board is full, the player has
+  // filled every cell: a perfect game.
+  function placeFood(){
+    var empty = [];
+    for(var y = 0; y < ROWS; y++){
+      for(var x = 0; x < COLS; x++){
+        if(!occupied(x, y)) empty.push(x * ROWS + y);
+      }
+    }
+    if(empty.length === 0){ food = null; win(); return; }
+    var k = empty[(Math.random() * empty.length) | 0];
+    food = { x:(k / ROWS) | 0, y:k % ROWS };
+  }
+
+  // ==================================================================
+  // Input: direction buffering
+  // ==================================================================
+  function isReverse(a, b){ return a.x === -b.x && a.y === -b.y; }
+  function isSame(a, b){ return a.x === b.x && a.y === b.y; }
+
+  function enqueueDir(nd){
+    // From READY, the first valid turn both starts the run and sets heading.
+    if(state === 'ready'){
+      if(isReverse(nd, dir)) return;   // a reversal at the start would be instant death: ignore, stay ready
+      state = 'playing';
+      hideOverlay();
+      dir = nd;
+      acc = 0; lastT = now();
+      updateControls();
+      return;
+    }
+    if(state !== 'playing') return;
+    // Validate against the LAST buffered turn (or the live heading) so chained
+    // inputs can't collapse into a reversal within one tick.
+    var last = queue.length ? queue[queue.length - 1] : dir;
+    if(isSame(nd, last) || isReverse(nd, last)) return;
+    if(queue.length < 2) queue.push(nd);
+  }
+
+  // ==================================================================
+  // Step / rules
+  // ==================================================================
+  function step(){
+    if(queue.length){
+      var nd = queue.shift();
+      if(!isReverse(nd, dir) && !isSame(nd, dir)) dir = nd;
+    }
+
+    var head = snake[0];
+    var nx = head.x + dir.x;
+    var ny = head.y + dir.y;
+
+    if(wrapMode){
+      nx = (nx + COLS) % COLS;
+      ny = (ny + ROWS) % ROWS;
+    } else if(nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS){
+      die('wall'); return;
+    }
+
+    var grow = food && nx === food.x && ny === food.y;
+
+    // Self-collision. When NOT growing, the tail vacates this tick, so the head
+    // is allowed to enter the tail's current cell: exclude the last segment.
+    var checkLen = grow ? snake.length : snake.length - 1;
+    for(var i = 0; i < checkLen; i++){
+      if(snake[i].x === nx && snake[i].y === ny){ die('self'); return; }
+    }
+
+    snake.unshift({ x:nx, y:ny });
+    if(grow){
+      apples++;
+      interval = Math.max(MIN_INTERVAL, BASE_INTERVAL - apples * RAMP);
+      buzz(); bumpScore();
+      updateHud(); updateSpeed();
+      placeFood();               // may trigger win() if the board is now full
+    } else {
+      snake.pop();
+    }
+  }
+
+  function die(reason){
+    if(state !== 'playing') return;
+    cause = reason;
+    finalize();
+    if(REDUCE){ state = 'over'; showOver(); }
+    else { state = 'dying'; deathStart = now(); }
+    updateControls();
+  }
+
+  function win(){
+    if(state !== 'playing') return;
+    cause = 'perfect';
+    finalize();
+    state = 'over';
+    showOver();
+    updateControls();
+  }
+
+  // Best-tracking + the single leaderboard submission. SOLID walls only; the
+  // score is apples eaten; submitted once, and only when it is a positive finite
+  // number: a 0-apple death submits nothing.
+  function finalize(){
+    if(wrapMode){ updateHud(); return; }
+    if(apples > best){ best = apples; saveBest(); }
+    if(!submitted && apples > 0 && isFinite(apples)){
+      submitted = true;
+      try {
+        window.parent.postMessage({ type:'batchly-score', score:apples }, '*');
+        sent = true;
+      } catch(e){ sent = false; }
+    }
+    updateHud();
+  }
+
+  function saveBest(){ try { localStorage.setItem(BEST_KEY, String(best)); } catch(e){} }
+
+  function buzz(){ try { if(navigator.vibrate) navigator.vibrate(12); } catch(e){} }
+
+  // ==================================================================
+  // Timing / main loop
+  // ==================================================================
+  function now(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  function frame(t){
+    raf = requestAnimationFrame(frame);
+    var dt = t - lastT; lastT = t;
+    if(dt < 0) dt = 0;
+    if(dt > 200) dt = interval;    // tab was backgrounded: don't fast-forward a burst of steps
+
+    if(state === 'playing'){
+      acc += dt;
+      var guard = 0;
+      while(acc >= interval && guard < 5){
+        acc -= interval;
+        step();
+        guard++;
+        if(state !== 'playing') break;
+      }
+      if(acc > interval) acc = interval;
+    } else if(state === 'dying'){
+      if(t - deathStart >= DEATH_MS){ state = 'over'; showOver(); updateControls(); }
+    } else {
+      acc = 0;
+    }
+
+    draw(t);
+  }
+
+  // ==================================================================
+  // Layout
+  // ==================================================================
+  function layout(){
+    var availW = wrap.clientWidth  - 12 - 4;   // 6px padding + 2px canvas border, each side
+    var availH = wrap.clientHeight - 12 - 4;
+    var fit = Math.floor(Math.min(availW / COLS, availH / ROWS));
+    if(!isFinite(fit) || fit < 6) fit = 6;
+    cell = Math.min(fit, 40);
+
+    var w = COLS * cell, h = ROWS * cell;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    var bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+    if(canvas.width !== bw || canvas.height !== bh){ canvas.width = bw; canvas.height = bh; }
+    draw(now());
+  }
+
+  // ==================================================================
+  // Drawing
+  // ==================================================================
+  function draw(t){
+    if(!cell) return;
+    var g = ctx;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var W = COLS * cell, H = ROWS * cell;
+
+    g.fillStyle = BOARD_BG;
+    g.fillRect(0, 0, W, H);
+
+    // subtle grid
+    g.lineWidth = 1;
+    g.strokeStyle = 'rgba(245,242,232,0.05)';
+    g.beginPath();
+    for(var x = 1; x < COLS; x++){ g.moveTo(x * cell + 0.5, 0); g.lineTo(x * cell + 0.5, H); }
+    for(var y = 1; y < ROWS; y++){ g.moveTo(0, y * cell + 0.5); g.lineTo(W, y * cell + 0.5); }
+    g.stroke();
+
+    if(food) drawFood(g, food, t);
+
+    var n = snake.length;
+    var flashing = (state === 'dying') && (Math.floor((t - deathStart) / 90) % 2 === 0);
+    for(var i = n - 1; i >= 0; i--) drawSeg(g, snake[i], i, n, flashing);
+  }
+
+  function drawSeg(g, seg, i, n, flashing){
+    var gap = Math.max(1, cell * 0.09);
+    var s = cell - gap;
+    var ox = seg.x * cell + gap / 2;
+    var oy = seg.y * cell + gap / 2;
+
+    var col;
+    if(flashing){ col = (i % 2 === 0) ? '#ef3a3a' : '#f5f2e8'; }
+    else if(i === 0){ col = 'hsl(142,72%,70%)'; }
+    else {
+      var f = (n > 1) ? i / (n - 1) : 0;   // 0 at neck -> 1 at tail
+      col = 'hsl(142,56%,' + Math.round(58 - f * 20) + '%)';
+    }
+    g.fillStyle = col;
+    g.fillRect(ox, oy, s, s);
+
+    if(i === 0 && !flashing) drawEyes(g, seg);
+  }
+
+  function drawEyes(g, seg){
+    var cx = seg.x * cell + cell / 2;
+    var cy = seg.y * cell + cell / 2;
+    var fx = dir.x, fy = dir.y;      // forward
+    var px = -fy, py = fx;           // perpendicular
+    var fwd = cell * 0.16, side = cell * 0.20;
+    var r = Math.max(1.4, cell * 0.09);
+    g.fillStyle = '#0a0a0d';
+    for(var s = -1; s <= 1; s += 2){
+      var ex = cx + fx * fwd + px * side * s;
+      var ey = cy + fy * fwd + py * side * s;
+      g.beginPath(); g.arc(ex, ey, r, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  function drawFood(g, f, t){
+    var pulse = REDUCE ? 1 : (1 + 0.10 * Math.sin(t / 260));
+    var s = cell * 0.62 * pulse;
+    var cx = f.x * cell + cell / 2;
+    var cy = f.y * cell + cell / 2;
+    var x = cx - s / 2, y = cy - s / 2;
+    g.fillStyle = '#ef3a3a';
+    g.fillRect(x, y, s, s);
+    g.fillStyle = 'rgba(0,0,0,0.20)';
+    g.fillRect(x + s * 0.60, y + s * 0.60, s * 0.32, s * 0.32);
+    g.fillStyle = 'rgba(245,242,232,0.55)';
+    g.fillRect(x + s * 0.14, y + s * 0.14, s * 0.20, s * 0.20);
+    g.fillStyle = '#4ec86a';   // stem
+    g.fillRect(cx - Math.max(1, cell * 0.04), y - cell * 0.11, Math.max(2, cell * 0.08), cell * 0.13);
+  }
+
+  // ==================================================================
+  // HUD / status / controls
+  // ==================================================================
+  function updateHud(){
+    elScore.textContent = String(apples);
+    elBest.textContent  = String(best);
+    elLen.textContent   = String(snake ? snake.length : INIT_LEN);
+    setStatusForState();
+  }
+
+  function bumpScore(){
+    if(REDUCE) return;
+    elScore.classList.remove('bump');
+    void elScore.offsetWidth;   // restart the animation
+    elScore.classList.add('bump');
+  }
+
+  function updateSpeed(){
+    var level = Math.round((BASE_INTERVAL - interval) / (BASE_INTERVAL - MIN_INTERVAL) * 9) + 1;
+    if(level < 1) level = 1; if(level > 10) level = 10;
+    for(var i = 0; i < spdBars.length; i++){
+      if(i < level) spdBars[i].classList.add('on'); else spdBars[i].classList.remove('on');
+    }
+  }
+
+  function setStatusForState(){
+    var modeTag = wrapMode
+      ? '<span class="tag">WRAP &middot; practice</span>'
+      : '<span class="tag">SOLID walls</span>';
+    if(state === 'ready')      elStatus.innerHTML = '<span class="tag">READY</span> ' + modeTag;
+    else if(state === 'playing') elStatus.innerHTML = '<span class="ok">PLAYING</span> ' + modeTag;
+    else if(state === 'paused')  elStatus.innerHTML = '<span class="tag">PAUSED</span> ' + modeTag;
+    else if(state === 'dying' || state === 'over'){
+      var msg = cause === 'perfect' ? '<span class="ok">PERFECT</span>' : '<span class="bad">GAME OVER</span>';
+      elStatus.innerHTML = msg + ' ' + modeTag;
+    }
+  }
+
+  function updateControls(){
+    var betweenRuns = (state === 'ready' || state === 'over');
+    btnMode.disabled  = !betweenRuns;
+    btnPause.disabled = !(state === 'playing' || state === 'paused');
+    btnPause.textContent = (state === 'paused') ? 'RESUME' : 'PAUSE';
+    var live = (state === 'playing');
+    for(var key in dpadBtns){
+      if(dpadBtns.hasOwnProperty(key)){
+        var on = live && dir.x === DIRS[key].x && dir.y === DIRS[key].y;
+        dpadBtns[key].classList.toggle('live', on);
+      }
+    }
+    // Runs on every state transition, so the footer status line always matches
+    // the CURRENT state (die()/win() call finalize() while still 'playing').
+    setStatusForState();
+  }
+  var DIRS = { up:UP, down:DOWN, left:LEFT, right:RIGHT };
+
+  // ==================================================================
+  // Overlay
+  // ==================================================================
+  function showReady(){
+    ovTitle.textContent = 'SNAKE';
+    ovTitle.style.color = 'var(--bone)';
+    ovSub.textContent = 'ARCADE · EAT · GROW · SURVIVE';
+    ovRows.innerHTML =
+      row('MOVE',  'Arrows / WASD / swipe / d-pad') +
+      row('GOAL',  'Eat apples to grow &amp; speed up') +
+      row('AVOID', 'The walls and your own tail') +
+      row('SCORE', 'Apples eaten; higher is better');
+    ovNote.innerHTML = 'Walls are <b>' + (wrapMode ? 'WRAP (practice, not scored)' : 'SOLID (leaderboard)') +
+      '</b>. Toggle it up top before you start.';
+    ovPrimary.textContent = 'START';
+    ovPrimary.dataset.action = 'start';
+    ovSecondary.hidden = true;
+    showOverlay();
+  }
+
+  function showPaused(){
+    ovTitle.textContent = 'PAUSED';
+    ovTitle.style.color = 'var(--bone)';
+    ovSub.textContent = wrapMode ? 'WRAP · PRACTICE' : 'SOLID · LEADERBOARD';
+    ovRows.innerHTML =
+      row('SCORE', String(apples)) +
+      row('LENGTH', String(snake.length)) +
+      row('BEST', String(best));
+    ovNote.innerHTML = 'Take a breath. Your run is right where you left it.';
+    ovPrimary.textContent = 'RESUME';
+    ovPrimary.dataset.action = 'resume';
+    ovSecondary.hidden = false;
+    ovSecondary.textContent = 'RESTART';
+    ovSecondary.dataset.action = 'restart';
+    showOverlay();
+  }
+
+  function showOver(){
+    var won = (cause === 'perfect');
+    ovTitle.textContent = won ? 'PERFECT!' : 'GAME OVER';
+    ovTitle.style.color = won ? 'var(--green)' : 'var(--red)';
+    var reason = won ? 'You filled the whole board'
+               : cause === 'wall' ? 'You hit the wall'
+               : 'You bit your own tail';
+    ovSub.textContent = reason.toUpperCase();
+    ovRows.innerHTML =
+      row('SCORE',  '<span class="v big">' + apples + '</span>', true) +
+      row('LENGTH', String(snake.length)) +
+      row('BEST',   String(best));
+
+    if(wrapMode){
+      ovNote.innerHTML = 'Practice run: <b>WRAP walls are not submitted</b> to the leaderboard. Switch to SOLID walls for a scored run.';
+    } else if(apples === 0){
+      ovNote.innerHTML = 'No apples eaten, so <b>nothing was submitted</b>: the leaderboard only takes runs that scored.';
+    } else if(sent){
+      ovNote.innerHTML = '<span class="ok">Submitted ' + apples + ' to the leaderboard.</span> Eat more apples next run to beat it.';
+    } else {
+      ovNote.innerHTML = 'Score could not be submitted (leaderboard unreachable).';
+    }
+
+    ovPrimary.textContent = 'PLAY AGAIN';
+    ovPrimary.dataset.action = 'restart';
+    ovSecondary.hidden = true;
+    showOverlay();
+  }
+
+  function row(k, v, raw){
+    return '<div class="row"><span class="k">' + k + '</span>' +
+           (raw ? v : '<span class="v">' + v + '</span>') + '</div>';
+  }
+
+  function showOverlay(){
+    over.classList.add('show');
+    if(document.hasFocus && document.hasFocus()){ try { ovPrimary.focus(); } catch(e){} }
+  }
+  function hideOverlay(){ over.classList.remove('show'); }
+
+  // ==================================================================
+  // Actions
+  // ==================================================================
+  function startGame(){
+    if(state !== 'ready') return;
+    state = 'playing';
+    hideOverlay();
+    acc = 0; lastT = now();
+    updateControls();
+  }
+
+  function togglePause(){
+    if(state === 'playing'){ state = 'paused'; showPaused(); updateControls(); }
+    else if(state === 'paused'){ state = 'playing'; hideOverlay(); acc = 0; lastT = now(); updateControls(); }
+  }
+
+  function toggleMode(){
+    if(!(state === 'ready' || state === 'over')) return;   // only between runs
+    wrapMode = !wrapMode;
+    btnMode.setAttribute('aria-pressed', String(wrapMode));
+    btnMode.textContent = 'WALLS: ' + (wrapMode ? 'WRAP' : 'SOLID');
+    canvas.classList.toggle('wrapmode', wrapMode);
+    setStatusForState();
+    if(state === 'ready') showReady();   // refresh the ready card's scored/practice line
+  }
+
+  // ==================================================================
+  // Keyboard
+  // ==================================================================
+  window.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = e.key;
+
+    if(k === 'ArrowUp'    || k === 'w' || k === 'W'){ enqueueDir(UP);    e.preventDefault(); return; }
+    if(k === 'ArrowDown'  || k === 's' || k === 'S'){ enqueueDir(DOWN);  e.preventDefault(); return; }
+    if(k === 'ArrowLeft'  || k === 'a' || k === 'A'){ enqueueDir(LEFT);  e.preventDefault(); return; }
+    if(k === 'ArrowRight' || k === 'd' || k === 'D'){ enqueueDir(RIGHT); e.preventDefault(); return; }
+
+    if(k === 'r' || k === 'R'){ reset(true); e.preventDefault(); return; }
+    if(k === 'p' || k === 'P'){ togglePause(); e.preventDefault(); return; }
+
+    if(k === ' ' || k === 'Enter'){
+      // Space/Enter: start from ready, restart from over, otherwise pause toggle.
+      // Let a focused button handle its own activation.
+      if(document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+      if(state === 'ready') startGame();
+      else if(state === 'over') reset(true);
+      else togglePause();
+      e.preventDefault();
+      return;
+    }
+
+    if(k === 'Escape'){
+      if(state === 'paused'){ togglePause(); e.preventDefault(); }
+      return;
+    }
+  });
+
+  // ==================================================================
+  // D-pad (mouse + touch). pointerdown for snappy response; the synthesised
+  // click is harmlessly de-duped by enqueueDir (same direction is rejected).
+  // ==================================================================
+  Object.keys(dpadBtns).forEach(function(key){
+    var btn = dpadBtns[key];
+    btn.addEventListener('pointerdown', function(e){
+      e.preventDefault();
+      enqueueDir(DIRS[key]);
+      buzz();
+    });
+    btn.addEventListener('click', function(e){ e.preventDefault(); enqueueDir(DIRS[key]); });
+  });
+
+  // ==================================================================
+  // Swipe on the arena (touch phones). A continued drag can chain turns.
+  // ==================================================================
+  var sx = 0, sy = 0, swiping = false;
+  canvas.addEventListener('touchstart', function(e){
+    if(e.touches.length !== 1) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; swiping = true;
+  }, { passive:true });
+
+  canvas.addEventListener('touchmove', function(e){
+    if(!swiping || !e.touches.length) return;
+    var dx = e.touches[0].clientX - sx;
+    var dy = e.touches[0].clientY - sy;
+    var TH = 22;
+    if(Math.abs(dx) < TH && Math.abs(dy) < TH) return;
+    if(Math.abs(dx) > Math.abs(dy)) enqueueDir(dx > 0 ? RIGHT : LEFT);
+    else enqueueDir(dy > 0 ? DOWN : UP);
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;   // reset origin so a long drag can turn again
+    if(e.cancelable) e.preventDefault();
+  }, { passive:false });
+
+  canvas.addEventListener('touchend',    function(){ swiping = false; }, { passive:true });
+  canvas.addEventListener('touchcancel', function(){ swiping = false; }, { passive:true });
+
+  // ==================================================================
+  // Button wiring
+  // ==================================================================
+  btnMode.addEventListener('click', toggleMode);
+  btnPause.addEventListener('click', togglePause);
+  btnNew.addEventListener('click', function(){ reset(true); });
+
+  function overlayAction(){
+    var a = ovPrimary.dataset.action;
+    if(a === 'start') startGame();
+    else if(a === 'resume') togglePause();
+    else if(a === 'restart') reset(true);
+  }
+  ovPrimary.addEventListener('click', overlayAction);
+  ovSecondary.addEventListener('click', function(){
+    if(ovSecondary.dataset.action === 'restart') reset(true);
+  });
+  over.addEventListener('click', function(e){
+    if(e.target === over && state === 'paused') togglePause();   // backdrop resumes only when paused
+  });
+
+  // ==================================================================
+  // Auto-pause when the tab is hidden mid-run
+  // ==================================================================
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden && state === 'playing') togglePause();
+  });
+
+  // ==================================================================
+  // Resize: observe #app (the non-scrolling root)
+  // ==================================================================
+  var queued = false;
+  function queueLayout(){
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(function(){ queued = false; layout(); });
+  }
+  window.addEventListener('resize', queueLayout);
+  window.addEventListener('orientationchange', queueLayout);
+  if(typeof ResizeObserver !== 'undefined'){
+    try { new ResizeObserver(queueLayout).observe(app); } catch(e){}
+  }
+
+  // ==================================================================
+  // Go
+  // ==================================================================
+  reset(false);
+  layout();
+  raf = requestAnimationFrame(frame);
+})();
+</script>
+<style id="hit-target-patch">
+/* --- hit targets (phone/coarse only). #app is height:100% + overflow:hidden, so a taller top
+   bar shrinks the arena rather than the document; layout() re-fits the canvas on resize. --- */
+@media (max-width: 900px), (pointer: coarse){
+  #mode, #pause, #restart, #ovBtns button{ min-height:44px; min-width:44px; touch-action:manipulation; }
+  #dpad{ grid-template-columns:repeat(3, 46px); grid-template-rows:repeat(3, 46px); }
+}
+</style>
+</body>
+</html>

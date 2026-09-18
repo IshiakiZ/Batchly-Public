@@ -1,0 +1,4 @@
+.mirror-staging/
+.mirror-previous/
+node_modules/
+.env*

@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sudoku</title>
+<!--
+  ============================================================================
+  SUDOKU: Batchly seed game
+  ============================================================================
+
+  DESIGN
+  ------
+  Puzzles are generated, never drawn from a table. Three stages:
+
+    1. FULL GRID      Randomised depth-first fill (sequential cell order,
+                      shuffled candidate order, bitmask row/col/box masks).
+                      Terminates in microseconds; the result is a uniformly
+                      shuffled valid solution.
+
+    2. DIG            Cells are cleared in random order. After every removal a
+                      counting solver (MRV + bitmask backtracking, early-exit
+                      at 2 solutions) proves the puzzle still has EXACTLY ONE
+                      solution; if not, the removal is reverted. Easy/Medium
+                      dig in 180deg-rotational pairs for a symmetric board;
+                      Hard/Expert dig freely so they can reach lower clue
+                      counts. Digging stops at the band's clue target.
+
+    3. GRADE          The puzzle is solved by a human-technique ladder, and
+                      rated by the hardest technique it was forced to use:
+
+                        L1  naked single
+                        L2  hidden single
+                        L3  locked candidates (pointing/claiming),
+                            naked pair, hidden pair
+                        L4  naked triple, X-wing
+                        L5  needs more than the above (i.e. guesswork)
+
+                      This is what actually separates the difficulties -- clue
+                      count alone is a poor proxy. A puzzle is accepted only if
+                      its rating lands inside the requested band; otherwise the
+                      whole pipeline retries with a fresh grid. Attempts yield
+                      to the event loop so the UI never locks, and a time+attempt
+                      budget guarantees termination (best candidate wins).
+
+  BANDS               clues   rating
+    Easy               45      L1-L2   singles only
+    Medium             36      L2-L3
+    Hard               30      L3-L4
+    Expert             25      L4-L5
+
+  HINTS               The hint engine re-derives candidates from the CURRENT
+                      board and reports the actual logical reason ("only cell in
+                      this box for 7"). It falls back to a plain, clearly-labelled
+                      reveal in two cases: the board contains contradictions from
+                      wrong entries, or no single is available (Expert boards rate
+                      L5, i.e. the technique ladder stalls). Every reason it gives
+                      is cross-checked against the true solution before it is
+                      shown, so it never lies about why a digit goes where it does.
+
+  LEADERBOARD         None. This is a relaxed puzzle: no score is ever posted to
+                      the parent frame. The timer is for the player, not a rank.
+
+  CONSTRAINTS         One file, zero external resources, zero network. Audio is
+                      synthesised with WebAudio oscillators; every glyph is text
+                      or CSS. Runs in a sandboxed iframe: no alert/confirm (they
+                      are blocked without allow-modals) -- all dialogs are DOM.
+                      localStorage is wrapped in try/catch because an opaque
+                      origin throws on access.
+  ============================================================================
+-->
+<style>
+  :root{
+    --bg:#10100e;
+    --panel:#18181d;
+    --panel2:#1f1f26;
+    --ink:#f5f2e8;
+    --dim:#8a8880;
+    --thin:#33333c;
+    --red:#ef3a3a;
+    --user:#5eb0ef;
+    --hint:#f5c14e;
+    --ok:#5fd08a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    -webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;
+  }
+  button{
+    font-family:inherit;
+    border-radius:0;
+    background:var(--panel);
+    border:2px solid var(--ink);
+    color:var(--ink);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    cursor:pointer;
+    padding:6px 8px;
+    line-height:1.1;
+    touch-action:manipulation;
+    user-select:none;
+  }
+  button:hover:not(:disabled){background:var(--ink);color:var(--bg)}
+  button:active:not(:disabled){transform:translate(1px,1px)}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  button.on{background:var(--red);border-color:var(--red);color:var(--bg)}
+  button.on:hover{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  button:focus-visible,#board:focus-visible{outline:2px dashed var(--red);outline-offset:2px}
+  #board:focus{outline:none}
+
+  #app{height:100%;display:flex;flex-direction:column;min-height:0}
+
+  /* ---------- header ---------- */
+  #top{
+    display:flex;align-items:center;gap:10px;
+    padding:6px 8px;border-bottom:2px solid var(--ink);
+    background:var(--panel);flex:0 0 auto;
+  }
+  .brand{font-weight:700;font-size:15px;letter-spacing:.18em;white-space:nowrap}
+  .brand b{color:var(--red)}
+  #diffs{display:flex;gap:4px;flex:1 1 auto;min-width:0}
+  #diffs button{font-size:10px;padding:5px 4px;flex:1 1 0;min-width:0}
+  #meta{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  #clock{
+    font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;
+    border:2px solid var(--ink);padding:2px 7px;background:var(--bg);min-width:74px;text-align:center;
+  }
+  #clock.paused{color:var(--dim);border-color:var(--dim)}
+
+  /* ---------- main ---------- */
+  #main{flex:1 1 auto;display:flex;min-height:0;min-width:0}
+  #boardwrap{
+    flex:1 1 auto;min-width:0;min-height:0;
+    display:flex;align-items:center;justify-content:center;
+    padding:8px;position:relative;
+  }
+  #board{
+    display:grid;
+    grid-template-columns:repeat(9,1fr);
+    grid-template-rows:repeat(9,1fr);
+    border:3px solid var(--ink);
+    background:var(--panel);
+    box-shadow:6px 6px 0 0 #000;
+    --cs:40px;
+    touch-action:manipulation;
+  }
+  .cell{
+    position:relative;display:grid;place-items:center;
+    border-right:1px solid var(--thin);
+    border-bottom:1px solid var(--thin);
+    cursor:pointer;user-select:none;overflow:hidden;
+  }
+  .cell.c8{border-right:0}
+  .cell.r8{border-bottom:0}
+  .cell.br{border-right:2px solid var(--ink)}
+  .cell.bb{border-bottom:2px solid var(--ink)}
+  .cell .v{
+    font-size:calc(var(--cs) * .56);
+    font-weight:700;line-height:1;color:var(--user);
+    pointer-events:none;
+  }
+  .cell.given .v{color:var(--ink)}
+  .cell.hinted .v{color:var(--hint)}
+  .cell.bad .v{color:var(--red)}
+  .cell .n{
+    position:absolute;inset:0;display:grid;
+    grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    pointer-events:none;
+  }
+  .cell .n i{
+    font-style:normal;display:grid;place-items:center;
+    font-size:calc(var(--cs) * .2);color:var(--dim);line-height:1;
+  }
+  .cell.peer{background:rgba(245,242,232,.055)}
+  .cell.same{background:rgba(94,176,239,.16)}
+  .cell.bad{background:rgba(239,58,58,.16)}
+  .cell.sel{background:rgba(239,58,58,.22)}
+  .cell.sel::after{
+    content:'';position:absolute;inset:0;
+    box-shadow:inset 0 0 0 2px var(--red);pointer-events:none;
+  }
+  .cell.flash{animation:flash .45s steps(1) 3}
+  @keyframes flash{0%{background:rgba(239,58,58,.55)}50%{background:transparent}100%{background:rgba(239,58,58,.55)}}
+  #board.hidden .cell .v,#board.hidden .cell .n{visibility:hidden}
+
+  /* ---------- side ---------- */
+  #side{display:flex;flex-direction:column;gap:6px;padding:6px;background:var(--panel);flex:0 0 auto}
+  /* keep the stacked pad from stretching into giant letterbox keys on a tablet;
+     never binds in row layout, where the side panel is only 266px wide */
+  #pad,#tools,#stats{max-width:560px;width:100%;margin-left:auto;margin-right:auto}
+  #pad{display:grid;gap:5px;grid-template-columns:repeat(5,1fr)}
+  #pad button{
+    position:relative;padding:0;height:44px;
+    font-size:19px;font-weight:700;display:grid;place-items:center;
+  }
+  #pad button .rem{
+    position:absolute;right:3px;bottom:1px;font-size:9px;font-weight:700;
+    color:var(--dim);letter-spacing:0;
+  }
+  #pad button:hover .rem{color:var(--bg)}
+  #pad button.done{opacity:.3}
+  #pad button.notes-mode{border-color:var(--hint);color:var(--hint)}
+  #pad button.notes-mode:hover{background:var(--hint);color:var(--bg)}
+  #pad button.notes-mode .rem{color:var(--hint)}
+  #pad #erase{font-size:12px}
+  #tools{display:grid;gap:5px;grid-template-columns:repeat(5,1fr)}
+  #tools button{font-size:9px;padding:7px 2px}
+  #stats{
+    display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:var(--dim);
+    border:2px solid var(--thin);padding:5px 6px;letter-spacing:.04em;
+  }
+  #stats b{color:var(--ink);font-weight:700}
+  #stats .lvl{color:var(--hint)}
+
+  /* ---------- status ---------- */
+  #status{
+    flex:0 0 auto;border-top:2px solid var(--ink);background:var(--panel);
+    padding:5px 8px;font-size:11px;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.03em;
+  }
+  #status.ok{color:var(--ok)}
+  #status.bad{color:var(--red)}
+  #status.warn{color:var(--hint)}
+  kbd{
+    border:1px solid var(--thin);padding:0 3px;color:var(--ink);
+    font-family:inherit;font-size:10px;background:var(--bg);
+  }
+
+  /* ---------- overlays ---------- */
+  .ov{
+    position:absolute;inset:0;display:none;
+    align-items:center;justify-content:center;
+    background:rgba(16,16,14,.9);z-index:5;padding:10px;
+  }
+  .ov.show{display:flex}
+  .card{
+    background:var(--panel2);border:2px solid var(--ink);
+    box-shadow:6px 6px 0 0 #000;
+    padding:16px;max-width:420px;width:100%;text-align:center;
+  }
+  .card h2{margin:0 0 10px;font-size:20px;letter-spacing:.16em}
+  .card h2.win{color:var(--ok)}
+  .card p{margin:0 0 12px;font-size:12px;color:var(--dim);line-height:1.6}
+  .card .row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+  .card .row button{font-size:11px;padding:8px 12px}
+  #winStats{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
+    background:var(--thin);border:1px solid var(--thin);margin:0 0 14px;
+  }
+  #winStats div{background:var(--panel);padding:8px 4px}
+  #winStats span{display:block;font-size:9px;color:var(--dim);letter-spacing:.1em}
+  #winStats strong{display:block;font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums}
+
+  /* full-app overlays (help / confirm) */
+  #helpOv,#confirmOv{
+    position:fixed;inset:0;z-index:20;display:none;
+    align-items:center;justify-content:center;background:rgba(16,16,14,.94);padding:12px;
+  }
+  #helpOv.show,#confirmOv.show{display:flex}
+  #helpCard{
+    background:var(--panel2);border:2px solid var(--ink);box-shadow:6px 6px 0 0 #000;
+    padding:16px;max-width:560px;width:100%;max-height:100%;overflow:auto;
+  }
+  #helpCard h2{margin:0 0 4px;font-size:16px;letter-spacing:.14em}
+  #helpCard h3{margin:14px 0 5px;font-size:11px;letter-spacing:.14em;color:var(--red)}
+  #helpCard p,#helpCard li{font-size:11.5px;line-height:1.7;color:#cfccc2;margin:0}
+  #helpCard ul{margin:0;padding-left:16px}
+  #helpCard .keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:3px 12px}
+
+  #genOv .card{max-width:300px}
+  .spin{
+    display:inline-block;width:10px;height:10px;background:var(--red);
+    animation:spin .8s steps(4) infinite;margin-right:8px;vertical-align:-1px;
+  }
+  @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+  /* ---------- layout modes ----------
+     Default = stacked (portrait phones). The board sits above a full-width pad.
+     Order matters: the ROW block comes first, the COMPACT block last, so a short
+     landscape phone gets row layout *and* the compact pad. */
+  #side{border-top:2px solid var(--ink)}
+
+  /* ROW: desktops, and any landscape viewport wide enough to spare 266px.
+     Without the second query an 812x375 landscape phone would stack, leaving
+     ~236px of height for the board while 546px of width sat unused. */
+  @media (min-width:820px), (min-width:560px) and (max-height:430px){
+    #main{flex-direction:row}
+    #side{width:266px;flex:0 0 266px;border-left:2px solid var(--ink);border-top:0}
+    #pad{grid-template-columns:repeat(3,1fr)}
+    #pad button{height:52px;font-size:22px}
+    #pad #erase{grid-column:1/-1;height:34px}
+    #tools{grid-template-columns:repeat(3,1fr)}
+    #tools button{font-size:10px;padding:9px 2px}
+    #stats{flex-direction:column;gap:3px;font-size:11px;margin-top:auto}
+  }
+  @media (max-width:819px){
+    .brand{font-size:12px;letter-spacing:.1em}
+    #clock{font-size:14px;min-width:62px}
+    #diffs button{font-size:9px;padding:5px 2px}
+  }
+  /* COMPACT: any short viewport. A 3-col pad needs ~380px of column height and
+     would clip; a 5-col pad needs ~130px. */
+  @media (max-height:430px){
+    #pad{grid-template-columns:repeat(5,1fr)}
+    #pad button{height:34px;font-size:15px}
+    #pad #erase{grid-column:auto;height:34px;font-size:11px}
+    #tools{grid-template-columns:repeat(5,1fr)}
+    #tools button{font-size:8px;padding:5px 1px}
+    #stats{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cell.flash{animation:none;background:rgba(239,58,58,.5)}
+    .spin{animation:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="brand">SU<b>DO</b>KU</div>
+    <div id="diffs"></div>
+    <div id="meta"><div id="clock">00:00</div></div>
+  </header>
+
+  <div id="main">
+    <div id="boardwrap">
+      <div id="board" tabindex="0" role="grid" aria-label="Sudoku board"></div>
+
+      <div class="ov" id="genOv">
+        <div class="card">
+          <h2><span class="spin"></span>GENERATING</h2>
+          <p id="genText">Building a puzzle with exactly one solution&hellip;</p>
+        </div>
+      </div>
+
+      <div class="ov" id="pauseOv">
+        <div class="card">
+          <h2>PAUSED</h2>
+          <p>The board is hidden and the clock is stopped.</p>
+          <div class="row"><button id="resumeBtn">Resume</button></div>
+        </div>
+      </div>
+
+      <div class="ov" id="winOv">
+        <div class="card">
+          <h2 class="win">SOLVED</h2>
+          <div id="winStats">
+            <div><span>TIME</span><strong id="wTime">00:00</strong></div>
+            <div><span>DIFFICULTY</span><strong id="wDiff">EASY</strong></div>
+            <div><span>MISTAKES</span><strong id="wMist">0</strong></div>
+            <div><span>HINTS USED</span><strong id="wHints">0</strong></div>
+          </div>
+          <p id="wNote">Clean solve, no help. Nice.</p>
+          <div class="row">
+            <button id="againBtn">New puzzle</button>
+            <button id="harderBtn">Step up</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="side">
+      <div id="pad"></div>
+      <div id="tools"></div>
+      <div id="stats"></div>
+    </aside>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<div id="helpOv">
+  <div id="helpCard">
+    <h2>HOW TO PLAY</h2>
+    <p>Fill every empty cell so each <b>row</b>, each <b>column</b> and each <b>3&times;3 box</b> contains
+       the digits 1&ndash;9 exactly once. Every puzzle here is generated and then <b>proven to have exactly
+       one solution</b>: there is always a single right answer, and <b>HINT</b> can always give you
+       the next one.</p>
+
+    <h3>CONTROLS</h3>
+    <div class="keys">
+      <p><kbd>click</kbd> / <kbd>tap</kbd>: select a cell</p>
+      <p><kbd>1</kbd>&ndash;<kbd>9</kbd>: enter a digit</p>
+      <p><kbd>0</kbd> <kbd>Del</kbd> <kbd>&#9003;</kbd>: erase</p>
+      <p><kbd>&#8592;&#8593;&#8594;&#8595;</kbd>: move selection</p>
+      <p><kbd>N</kbd>: notes mode on/off</p>
+      <p><kbd>H</kbd>: hint</p>
+      <p><kbd>U</kbd> / <kbd>Ctrl+Z</kbd>: undo</p>
+      <p><kbd>C</kbd>: check board</p>
+      <p><kbd>P</kbd>: pause</p>
+      <p><kbd>Esc</kbd>: deselect / close</p>
+    </div>
+
+    <h3>NOTES</h3>
+    <p>Turn on <b>NOTES</b> and digits are written as small pencil marks instead of answers. Typing the
+       same mark again removes it. Placing a real digit automatically rubs that pencil mark out of every
+       cell it can see. Re-typing a digit already in the selected cell clears it.</p>
+
+    <h3>MISTAKES</h3>
+    <p>With <b>MISTAKES</b> on, a wrong digit turns red the moment you place it. Switch it off for a pure
+       solve with no feedback at all; then use <b>CHECK</b> whenever you want the board audited.
+       Your mistake count is tracked either way.</p>
+
+    <h3>HINTS</h3>
+    <p><b>HINT</b> fills the selected cell (or finds the easiest cell on the board) and tells you the
+       actual logic behind it. When no clean deduction exists yet (common on <b>EXPERT</b>, or once
+       a wrong digit has poisoned the board) it reveals the digit and says so rather than inventing
+       a reason. Revealed cells lock in gold.</p>
+
+    <h3>DIFFICULTY</h3>
+    <p>Puzzles are rated by the hardest technique they actually force you to use: the generator
+       solves each one the way a person would and keeps digging until the rating lands in the band, so the
+       label means something. <b>EASY</b> is singles only. <b>MEDIUM</b> adds hidden singles.
+       <b>HARD</b> needs locked candidates or pairs. <b>EXPERT</b> needs triples, X-wings or chains.
+       The panel shows each puzzle's rating under <b>NEEDS</b>.</p>
+
+    <h3>NO LEADERBOARD</h3>
+    <p>Nothing is submitted anywhere. The clock is for you. Take as long as you like.</p>
+
+    <div class="row" style="margin-top:16px"><button id="helpClose">Close</button></div>
+  </div>
+</div>
+
+<div id="confirmOv">
+  <div class="card">
+    <h2>HOLD ON</h2>
+    <p id="confirmText">Start a new puzzle?</p>
+    <div class="row">
+      <button id="confirmYes">Yes, restart</button>
+      <button id="confirmNo">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+
+/* =========================================================================
+   0. GEOMETRY: units, peers, bit helpers
+   ========================================================================= */
+var ALL = 0x1FF;
+
+var units = [];               // 27 units of 9 cell indices
+for (var r = 0; r < 9; r++) { var u = []; for (var c = 0; c < 9; c++) u.push(r * 9 + c); units.push(u); }
+for (var c2 = 0; c2 < 9; c2++) { var u2 = []; for (var r2 = 0; r2 < 9; r2++) u2.push(r2 * 9 + c2); units.push(u2); }
+for (var b = 0; b < 9; b++) {
+  var u3 = [], br = ((b / 3) | 0) * 3, bc = (b % 3) * 3;
+  for (var rr = 0; rr < 3; rr++) for (var cc = 0; cc < 3; cc++) u3.push((br + rr) * 9 + bc + cc);
+  units.push(u3);
+}
+var ROW_UNIT = 0, COL_UNIT = 9, BOX_UNIT = 18;
+
+var peers = [];
+for (var i = 0; i < 81; i++) peers.push([]);
+(function () {
+  for (var i = 0; i < 81; i++) {
+    var seen = new Uint8Array(81);
+    var list = [];
+    var r = (i / 9) | 0, c = i % 9, bx = ((r / 3) | 0) * 3 + ((c / 3) | 0);
+    var us = [units[ROW_UNIT + r], units[COL_UNIT + c], units[BOX_UNIT + bx]];
+    for (var k = 0; k < 3; k++) for (var j = 0; j < 9; j++) {
+      var p = us[k][j];
+      if (p !== i && !seen[p]) { seen[p] = 1; list.push(p); }
+    }
+    peers[i] = list;
+  }
+})();
+
+function boxOf(i) { var r = (i / 9) | 0, c = i % 9; return ((r / 3) | 0) * 3 + ((c / 3) | 0); }
+function popcount(x) {
+  x = x - ((x >> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+  x = (x + (x >> 4)) & 0x0f0f0f0f;
+  return (x * 0x01010101) >> 24;
+}
+function bitDigit(bit) { return 32 - Math.clz32(bit); }   // 1<<(d-1) -> d
+function shuffle(a) {
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = (Math.random() * (i + 1)) | 0;
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+/* =========================================================================
+   1. SOLVER: counts solutions, early-exits at `limit`
+   ========================================================================= */
+function countSolutions(grid, limit) {
+  var g = Uint8Array.from(grid);
+  var rowM = new Int32Array(9), colM = new Int32Array(9), boxM = new Int32Array(9);
+  for (var i = 0; i < 81; i++) {
+    var v = g[i];
+    if (!v) continue;
+    var bit = 1 << (v - 1), r = (i / 9) | 0, c = i % 9, bx = boxOf(i);
+    if ((rowM[r] & bit) || (colM[c] & bit) || (boxM[bx] & bit)) return 0;  // already invalid
+    rowM[r] |= bit; colM[c] |= bit; boxM[bx] |= bit;
+  }
+  var count = 0;
+
+  function rec() {                       // returns true => stop (limit reached)
+    var best = -1, bestMask = 0, bestN = 10;
+    for (var i = 0; i < 81; i++) {
+      if (g[i]) continue;
+      var r = (i / 9) | 0, c = i % 9, bx = boxOf(i);
+      var mask = ALL & ~(rowM[r] | colM[c] | boxM[bx]);
+      var n = popcount(mask);
+      if (n === 0) return false;         // dead branch
+      if (n < bestN) { bestN = n; best = i; bestMask = mask; if (n === 1) break; }
+    }
+    if (best === -1) { count++; return count >= limit; }
+    var br = (best / 9) | 0, bc = best % 9, bbx = boxOf(best), m = bestMask;
+    while (m) {
+      var bit = m & -m; m ^= bit;
+      g[best] = bitDigit(bit);
+      rowM[br] |= bit; colM[bc] |= bit; boxM[bbx] |= bit;
+      var stop = rec();
+      g[best] = 0;
+      rowM[br] &= ~bit; colM[bc] &= ~bit; boxM[bbx] &= ~bit;
+      if (stop) return true;
+    }
+    return false;
+  }
+  rec();
+  return count;
+}
+
+/* =========================================================================
+   2. FULL GRID: randomised backtracking fill
+   ========================================================================= */
+function generateFull() {
+  var g = new Uint8Array(81);
+  var rowM = new Int32Array(9), colM = new Int32Array(9), boxM = new Int32Array(9);
+
+  function rec(pos) {
+    if (pos === 81) return true;
+    var r = (pos / 9) | 0, c = pos % 9, bx = boxOf(pos);
+    var mask = ALL & ~(rowM[r] | colM[c] | boxM[bx]);
+    var bits = [];
+    while (mask) { var bit = mask & -mask; mask ^= bit; bits.push(bit); }
+    shuffle(bits);
+    for (var k = 0; k < bits.length; k++) {
+      var bt = bits[k];
+      g[pos] = bitDigit(bt);
+      rowM[r] |= bt; colM[c] |= bt; boxM[bx] |= bt;
+      if (rec(pos + 1)) return true;
+      g[pos] = 0;
+      rowM[r] &= ~bt; colM[c] &= ~bt; boxM[bx] &= ~bt;
+    }
+    return false;
+  }
+  rec(0);
+  return g;
+}
+
+/* =========================================================================
+   3. DIG: remove clues while a unique solution provably survives
+   ========================================================================= */
+function dig(full, targetClues, symmetric) {
+  var g = Uint8Array.from(full);
+  var clues = 81;
+  var order = [];
+  for (var i = 0; i < 81; i++) order.push(i);
+  shuffle(order);
+
+  for (var k = 0; k < order.length && clues > targetClues; k++) {
+    var a = order[k];
+    if (!g[a]) continue;
+    var bIdx = 80 - a;
+    var pair = symmetric && bIdx !== a && g[bIdx] !== 0;
+    var va = g[a], vb = pair ? g[bIdx] : 0;
+    g[a] = 0; if (pair) g[bIdx] = 0;
+    if (countSolutions(g, 2) === 1) {
+      clues -= pair ? 2 : 1;
+    } else {
+      g[a] = va; if (pair) g[bIdx] = vb;
+    }
+  }
+  return { puzzle: g, clues: clues };
+}
+
+/* Dig to the band's clue target, then -- if the puzzle is still too EASY --
+   keep removing clues until its rating climbs into the band. Clue count alone
+   is a poor lever on difficulty: digging to 30 lands on locked-candidates only
+   ~10% of the time, so aiming at the target and retrying wastes most attempts.
+   Removals that overshoot band.max are reverted, which keeps Hard from
+   silently turning into Expert. Uniqueness is enforced on every removal. */
+function digToBand(full, band) {
+  var d = dig(full, band.clues, band.sym);
+  var g = grade(d.puzzle);
+  if (g.level >= band.min) return { puzzle: d.puzzle, clues: d.clues, level: g.level };
+
+  var pz = d.puzzle, clues = d.clues, level = g.level;
+  var order = [];
+  for (var i = 0; i < 81; i++) if (pz[i]) order.push(i);
+  shuffle(order);
+
+  for (var k = 0; k < order.length && clues > band.floor && level < band.min; k++) {
+    var a = order[k];
+    if (!pz[a]) continue;
+    var va = pz[a];
+    pz[a] = 0;
+    if (countSolutions(pz, 2) !== 1) { pz[a] = va; continue; }
+    var gg = grade(pz);
+    if (gg.level > band.max) { pz[a] = va; break; }   // overshot -- put it back
+    clues--;
+    level = gg.level;
+  }
+  return { puzzle: pz, clues: clues, level: level };
+}
+
+/* =========================================================================
+   4. GRADER: solve with human techniques, report the hardest one needed
+   ========================================================================= */
+var LEVEL_NAME = {
+  1: 'Naked singles',
+  2: 'Hidden singles',
+  3: 'Locked candidates / pairs',
+  4: 'Triples / X-wing',
+  5: 'Beyond X-wing (chains)'
+};
+
+function makeCands(grid) {
+  var cand = new Int32Array(81);
+  for (var i = 0; i < 81; i++) cand[i] = grid[i] ? 0 : ALL;
+  for (var j = 0; j < 81; j++) {
+    if (!grid[j]) continue;
+    var bit = 1 << (grid[j] - 1), pl = peers[j];
+    for (var k = 0; k < pl.length; k++) cand[pl[k]] &= ~bit;
+  }
+  return cand;
+}
+
+/* Shared logic engine. Used by the grader and by the hint engine. */
+function Engine(grid) {
+  this.g = Uint8Array.from(grid);
+  this.cand = makeCands(this.g);
+  this.empties = 0;
+  for (var i = 0; i < 81; i++) if (!this.g[i]) this.empties++;
+}
+Engine.prototype.place = function (i, v) {
+  this.g[i] = v; this.cand[i] = 0; this.empties--;
+  var bit = 1 << (v - 1), pl = peers[i];
+  for (var k = 0; k < pl.length; k++) this.cand[pl[k]] &= ~bit;
+};
+Engine.prototype.contradiction = function () {
+  for (var i = 0; i < 81; i++) if (!this.g[i] && this.cand[i] === 0) return true;
+  return false;
+};
+/* Returns {i,v,why} for the first naked single, else null. */
+Engine.prototype.nakedSingle = function () {
+  for (var i = 0; i < 81; i++) {
+    if (this.g[i] || this.cand[i] === 0) continue;
+    if (popcount(this.cand[i]) === 1) {
+      return { i: i, v: bitDigit(this.cand[i]), why: 'it is the only digit that fits this cell' };
+    }
+  }
+  return null;
+};
+/* Returns {i,v,why} for the first hidden single, else null. */
+Engine.prototype.hiddenSingle = function () {
+  for (var ui = 0; ui < 27; ui++) {
+    var un = units[ui];
+    for (var d = 0; d < 9; d++) {
+      var bit = 1 << d, spot = -1, n = 0, taken = false;
+      for (var k = 0; k < 9; k++) {
+        var i = un[k];
+        if (this.g[i] === d + 1) { taken = true; break; }
+        if (!this.g[i] && (this.cand[i] & bit)) { n++; spot = i; }
+      }
+      if (taken || n !== 1) continue;
+      return { i: spot, v: d + 1, why: 'it is the only cell in this ' + unitName(ui) + ' that can hold ' + (d + 1) };
+    }
+  }
+  return null;
+};
+function unitName(ui) { return ui < COL_UNIT ? 'row' : (ui < BOX_UNIT ? 'column' : 'box'); }
+
+/* --- eliminations (return true if anything changed) --- */
+Engine.prototype.lockedCandidates = function () {
+  var changed = false, self = this;
+  function placed(un, d) {
+    for (var k = 0; k < 9; k++) if (self.g[un[k]] === d + 1) return true;
+    return false;
+  }
+  // pointing: digit confined to one row/col inside a box -> strip the rest of that line
+  for (var b = 0; b < 9; b++) {
+    var box = units[BOX_UNIT + b];
+    for (var d = 0; d < 9; d++) {
+      if (placed(box, d)) continue;
+      var bit = 1 << d, cells = [];
+      for (var k = 0; k < 9; k++) { var i = box[k]; if (!this.g[i] && (this.cand[i] & bit)) cells.push(i); }
+      if (cells.length < 2) continue;
+      var sameRow = true, sameCol = true;
+      for (var m = 1; m < cells.length; m++) {
+        if (((cells[m] / 9) | 0) !== ((cells[0] / 9) | 0)) sameRow = false;
+        if (cells[m] % 9 !== cells[0] % 9) sameCol = false;
+      }
+      if (sameRow) {
+        var line = units[ROW_UNIT + ((cells[0] / 9) | 0)];
+        for (var q = 0; q < 9; q++) {
+          var t = line[q];
+          if (boxOf(t) === b || this.g[t]) continue;
+          if (this.cand[t] & bit) { this.cand[t] &= ~bit; changed = true; }
+        }
+      }
+      if (sameCol) {
+        var lineC = units[COL_UNIT + (cells[0] % 9)];
+        for (var q2 = 0; q2 < 9; q2++) {
+          var t2 = lineC[q2];
+          if (boxOf(t2) === b || this.g[t2]) continue;
+          if (this.cand[t2] & bit) { this.cand[t2] &= ~bit; changed = true; }
+        }
+      }
+    }
+  }
+  // claiming: digit in a line confined to one box -> strip the rest of that box
+  for (var ui = 0; ui < BOX_UNIT; ui++) {
+    var line2 = units[ui];
+    for (var d2 = 0; d2 < 9; d2++) {
+      if (placed(line2, d2)) continue;
+      var bit2 = 1 << d2, cs = [];
+      for (var k2 = 0; k2 < 9; k2++) { var i2 = line2[k2]; if (!this.g[i2] && (this.cand[i2] & bit2)) cs.push(i2); }
+      if (cs.length < 2) continue;
+      var bx = boxOf(cs[0]), same = true;
+      for (var m2 = 1; m2 < cs.length; m2++) if (boxOf(cs[m2]) !== bx) { same = false; break; }
+      if (!same) continue;
+      var box2 = units[BOX_UNIT + bx];
+      for (var q3 = 0; q3 < 9; q3++) {
+        var t3 = box2[q3];
+        if (this.g[t3] || cs.indexOf(t3) >= 0) continue;
+        if (this.cand[t3] & bit2) { this.cand[t3] &= ~bit2; changed = true; }
+      }
+    }
+  }
+  return changed;
+};
+Engine.prototype.nakedPairs = function () {
+  var changed = false;
+  for (var ui = 0; ui < 27; ui++) {
+    var un = units[ui];
+    for (var a = 0; a < 9; a++) {
+      var ia = un[a];
+      if (this.g[ia] || popcount(this.cand[ia]) !== 2) continue;
+      for (var b = a + 1; b < 9; b++) {
+        var ib = un[b];
+        if (this.g[ib] || this.cand[ib] !== this.cand[ia]) continue;
+        var mask = this.cand[ia];
+        for (var k = 0; k < 9; k++) {
+          var t = un[k];
+          if (t === ia || t === ib || this.g[t]) continue;
+          if (this.cand[t] & mask) { this.cand[t] &= ~mask; changed = true; }
+        }
+      }
+    }
+  }
+  return changed;
+};
+Engine.prototype.hiddenPairs = function () {
+  var changed = false;
+  for (var ui = 0; ui < 27; ui++) {
+    var un = units[ui];
+    var spots = [];                       // spots[d] = bitmask of positions (0..8) inside the unit
+    for (var d = 0; d < 9; d++) {
+      var bit = 1 << d, m = 0;
+      for (var k = 0; k < 9; k++) { var i = un[k]; if (!this.g[i] && (this.cand[i] & bit)) m |= 1 << k; }
+      spots.push(m);
+    }
+    for (var d1 = 0; d1 < 9; d1++) {
+      if (popcount(spots[d1]) !== 2) continue;
+      for (var d2 = d1 + 1; d2 < 9; d2++) {
+        if (spots[d2] !== spots[d1]) continue;
+        /* d1 and d2 are confined to the SAME two cells of this unit, so those two
+           cells hold d1 and d2 in some order -> every other candidate in them dies.
+           Deliberately no "and no other digit lives in those spots" test: that is
+           precisely the case where cand & ~keep is already 0, i.e. where there is
+           nothing to eliminate. Gating on it made this technique a permanent no-op
+           (it returned false on every board), so puzzles that hinge on a hidden pair
+           fell through to `stuck` and were mis-rated as needing chains. */
+        var keep = (1 << d1) | (1 << d2), sm = spots[d1];
+        while (sm) {
+          var sb = sm & -sm; sm ^= sb;
+          var cell = un[bitDigit(sb) - 1];
+          if (this.cand[cell] & ~keep) { this.cand[cell] &= keep; changed = true; }
+        }
+      }
+    }
+  }
+  return changed;
+};
+Engine.prototype.nakedTriples = function () {
+  var changed = false;
+  for (var ui = 0; ui < 27; ui++) {
+    var un = units[ui], pool = [];
+    for (var k = 0; k < 9; k++) {
+      var i = un[k], n = popcount(this.cand[i]);
+      if (!this.g[i] && n >= 2 && n <= 3) pool.push(i);
+    }
+    for (var a = 0; a < pool.length; a++)
+      for (var b = a + 1; b < pool.length; b++)
+        for (var c = b + 1; c < pool.length; c++) {
+          var mask = this.cand[pool[a]] | this.cand[pool[b]] | this.cand[pool[c]];
+          if (popcount(mask) !== 3) continue;
+          for (var q = 0; q < 9; q++) {
+            var t = un[q];
+            if (this.g[t] || t === pool[a] || t === pool[b] || t === pool[c]) continue;
+            if (this.cand[t] & mask) { this.cand[t] &= ~mask; changed = true; }
+          }
+        }
+  }
+  return changed;
+};
+Engine.prototype.xWing = function () {
+  var changed = false;
+  for (var d = 0; d < 9; d++) {
+    var bit = 1 << d;
+    // rows share two columns
+    var rows = [];
+    for (var r = 0; r < 9; r++) {
+      var cs = [];
+      for (var c = 0; c < 9; c++) { var i = r * 9 + c; if (!this.g[i] && (this.cand[i] & bit)) cs.push(c); }
+      rows.push(cs.length === 2 ? cs : null);
+    }
+    for (var r1 = 0; r1 < 9; r1++) {
+      if (!rows[r1]) continue;
+      for (var r2 = r1 + 1; r2 < 9; r2++) {
+        if (!rows[r2] || rows[r2][0] !== rows[r1][0] || rows[r2][1] !== rows[r1][1]) continue;
+        for (var e = 0; e < 2; e++) {
+          var col = rows[r1][e];
+          for (var rr = 0; rr < 9; rr++) {
+            if (rr === r1 || rr === r2) continue;
+            var t = rr * 9 + col;
+            if (!this.g[t] && (this.cand[t] & bit)) { this.cand[t] &= ~bit; changed = true; }
+          }
+        }
+      }
+    }
+    // columns share two rows
+    var cols = [];
+    for (var c3 = 0; c3 < 9; c3++) {
+      var rs = [];
+      for (var r3 = 0; r3 < 9; r3++) { var i3 = r3 * 9 + c3; if (!this.g[i3] && (this.cand[i3] & bit)) rs.push(r3); }
+      cols.push(rs.length === 2 ? rs : null);
+    }
+    for (var c1 = 0; c1 < 9; c1++) {
+      if (!cols[c1]) continue;
+      for (var c22 = c1 + 1; c22 < 9; c22++) {
+        if (!cols[c22] || cols[c22][0] !== cols[c1][0] || cols[c22][1] !== cols[c1][1]) continue;
+        for (var e2 = 0; e2 < 2; e2++) {
+          var row = cols[c1][e2];
+          for (var ccc = 0; ccc < 9; ccc++) {
+            if (ccc === c1 || ccc === c22) continue;
+            var t2 = row * 9 + ccc;
+            if (!this.g[t2] && (this.cand[t2] & bit)) { this.cand[t2] &= ~bit; changed = true; }
+          }
+        }
+      }
+    }
+  }
+  return changed;
+};
+
+/* One deduction step. Returns the level used, or 0 if stuck. */
+Engine.prototype.step = function () {
+  var s = this.nakedSingle();
+  if (s) { this.place(s.i, s.v); return 1; }
+  s = this.hiddenSingle();
+  if (s) { this.place(s.i, s.v); return 2; }
+  if (this.contradiction()) return 0;
+  if (this.lockedCandidates()) return 3;
+  if (this.nakedPairs()) return 3;
+  if (this.hiddenPairs()) return 3;
+  if (this.nakedTriples()) return 4;
+  if (this.xWing()) return 4;
+  return 0;
+};
+
+function grade(puzzle) {
+  var e = new Engine(puzzle);
+  var max = 0, guard = 0;
+  while (e.empties > 0) {
+    if (++guard > 2000) return { solved: false, level: 5 };
+    var lv = e.step();
+    if (lv === 0) return { solved: false, level: 5 };
+    if (lv > max) max = lv;
+  }
+  return { solved: true, level: Math.max(max, 1) };
+}
+
+/* =========================================================================
+   5. GENERATION PIPELINE (async, budgeted)
+   ========================================================================= */
+var BANDS = {
+  easy:   { label: 'EASY',   clues: 45, min: 1, max: 2, tol: 2, floor: 40, sym: true },
+  medium: { label: 'MEDIUM', clues: 36, min: 2, max: 3, tol: 3, floor: 30, sym: true },
+  hard:   { label: 'HARD',   clues: 30, min: 3, max: 4, tol: 4, floor: 24, sym: false },
+  expert: { label: 'EXPERT', clues: 25, min: 4, max: 5, tol: 4, floor: 22, sym: false }
+};
+var DIFF_ORDER = ['easy', 'medium', 'hard', 'expert'];
+
+function bandDist(level, band) {
+  if (level >= band.min && level <= band.max) return 0;
+  return Math.min(Math.abs(level - band.min), Math.abs(level - band.max));
+}
+/* Yield to the event loop between attempts. rAF is used so the GENERATING overlay
+   is guaranteed to have PAINTED before we hog the main thread again -- but rAF is
+   paused outright in a hidden or offscreen frame, and this game boots straight into
+   newGame(). Loaded in a background tab (middle-clicked link, restored session) the
+   rAF-only version never resolved, so generation never started and the puzzle sat on
+   the GENERATING overlay indefinitely. The timer is the backstop: when rAF is alive
+   it wins the race (~16ms) and we keep the paint guarantee; when it is parked, the
+   generator still runs. */
+function nextTick() {
+  return new Promise(function (res) {
+    var done = false;
+    function go() { if (done) return; done = true; res(); }
+    requestAnimationFrame(function () { setTimeout(go, 0); });
+    setTimeout(go, 50);
+  });
+}
+
+function generatePuzzle(diff, onAttempt) {
+  var band = BANDS[diff];
+  var best = null, t0 = (performance && performance.now) ? performance.now() : Date.now();
+  var maxAttempts = 20, budget = 2800;
+
+  return (function loop(attempt) {
+    if (onAttempt) onAttempt(attempt + 1);
+    var full = generateFull();
+    var d = digToBand(full, band);
+    var dist = bandDist(d.level, band) * 100 + Math.abs(d.clues - band.clues);
+    if (!best || dist < best.dist) {
+      best = { puzzle: d.puzzle, solution: full, clues: d.clues, level: d.level, dist: dist };
+    }
+    var accepted = bandDist(d.level, band) === 0 && d.clues <= band.clues + band.tol;
+    var elapsed = ((performance && performance.now) ? performance.now() : Date.now()) - t0;
+    if (accepted || attempt + 1 >= maxAttempts || elapsed > budget) return Promise.resolve(best);
+    return nextTick().then(function () { return loop(attempt + 1); });
+  })(0);
+}
+
+/* =========================================================================
+   6. AUDIO: synthesised, no assets
+   ========================================================================= */
+var sfx = {
+  ctx: null, enabled: true, dead: false,
+  init: function () {
+    if (this.ctx || this.dead) return;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { this.dead = true; return; }
+      this.ctx = new AC();
+    } catch (e) { this.dead = true; }
+  },
+  tone: function (freq, dur, type, gain, when) {
+    if (!this.enabled || this.dead) return;
+    this.init();
+    if (!this.ctx) return;
+    try {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      var t = this.ctx.currentTime + (when || 0);
+      var o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(gain, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.ctx.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (e) { /* audio is a nicety, never a failure */ }
+  },
+  tap:  function () { this.tone(520, 0.04, 'square', 0.025); },
+  good: function () { this.tone(880, 0.06, 'square', 0.03); },
+  note: function () { this.tone(1200, 0.03, 'triangle', 0.02); },
+  bad:  function () { this.tone(150, 0.16, 'sawtooth', 0.035); },
+  deny: function () { this.tone(210, 0.07, 'square', 0.025); },
+  hint: function () { this.tone(660, 0.07, 'triangle', 0.035, 0); this.tone(990, 0.09, 'triangle', 0.035, 0.07); },
+  win:  function () {
+    var n = [523.25, 659.25, 783.99, 1046.5];
+    for (var i = 0; i < n.length; i++) this.tone(n[i], 0.28, 'triangle', 0.04, i * 0.11);
+  }
+};
+
+/* =========================================================================
+   7. STATE
+   ========================================================================= */
+var S = {
+  diff: 'easy',
+  puzzle: new Uint8Array(81),
+  solution: new Uint8Array(81),
+  values: new Uint8Array(81),
+  notes: new Int32Array(81),
+  hinted: new Uint8Array(81),
+  clues: 0,
+  level: 1,
+  sel: 40,
+  notesMode: false,
+  mistakesOn: true,
+  mistakes: 0,
+  hints: 0,
+  undo: [],
+  flash: null,
+  elapsed: 0,
+  runningSince: 0,
+  paused: false,
+  won: false,
+  gen: false
+};
+
+var KEY = 'batchly-sudoku-v1';
+var storageOk = true;
+
+function nowMs() { return Date.now(); }
+function elapsedMs() {
+  return S.elapsed + (S.runningSince && !S.paused && !S.won ? nowMs() - S.runningSince : 0);
+}
+function fmt(ms) {
+  var t = Math.max(0, Math.floor(ms / 1000));
+  var h = (t / 3600) | 0, m = ((t % 3600) / 60) | 0, s = t % 60;
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+}
+
+/* =========================================================================
+   8. DOM
+   ========================================================================= */
+var $ = function (sel) { return document.querySelector(sel); };
+var board = $('#board'), padEl = $('#pad'), toolsEl = $('#tools'), statsEl = $('#stats');
+var statusEl = $('#status'), clockEl = $('#clock'), diffsEl = $('#diffs');
+var cellEls = [], valEls = [], noteWraps = [], noteEls = [];
+
+(function buildBoard() {
+  var frag = document.createDocumentFragment();
+  for (var i = 0; i < 81; i++) {
+    var r = (i / 9) | 0, c = i % 9;
+    var cell = document.createElement('div');
+    cell.className = 'cell';
+    if (c % 3 === 2 && c < 8) cell.classList.add('br');
+    if (r % 3 === 2 && r < 8) cell.classList.add('bb');
+    if (c === 8) cell.classList.add('c8');
+    if (r === 8) cell.classList.add('r8');
+    cell.dataset.i = i;
+    cell.setAttribute('role', 'gridcell');
+
+    var v = document.createElement('div'); v.className = 'v';
+    var n = document.createElement('div'); n.className = 'n';
+    var ns = [];
+    for (var d = 1; d <= 9; d++) {
+      var it = document.createElement('i');
+      it.textContent = d;
+      it.style.opacity = '0';
+      n.appendChild(it); ns.push(it);
+    }
+    cell.appendChild(v); cell.appendChild(n);
+    frag.appendChild(cell);
+    cellEls.push(cell); valEls.push(v); noteWraps.push(n); noteEls.push(ns);
+  }
+  board.appendChild(frag);
+})();
+
+var padBtns = [], padRems = [];
+(function buildPad() {
+  for (var d = 1; d <= 9; d++) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.d = d;
+    b.setAttribute('aria-label', 'Enter ' + d);
+    var s = document.createElement('span'); s.textContent = d;
+    var rem = document.createElement('span'); rem.className = 'rem'; rem.textContent = '9';
+    b.appendChild(s); b.appendChild(rem);
+    padEl.appendChild(b); padBtns.push(b); padRems.push(rem);
+  }
+  var e = document.createElement('button');
+  e.type = 'button'; e.id = 'erase'; e.textContent = 'DEL';
+  e.setAttribute('aria-label', 'Erase cell');
+  padEl.appendChild(e);
+  e.addEventListener('click', function () { sfx.init(); erase(); });
+
+  padEl.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-d]');
+    if (!b) return;
+    sfx.init();
+    enterDigit(+b.dataset.d);
+  });
+})();
+
+var TOOLS = [
+  { id: 'notes',    label: 'Notes<br>N',    act: function () { setNotes(!S.notesMode); } },
+  { id: 'hint',     label: 'Hint<br>H',     act: function () { hint(); } },
+  { id: 'undo',     label: 'Undo<br>U',     act: function () { undo(); } },
+  { id: 'check',    label: 'Check<br>C',    act: function () { checkBoard(); } },
+  { id: 'pause',    label: 'Pause<br>P',    act: function () { setPaused(!S.paused); } },
+  { id: 'mistakes', label: 'Mistakes',      act: function () { toggleMistakes(); } },
+  { id: 'sound',    label: 'Sound',         act: function () { toggleSound(); } },
+  { id: 'help',     label: 'Help<br>?',     act: function () { showHelp(true); } },
+  { id: 'new',      label: 'New<br>Puzzle', act: function () { askNewGame(S.diff); } }
+];
+var toolBtns = {};
+TOOLS.forEach(function (t) {
+  var b = document.createElement('button');
+  b.type = 'button'; b.innerHTML = t.label;
+  b.addEventListener('click', function () { sfx.init(); t.act(); });
+  toolsEl.appendChild(b); toolBtns[t.id] = b;
+});
+
+DIFF_ORDER.forEach(function (d) {
+  var b = document.createElement('button');
+  b.type = 'button'; b.textContent = BANDS[d].label; b.dataset.diff = d;
+  b.addEventListener('click', function () { sfx.init(); askNewGame(d); });
+  diffsEl.appendChild(b);
+});
+
+/* =========================================================================
+   9. LAYOUT
+   ========================================================================= */
+function layout() {
+  var wrap = $('#boardwrap');
+  var w = wrap.clientWidth, h = wrap.clientHeight;
+  var avail = Math.floor(Math.min(w, h)) - 2;
+  if (!isFinite(avail) || avail < 132) avail = 132;
+  // whole-pixel cells so the 1px grid lines never land on a half pixel; the 6px
+  // of outer border is subtracted FIRST so the board can never exceed `avail`.
+  var cs = Math.max(14, Math.floor((avail - 6) / 9));
+  var size = cs * 9 + 6;
+  board.style.width = size + 'px';
+  board.style.height = size + 'px';
+  board.style.setProperty('--cs', cs + 'px');
+}
+window.addEventListener('resize', layout);
+if (window.ResizeObserver) new ResizeObserver(layout).observe($('#boardwrap'));
+
+/* =========================================================================
+   10. RENDER
+   ========================================================================= */
+var statusTimer = 0;
+var DEFAULT_HELP = 'Select a cell, type 1-9 &middot; <kbd>N</kbd> notes &middot; <kbd>H</kbd> hint &middot; <kbd>C</kbd> check &middot; <kbd>?</kbd> help';
+function msg(text, kind) {
+  statusEl.className = kind || '';
+  statusEl.innerHTML = text;
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(function () {
+    statusEl.className = '';
+    statusEl.innerHTML = DEFAULT_HELP;
+  }, 4200);
+}
+function resetStatus() {
+  clearTimeout(statusTimer);
+  statusEl.className = '';
+  statusEl.innerHTML = DEFAULT_HELP;
+}
+
+function render() {
+  var selR = (S.sel / 9) | 0, selC = S.sel % 9, selB = boxOf(S.sel);
+  var selV = S.values[S.sel];
+
+  for (var i = 0; i < 81; i++) {
+    var cls = 'cell';
+    var r = (i / 9) | 0, c = i % 9;
+    if (c % 3 === 2 && c < 8) cls += ' br';
+    if (r % 3 === 2 && r < 8) cls += ' bb';
+    if (c === 8) cls += ' c8';
+    if (r === 8) cls += ' r8';
+
+    var v = S.values[i];
+    if (S.puzzle[i]) cls += ' given';
+    else if (S.hinted[i]) cls += ' hinted';
+
+    if (v && selV && v === selV) cls += ' same';
+    if (r === selR || c === selC || boxOf(i) === selB) cls += ' peer';
+    if (S.mistakesOn && v && !S.puzzle[i] && v !== S.solution[i]) cls += ' bad';
+    if (S.flash && S.flash.has(i)) cls += ' flash';
+    if (i === S.sel) cls += ' sel';
+
+    if (cellEls[i].className !== cls) cellEls[i].className = cls;
+
+    var txt = v ? String(v) : '';
+    if (valEls[i].textContent !== txt) valEls[i].textContent = txt;
+
+    if (v) {
+      if (noteWraps[i].style.display !== 'none') noteWraps[i].style.display = 'none';
+    } else {
+      if (noteWraps[i].style.display === 'none') noteWraps[i].style.display = '';
+      var nm = S.notes[i];
+      for (var d = 0; d < 9; d++) {
+        var want = (nm >> d) & 1 ? '1' : '0';
+        if (noteEls[i][d].style.opacity !== want) noteEls[i][d].style.opacity = want;
+      }
+    }
+  }
+
+  // number pad
+  var counts = new Uint8Array(10);
+  for (var k = 0; k < 81; k++) if (S.values[k]) counts[S.values[k]]++;
+  for (var d2 = 1; d2 <= 9; d2++) {
+    var b = padBtns[d2 - 1];
+    b.classList.toggle('done', counts[d2] >= 9);
+    b.classList.toggle('notes-mode', S.notesMode);
+    var left = 9 - counts[d2];
+    var txt2 = String(left);
+    if (padRems[d2 - 1].textContent !== txt2) padRems[d2 - 1].textContent = txt2;
+  }
+
+  // toggles
+  toolBtns.notes.classList.toggle('on', S.notesMode);
+  toolBtns.mistakes.classList.toggle('on', S.mistakesOn);
+  toolBtns.sound.classList.toggle('on', sfx.enabled);
+  toolBtns.pause.classList.toggle('on', S.paused);
+  toolBtns.undo.disabled = S.undo.length === 0 || S.won || S.gen;
+  toolBtns.hint.disabled = S.won || S.gen || S.paused;
+  toolBtns.check.disabled = S.won || S.gen || S.paused;
+  toolBtns.pause.disabled = S.won || S.gen;
+
+  for (var q = 0; q < diffsEl.children.length; q++) {
+    diffsEl.children[q].classList.toggle('on', diffsEl.children[q].dataset.diff === S.diff);
+  }
+
+  // stats
+  var empty = 0;
+  for (var z = 0; z < 81; z++) if (!S.values[z]) empty++;
+  statsEl.innerHTML =
+    '<span>CLUES <b>' + S.clues + '</b></span>' +
+    '<span>LEFT <b>' + empty + '</b></span>' +
+    '<span>MISTAKES <b>' + S.mistakes + '</b></span>' +
+    '<span>HINTS <b>' + S.hints + '</b></span>' +
+    '<span class="lvl">NEEDS: ' + LEVEL_NAME[S.level] + '</span>';
+
+  board.classList.toggle('hidden', S.paused);
+  clockEl.classList.toggle('paused', S.paused);
+}
+
+function tickClock() {
+  clockEl.textContent = S.paused ? '--:--' : fmt(elapsedMs());
+}
+setInterval(tickClock, 250);
+
+/* =========================================================================
+   11. ACTIONS
+   ========================================================================= */
+function snapshot() {
+  S.undo.push({
+    v: Uint8Array.from(S.values),
+    n: Int32Array.from(S.notes),
+    h: Uint8Array.from(S.hinted),
+    m: S.mistakes, hn: S.hints, sel: S.sel
+  });
+  if (S.undo.length > 400) S.undo.shift();
+}
+function undo() {
+  if (S.won || S.gen || S.paused) return;
+  if (!S.undo.length) { msg('Nothing to undo.', 'warn'); sfx.deny(); return; }
+  var s = S.undo.pop();
+  S.values.set(s.v); S.notes.set(s.n); S.hinted.set(s.h);
+  S.mistakes = s.m; S.hints = s.hn; S.sel = s.sel;
+  S.flash = null;
+  sfx.tap(); save(); render();
+}
+
+function select(i) {
+  if (S.gen || S.paused) return;
+  S.sel = i;
+  render();
+}
+
+function editable(i) {
+  if (S.puzzle[i]) { msg('That cell is a clue; it cannot be changed.', 'warn'); sfx.deny(); return false; }
+  if (S.hinted[i]) { msg('That cell was revealed by a hint; it is locked.', 'warn'); sfx.deny(); return false; }
+  return true;
+}
+
+function enterDigit(d) {
+  if (S.won || S.gen || S.paused) return;
+  var i = S.sel;
+  if (!editable(i)) return;
+
+  if (S.notesMode) {
+    if (S.values[i]) { msg('Erase the digit before writing notes here.', 'warn'); sfx.deny(); return; }
+    snapshot();
+    S.notes[i] ^= (1 << (d - 1));
+    sfx.note(); save(); render();
+    return;
+  }
+
+  snapshot();
+  if (S.values[i] === d) {                 // typing the same digit clears it
+    S.values[i] = 0;
+    sfx.tap();
+  } else {
+    S.values[i] = d;
+    S.notes[i] = 0;
+    var bit = 1 << (d - 1), pl = peers[i];
+    for (var k = 0; k < pl.length; k++) S.notes[pl[k]] &= ~bit;   // auto-clean pencil marks
+    if (d !== S.solution[i]) {
+      S.mistakes++;
+      sfx.bad();
+      if (S.mistakesOn) msg('That digit is wrong.', 'bad');
+    } else {
+      sfx.good();
+    }
+  }
+  S.flash = null;
+  save(); render();
+  checkWin();
+}
+
+function erase() {
+  if (S.won || S.gen || S.paused) return;
+  var i = S.sel;
+  if (!editable(i)) return;
+  if (!S.values[i] && !S.notes[i]) { sfx.deny(); return; }
+  snapshot();
+  S.values[i] = 0; S.notes[i] = 0;
+  sfx.tap(); save(); render();
+}
+
+function setNotes(on) {
+  S.notesMode = !!on;
+  msg(S.notesMode ? 'Notes mode ON: digits are written as pencil marks.'
+                  : 'Notes mode OFF: digits are written as answers.',
+      S.notesMode ? 'warn' : 'ok');
+  sfx.tap(); render();
+}
+function toggleMistakes() {
+  S.mistakesOn = !S.mistakesOn;
+  msg(S.mistakesOn ? 'Mistake highlighting ON: wrong digits turn red immediately.'
+                   : 'Mistake highlighting OFF: no feedback until you hit CHECK.',
+      'ok');
+  sfx.tap(); save(); render();
+}
+function toggleSound() {
+  sfx.enabled = !sfx.enabled;
+  if (sfx.enabled) { sfx.init(); sfx.good(); }
+  msg('Sound ' + (sfx.enabled ? 'ON' : 'OFF') + '.', 'ok');
+  save(); render();
+}
+
+function setPaused(on) {
+  if (S.won || S.gen) return;
+  if (on === S.paused) return;
+  if (on) {
+    S.elapsed = elapsedMs();
+    S.runningSince = 0;
+    S.paused = true;
+  } else {
+    S.paused = false;
+    S.runningSince = nowMs();
+  }
+  $('#pauseOv').classList.toggle('show', S.paused);
+  save(); render(); tickClock();
+}
+
+/* ---- check ---- */
+function checkBoard() {
+  if (S.won || S.gen || S.paused) return;
+  var wrong = [], empty = 0;
+  for (var i = 0; i < 81; i++) {
+    if (!S.values[i]) empty++;
+    else if (S.values[i] !== S.solution[i]) wrong.push(i);
+  }
+  if (wrong.length) {
+    S.flash = new Set(wrong);
+    render();
+    setTimeout(function () { S.flash = null; render(); }, 1400);
+    sfx.bad();
+    msg(wrong.length + (wrong.length === 1 ? ' digit is' : ' digits are') + ' wrong, flashing now.', 'bad');
+  } else if (empty) {
+    sfx.good();
+    msg('No mistakes so far: ' + empty + (empty === 1 ? ' cell' : ' cells') + ' left.', 'ok');
+  } else {
+    msg('Solved!', 'ok');
+  }
+}
+
+/* ---- hint ---- */
+function hint() {
+  if (S.won || S.gen || S.paused) return;
+
+  var empties = [];
+  for (var i = 0; i < 81; i++) if (!S.values[i]) empties.push(i);
+  if (!empties.length) { msg('The board is full. Hit CHECK.', 'warn'); sfx.deny(); return; }
+
+  var e = new Engine(S.values);
+  var broken = e.contradiction();
+  var pick = null;
+
+  if (!broken) {
+    var target = (!S.values[S.sel]) ? S.sel : -1;
+    var reasoned = null;
+
+    // 1. best case -- the cell you picked is provable right now, so explain it
+    if (target >= 0) {
+      var cand = e.cand[target];
+      if (popcount(cand) === 1 && bitDigit(cand) === S.solution[target]) {
+        reasoned = { i: target, v: S.solution[target], why: 'it is the only digit that fits this cell' };
+      } else {
+        var w = whyHiddenSingle(e, target);
+        if (w && w.v === S.solution[target]) reasoned = { i: target, v: w.v, why: w.why };
+      }
+    }
+
+    if (reasoned) {
+      pick = reasoned;
+    } else {
+      // 2. your cell is not provable yet. Teaching a deduction that IS available
+      //    beats silently revealing an answer -- on Expert boards the selected
+      //    cell is rarely a single, which otherwise turned ~60% of hints into
+      //    bare reveals exactly when the player most needs to be taught.
+      var ns = e.nakedSingle();
+      var hs = ns ? null : e.hiddenSingle();
+      var other = (ns && ns.v === S.solution[ns.i]) ? ns
+                : ((hs && hs.v === S.solution[hs.i]) ? hs : null);
+      if (other) { other.redirected = target >= 0; pick = other; }
+      else if (target >= 0) pick = { i: target, v: S.solution[target], why: null };
+    }
+  }
+
+  if (!pick) {
+    var i2 = empties[(Math.random() * empties.length) | 0];
+    pick = { i: i2, v: S.solution[i2], why: null };
+  }
+
+  snapshot();
+  S.hints++;
+  S.sel = pick.i;
+  S.values[pick.i] = pick.v;
+  S.notes[pick.i] = 0;
+  S.hinted[pick.i] = 1;
+  var bit = 1 << (pick.v - 1), pl = peers[pick.i];
+  for (var k = 0; k < pl.length; k++) S.notes[pl[k]] &= ~bit;
+
+  sfx.hint();
+  var r = ((pick.i / 9) | 0) + 1, c = (pick.i % 9) + 1;
+  if (pick.why) {
+    msg('HINT &rarr; ' + (pick.redirected ? 'your cell needs more groundwork, but R' : 'R') +
+        r + 'C' + c + ' is ' + pick.v + ': ' + pick.why + '.', 'warn');
+  } else if (broken) {
+    msg('HINT &rarr; R' + r + 'C' + c + ' is ' + pick.v + '. (Some digits on the board are wrong, so no clean deduction exists; hit CHECK.)', 'warn');
+  } else {
+    msg('HINT &rarr; R' + r + 'C' + c + ' is ' + pick.v + ' (revealed: this one needs deeper logic).', 'warn');
+  }
+  S.flash = null;
+  save(); render();
+  checkWin();
+}
+/* Is `target` the only cell in one of its units that can hold some digit? */
+function whyHiddenSingle(e, target) {
+  var r = (target / 9) | 0, c = target % 9, bx = boxOf(target);
+  var uidx = [ROW_UNIT + r, COL_UNIT + c, BOX_UNIT + bx];
+  for (var q = 0; q < 3; q++) {
+    var un = units[uidx[q]];
+    for (var d = 0; d < 9; d++) {
+      var bit = 1 << d;
+      if (!(e.cand[target] & bit)) continue;
+      var n = 0, taken = false;
+      for (var k = 0; k < 9; k++) {
+        var i = un[k];
+        if (e.g[i] === d + 1) { taken = true; break; }
+        if (!e.g[i] && (e.cand[i] & bit)) n++;
+      }
+      if (!taken && n === 1) {
+        return { v: d + 1, why: 'it is the only cell in this ' + unitName(uidx[q]) + ' that can hold ' + (d + 1) };
+      }
+    }
+  }
+  return null;
+}
+
+/* ---- win ---- */
+function checkWin() {
+  for (var i = 0; i < 81; i++) if (S.values[i] !== S.solution[i]) {
+    var full = true;
+    for (var k = 0; k < 81; k++) if (!S.values[k]) { full = false; break; }
+    if (full && !S.mistakesOn) msg('The board is full but not solved. Hit CHECK.', 'bad');
+    return;
+  }
+  S.won = true;
+  S.elapsed = elapsedMs();
+  S.runningSince = 0;
+  clearSave();
+
+  $('#wTime').textContent = fmt(S.elapsed);
+  $('#wDiff').textContent = BANDS[S.diff].label;
+  $('#wMist').textContent = S.mistakes;
+  $('#wHints').textContent = S.hints;
+  var note;
+  if (!S.mistakes && !S.hints) note = 'Flawless: no mistakes, no hints.';
+  else if (!S.hints) note = 'Solved unaided. ' + S.mistakes + ' mistake' + (S.mistakes === 1 ? '' : 's') + ' along the way.';
+  else note = 'Solved with ' + S.hints + ' hint' + (S.hints === 1 ? '' : 's') + '. Try the next one clean.';
+  $('#wNote').textContent = note;
+
+  var idx = DIFF_ORDER.indexOf(S.diff);
+  var harder = $('#harderBtn');
+  if (idx < DIFF_ORDER.length - 1) {
+    harder.style.display = '';
+    harder.textContent = 'Try ' + BANDS[DIFF_ORDER[idx + 1]].label;
+    harder.dataset.next = DIFF_ORDER[idx + 1];
+  } else {
+    harder.style.display = 'none';
+  }
+
+  $('#winOv').classList.add('show');
+  sfx.win();
+  render();
+  tickClock();
+  /* No leaderboard: this puzzle deliberately posts no score to the parent. */
+}
+
+/* =========================================================================
+   12. NEW GAME
+   ========================================================================= */
+function inProgress() {
+  if (S.won || S.gen) return false;
+  for (var i = 0; i < 81; i++) {
+    if (!S.puzzle[i] && (S.values[i] || S.notes[i])) return true;
+  }
+  return false;
+}
+function askNewGame(diff) {
+  if (inProgress()) {
+    confirmDialog('Start a new ' + BANDS[diff].label + ' puzzle? Your current progress will be lost.',
+      function () { newGame(diff); });
+  } else {
+    newGame(diff);
+  }
+}
+
+function newGame(diff) {
+  if (S.gen) return;
+  S.gen = true;
+  S.diff = diff;
+  S.won = false;
+  S.paused = false;
+  $('#winOv').classList.remove('show');
+  $('#pauseOv').classList.remove('show');
+  $('#genOv').classList.add('show');
+  $('#genText').textContent = 'Building a ' + BANDS[diff].label + ' puzzle with exactly one solution…';
+  render();
+
+  return nextTick().then(function () {
+    return generatePuzzle(diff, function (n) {
+      $('#genText').textContent = 'Building a ' + BANDS[diff].label +
+        ' puzzle with exactly one solution… (attempt ' + n + ')';
+    });
+  }).then(function (res) {
+    S.puzzle = Uint8Array.from(res.puzzle);
+    S.solution = Uint8Array.from(res.solution);
+    S.values = Uint8Array.from(res.puzzle);
+    S.notes = new Int32Array(81);
+    S.hinted = new Uint8Array(81);
+    S.clues = res.clues;
+    S.level = res.level;
+    S.mistakes = 0; S.hints = 0;
+    S.undo = [];
+    S.flash = null;
+    S.elapsed = 0;
+    S.runningSince = nowMs();
+
+    var firstEmpty = 40;
+    for (var i = 0; i < 81; i++) if (!S.values[i]) { firstEmpty = i; break; }
+    S.sel = firstEmpty;
+
+    S.gen = false;
+    $('#genOv').classList.remove('show');
+    resetStatus();
+    save(); layout(); render(); tickClock();
+  }).catch(function (err) {
+    S.gen = false;
+    $('#genOv').classList.remove('show');
+    msg('Generator hiccuped. Try New Puzzle again.', 'bad');
+    if (window.console && console.error) console.error(err);
+  });
+}
+
+/* =========================================================================
+   13. PERSISTENCE  (opaque-origin safe)
+   ========================================================================= */
+function save() {
+  if (!storageOk || S.gen || S.won) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({
+      ver: 1,
+      diff: S.diff,
+      puzzle: Array.from(S.puzzle),
+      solution: Array.from(S.solution),
+      values: Array.from(S.values),
+      notes: Array.from(S.notes),
+      hinted: Array.from(S.hinted),
+      clues: S.clues, level: S.level,
+      mistakes: S.mistakes, hints: S.hints,
+      mistakesOn: S.mistakesOn, sound: sfx.enabled,
+      sel: S.sel,
+      elapsed: elapsedMs()
+    }));
+  } catch (e) { storageOk = false; }
+}
+function clearSave() {
+  if (!storageOk) return;
+  try { localStorage.removeItem(KEY); } catch (e) { storageOk = false; }
+}
+function validSolution(sol) {
+  if (!sol || sol.length !== 81) return false;
+  for (var ui = 0; ui < 27; ui++) {
+    var seen = 0;
+    for (var k = 0; k < 9; k++) {
+      var v = sol[units[ui][k]];
+      if (!(v >= 1 && v <= 9)) return false;
+      var bit = 1 << (v - 1);
+      if (seen & bit) return false;
+      seen |= bit;
+    }
+  }
+  return true;
+}
+function restore() {
+  if (!storageOk) return null;
+  var raw;
+  try { raw = localStorage.getItem(KEY); } catch (e) { storageOk = false; return null; }
+  if (!raw) return null;
+  try {
+    var d = JSON.parse(raw);
+    if (!d || d.ver !== 1 || !BANDS[d.diff]) return null;
+    var arrs = ['puzzle', 'solution', 'values', 'notes', 'hinted'];
+    for (var a = 0; a < arrs.length; a++) {
+      if (!Array.isArray(d[arrs[a]]) || d[arrs[a]].length !== 81) return null;
+    }
+    if (!validSolution(d.solution)) return null;
+    for (var i = 0; i < 81; i++) {
+      if (d.puzzle[i] && d.puzzle[i] !== d.solution[i]) return null;
+      if (d.puzzle[i] && d.values[i] !== d.puzzle[i]) return null;
+      if (d.hinted[i] && d.values[i] !== d.solution[i]) return null;
+    }
+    return d;
+  } catch (e) { return null; }
+}
+
+/* =========================================================================
+   14. DIALOGS
+   ========================================================================= */
+var confirmAction = null;
+function confirmDialog(text, onYes) {
+  $('#confirmText').innerHTML = text;
+  confirmAction = onYes;
+  $('#confirmOv').classList.add('show');
+  $('#confirmNo').focus();
+}
+function closeConfirm() { $('#confirmOv').classList.remove('show'); confirmAction = null; }
+$('#confirmYes').addEventListener('click', function () {
+  var a = confirmAction; closeConfirm(); if (a) a();
+});
+$('#confirmNo').addEventListener('click', closeConfirm);
+
+function showHelp(on) {
+  $('#helpOv').classList.toggle('show', !!on);
+  if (on) $('#helpClose').focus();
+}
+$('#helpClose').addEventListener('click', function () { showHelp(false); });
+$('#resumeBtn').addEventListener('click', function () { sfx.init(); setPaused(false); });
+$('#againBtn').addEventListener('click', function () { sfx.init(); newGame(S.diff); });
+$('#harderBtn').addEventListener('click', function (e) {
+  sfx.init();
+  newGame(e.currentTarget.dataset.next || S.diff);
+});
+
+/* =========================================================================
+   15. INPUT
+   ========================================================================= */
+board.addEventListener('pointerdown', function (e) {
+  var t = e.target.closest('.cell');
+  if (!t) return;
+  e.preventDefault();
+  sfx.init();
+  board.focus({ preventScroll: true });
+  select(+t.dataset.i);
+  sfx.tap();
+});
+board.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+window.addEventListener('keydown', function (e) {
+  var tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // let the browser drive focused buttons with Enter/Space, and never eat Tab
+  if (e.key === 'Tab') return;
+  if ((e.key === 'Enter' || e.key === ' ') && tag === 'BUTTON') return;
+
+  if (e.key === 'Escape') {
+    if ($('#confirmOv').classList.contains('show')) { closeConfirm(); e.preventDefault(); return; }
+    if ($('#helpOv').classList.contains('show')) { showHelp(false); e.preventDefault(); return; }
+    if (S.paused) { setPaused(false); e.preventDefault(); return; }
+    return;
+  }
+  if ($('#confirmOv').classList.contains('show') || $('#helpOv').classList.contains('show')) return;
+
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+    e.preventDefault(); sfx.init(); undo(); return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  if (S.gen) return;
+  sfx.init();
+
+  if (e.key >= '1' && e.key <= '9') { e.preventDefault(); enterDigit(+e.key); return; }
+  if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); erase(); return; }
+
+  var dr = 0, dc = 0;
+  switch (e.key) {
+    case 'ArrowUp': dr = -1; break;
+    case 'ArrowDown': dr = 1; break;
+    case 'ArrowLeft': dc = -1; break;
+    case 'ArrowRight': dc = 1; break;
+    default: break;
+  }
+  if (dr || dc) {
+    e.preventDefault();
+    if (S.paused || S.won) return;
+    var r = ((S.sel / 9) | 0) + dr, c = (S.sel % 9) + dc;
+    r = (r + 9) % 9; c = (c + 9) % 9;
+    select(r * 9 + c);
+    return;
+  }
+
+  switch (e.key.toLowerCase()) {
+    case 'n': e.preventDefault(); if (!S.won && !S.paused) setNotes(!S.notesMode); break;
+    case 'h': e.preventDefault(); hint(); break;
+    case 'u': e.preventDefault(); undo(); break;
+    case 'c': e.preventDefault(); checkBoard(); break;
+    case 'p': e.preventDefault(); setPaused(!S.paused); break;
+    case '?': e.preventDefault(); showHelp(true); break;
+    default: break;
+  }
+});
+
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden && !S.paused && !S.won && !S.gen && S.runningSince) setPaused(true);
+});
+
+/* =========================================================================
+   16. BOOT
+   ========================================================================= */
+function boot() {
+  resetStatus();
+  var d = restore();
+  if (d) {
+    S.diff = d.diff;
+    S.puzzle = Uint8Array.from(d.puzzle);
+    S.solution = Uint8Array.from(d.solution);
+    S.values = Uint8Array.from(d.values);
+    S.notes = Int32Array.from(d.notes);
+    S.hinted = Uint8Array.from(d.hinted);
+    S.clues = d.clues | 0;
+    S.level = (d.level >= 1 && d.level <= 5) ? d.level : 1;
+    S.mistakes = d.mistakes | 0;
+    S.hints = d.hints | 0;
+    S.mistakesOn = d.mistakesOn !== false;
+    sfx.enabled = d.sound !== false;
+    S.sel = (d.sel >= 0 && d.sel < 81) ? d.sel : 40;
+    S.elapsed = Math.max(0, d.elapsed | 0);
+    S.runningSince = nowMs();
+    S.undo = [];
+    S.won = false;
+    layout(); render(); tickClock();
+    msg('Resumed your ' + BANDS[S.diff].label + ' puzzle. New Puzzle starts a fresh one.', 'ok');
+  } else {
+    layout();
+    newGame('easy');
+  }
+}
+layout();
+boot();
+window.addEventListener('load', layout);
+
+})();
+</script>
+<style>
+/* Touch: 44px tap targets for the difficulty and tool rows (the pad is already 44). Gated: the
+   desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  #diffs button,#tools button,.card .row button{min-height:44px}
+}
+/* The stacked phone layout the comments describe was never declared: #main is display:flex with
+   the default ROW direction, so under 820px the board wrap collapsed to 16px beside a 375px #side
+   (board 16x132, document 391px wide). Stack it at the breakpoint the game already uses.
+   1fr is minmax(auto,1fr): minmax(0,1fr) keeps a wide key from widening #side past the frame. */
+@media (max-width:819px){
+  #main{flex-direction:column}
+  #pad,#tools{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+</style>
+</body>
+</html>

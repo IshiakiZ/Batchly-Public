@@ -1,0 +1,20 @@
+{
+  "folder": "admin/snake",
+  "title": "Snake",
+  "description": "The classic snake: eat, grow, and don't crash. Speeds up as you get longer, with a wrap-walls mode. Longest run tops the board.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/snake",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 37711,
+      "sha256": "5413bd055be7d1458a306d9b1c7834860bda18ae74ed099f5a7ab29c37563048",
+      "source": "published catalog HTML"
+    }
+  ]
+}

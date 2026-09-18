@@ -1,0 +1,20 @@
+{
+  "folder": "admin/unit-converter",
+  "title": "Unit Converter",
+  "description": "Convert length, mass, temperature, volume and more, plus a tip calculator and date maths. Works offline.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/unit-converter",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 64849,
+      "sha256": "e62b914fbe9257a957ae06f84409ad6ae225ad5d0440df16399664b610d39389",
+      "source": "published catalog HTML"
+    }
+  ]
+}

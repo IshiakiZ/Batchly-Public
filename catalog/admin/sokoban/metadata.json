@@ -1,0 +1,20 @@
+{
+  "folder": "admin/sokoban",
+  "title": "Sokoban",
+  "description": "Push every crate onto its goal, but you can only push, never pull. Twelve hand-built levels with undo and a move counter.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/sokoban",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 50164,
+      "sha256": "20642ed0710aa718030651abf039a49fb2451aa094249af49168f8e91fb3e878",
+      "source": "published catalog HTML"
+    }
+  ]
+}

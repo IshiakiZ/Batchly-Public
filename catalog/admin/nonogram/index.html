@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Nonogram</title>
+<!--
+================================================================================
+NONOGRAM: Batchly
+================================================================================
+A picross / nonogram: fill the grid so every row and column matches its number
+clues, revealing a hidden picture. Sizes 5x5 / 10x10 / 15x15.
+
+--------------------------------------------------------------------------------
+GENERATION: why every board is FAIR (uniquely solvable by pure logic)
+--------------------------------------------------------------------------------
+A random picture always yields consistent clues (the picture is one solution),
+but not necessarily a UNIQUE one: many pictures share their clues with another
+arrangement, so "match the clues" would be ambiguous and "reveal the picture"
+could differ from what the player logically deduced.
+
+So generation is rejection sampling against a LINE SOLVER:
+
+  1. Draw a random bitmap at a tuned density.
+  2. Derive its row/column clues.
+  3. Run a pure line-solver: for each line, enumerate every block placement
+     still consistent with what's known, and mark a cell as forced-filled /
+     forced-empty when it agrees across ALL placements. Propagate rows<->columns
+     to a fixed point.
+  4. Accept ONLY if the solver determines every cell with no guessing AND the
+     result equals the original bitmap.
+
+If the line-solver fully determines the grid, the solution is unique (a cell it
+forces cannot differ between solutions) and reachable by logic alone: the
+hallmark of a well-formed nonogram. Densities/budgets were tuned offline:
+5x5/10x10/15x15 each found a unique board in ~1-2 attempts (100/100 trials),
+sub-millisecond. A guaranteed-unique all-filled board is the last-resort
+fallback so New never fails.
+
+Because the board is unique, "all clues satisfied" is EQUIVALENT to "matches the
+hidden picture", so win detection checks clue satisfaction (filled cells only),
+and the mistake indicator can flag a filled cell that is empty in the one true
+solution.
+
+--------------------------------------------------------------------------------
+CONTRACT
+--------------------------------------------------------------------------------
+Single self-contained file. No network of any kind: no CDN, no webfonts, no
+fetch/XHR/WebSocket, no external images. Every visual is plain CSS on system
+monospace; every sound is synthesised with WebAudio on demand. Runs in a
+sandboxed, possibly opaque-origin iframe, so localStorage is feature-detected
+and falls back to memory rather than throwing.
+
+NO LEADERBOARD, BY DESIGN. This is a relaxed puzzle with no meaningful
+higher-is-better score (time is lower-is-better and would rank backwards against
+the host's keep-your-highest contract). Nothing is ever posted to the parent
+frame: there is no postMessage call anywhere in this file, and that absence is
+deliberate.
+
+Input: left-click / tap = fill, right-click / long-press = mark X, drag = paint
+a straight line. A completed line auto-crosses its remaining cells. Works with
+mouse, touch and keyboard; focus is never trapped.
+================================================================================
+-->
+<style>
+:root{
+  --bg:#10100e;
+  --panel:#18181d;
+  --panel-2:#20202a;
+  --well:#0b0b09;
+  --line:#33333d;
+  --grid:#2c2c34;
+  --grid5:#54545f;
+  --bone:#f5f2e8;
+  --muted:#9a978c;
+  --fill:#e9e3d2;
+  --fill-2:#cfc9b8;
+  --red:#ef3a3a;
+  --red-hi:#ff7a5e;
+  --green:#43db80;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;overflow:hidden;}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  font-size:14px;
+  line-height:1.3;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  touch-action:manipulation;
+}
+#app{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px clamp(8px,2vw,16px) 8px;
+  max-width:900px;
+  margin:0 auto;
+}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:0 0 auto;}
+h1{
+  margin:0;
+  font-size:clamp(15px,4.4vw,22px);
+  font-weight:800;
+  letter-spacing:.14em;
+  line-height:1;
+  white-space:nowrap;
+}
+h1 .o{color:var(--red);}
+.spacer{flex:1 1 auto;min-width:0;}
+.stats{display:flex;gap:6px;flex:0 0 auto;}
+.stat{
+  border:2px solid var(--line);
+  background:var(--panel);
+  padding:3px 8px;
+  min-width:56px;
+  text-align:center;
+}
+.stat .k{
+  display:block;
+  font-size:10px;
+  letter-spacing:.1em;
+  color:var(--muted);
+  font-weight:700;
+}
+.stat .v{
+  display:block;
+  font-size:15px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  line-height:1.2;
+}
+.stat.hot{border-color:var(--red);}
+.stat.hot .v{color:var(--red-hi);}
+.stat.good{border-color:var(--green);}
+.stat.good .v{color:var(--green);}
+
+/* ---------- controls ---------- */
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}
+.btn{
+  appearance:none;
+  border:2px solid var(--bone);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  cursor:pointer;
+  border-radius:0;
+  box-shadow:3px 3px 0 0 var(--bone);
+  transition:transform .06s ease,box-shadow .06s ease,background-color .12s ease;
+}
+.btn:hover:not(:disabled){background:var(--panel-2);}
+.btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 0 var(--bone);}
+.btn:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+  box-shadow:3px 3px 0 0 var(--line);
+  border-color:var(--line);
+  color:var(--muted);
+}
+.btn.on{background:var(--red);border-color:var(--red);color:#fff;box-shadow:3px 3px 0 0 var(--red-hi);}
+.btn.on:hover:not(:disabled){background:var(--red-hi);border-color:var(--red-hi);}
+.btn:focus-visible{outline:2px solid var(--red-hi);outline-offset:3px;}
+.btn.icon{padding:6px 9px;font-size:13px;line-height:1;}
+
+.seg{display:flex;border:2px solid var(--bone);box-shadow:3px 3px 0 0 var(--bone);flex:0 0 auto;}
+.seg button{
+  appearance:none;
+  border:0;
+  border-left:2px solid var(--line);
+  background:var(--panel);
+  color:var(--bone);
+  font:inherit;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.06em;
+  padding:6px 9px;
+  cursor:pointer;
+  transition:background-color .12s ease;
+}
+.seg button:first-child{border-left:0;}
+.seg button:hover{background:var(--panel-2);}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff;}
+.seg button:focus-visible{outline:2px solid var(--red-hi);outline-offset:-3px;}
+
+/* mode toggle (fill / mark) */
+.seg.mode button[aria-pressed="true"]{background:var(--bone);color:#111;}
+.seg.mode .glyph{font-size:13px;line-height:1;}
+
+/* ---------- status ---------- */
+#status{
+  flex:0 0 auto;
+  font-size:11px;
+  color:var(--muted);
+  border-left:3px solid var(--line);
+  padding:2px 0 2px 8px;
+  min-height:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#status.hi{color:var(--bone);border-left-color:var(--red);}
+#status.win{color:var(--green);border-left-color:var(--green);}
+
+/* ---------- puzzle ---------- */
+#wrap{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+#puzzle{
+  display:grid;
+  position:relative;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:none;
+}
+/* clue numbers */
+.num{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  color:var(--bone);
+  font-size:var(--numfs);
+  line-height:1;
+  pointer-events:none;
+}
+.num.rc{justify-content:flex-end;padding-right:.28em;}
+.num.cc{align-items:flex-end;padding-bottom:.22em;}
+.num.z{color:var(--muted);opacity:.55;}
+.num.done{color:var(--muted);opacity:.4;text-decoration:line-through;}
+.num.hl{color:var(--red-hi);}
+
+/* cells */
+.cell{
+  position:relative;
+  width:var(--cell);
+  height:var(--cell);
+  background:var(--panel);
+  cursor:pointer;
+  padding:0;margin:0;
+  appearance:none;
+  border:0;
+  border-radius:0;
+  transition:background-color .08s ease;
+}
+.cell::before{ /* row/col highlight band */
+  content:"";
+  position:absolute;
+  inset:0;
+  background:var(--bone);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .1s ease;
+}
+.cell.rowhl::before,.cell.colhl::before{opacity:.07;}
+.cell.fill{background:var(--fill);}
+.cell.fill.rowhl::before,.cell.fill.colhl::before{background:#000;opacity:.10;}
+.cell.err{background:var(--red);}
+.cell.err::after{
+  content:"";
+  position:absolute;inset:18%;
+  background:
+    linear-gradient(45deg,transparent 43%,#2a0000 43%,#2a0000 57%,transparent 57%),
+    linear-gradient(-45deg,transparent 43%,#2a0000 43%,#2a0000 57%,transparent 57%);
+  pointer-events:none;
+}
+.cell.mark::after{ /* X annotation */
+  content:"";
+  position:absolute;inset:24%;
+  background:
+    linear-gradient(45deg,transparent 40%,var(--muted) 40%,var(--muted) 60%,transparent 60%),
+    linear-gradient(-45deg,transparent 40%,var(--muted) 40%,var(--muted) 60%,transparent 60%);
+  pointer-events:none;
+  opacity:.9;
+}
+.cell.mark.auto::after{opacity:.42;}
+.cell.pop{animation:pop .18s ease-out;}
+@keyframes pop{0%{transform:scale(1);}45%{transform:scale(.82);}100%{transform:scale(1);}}
+.cell.hintpulse{animation:hintpulse .6s ease-in-out 3;}
+@keyframes hintpulse{0%,100%{box-shadow:inset 0 0 0 0 var(--red-hi);}50%{box-shadow:inset 0 0 0 3px var(--red-hi);}}
+.cell:focus-visible{outline:3px solid var(--red);outline-offset:-3px;z-index:3;}
+
+#puzzle.won .cell.mark::after{opacity:0;}
+#puzzle.won .cell.err{background:var(--fill);}
+#puzzle.won .cell.err::after{opacity:0;}
+#puzzle.won .cell.fill{animation:wave .6s ease-out both;animation-delay:calc(var(--d,0) * 32ms);}
+@keyframes wave{
+  0%{background:var(--fill);}
+  38%{background:var(--red);}
+  100%{background:var(--fill);}
+}
+
+/* ---------- footer ---------- */
+footer{
+  flex:0 0 auto;
+  font-size:10px;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  white-space:nowrap;
+  overflow:hidden;
+}
+footer .keys{overflow:hidden;text-overflow:ellipsis;}
+
+/* ---------- overlays ---------- */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(8,8,7,.88);
+  display:none;
+  place-items:center;
+  padding:14px;
+  z-index:30;
+}
+.overlay.show{display:grid;}
+.modal{
+  background:var(--panel);
+  border:2px solid var(--bone);
+  box-shadow:8px 8px 0 0 var(--red);
+  padding:16px;
+  width:min(460px,94vw);
+  max-height:88vh;
+  overflow:auto;
+}
+.modal h2{margin:0 0 4px;font-size:17px;letter-spacing:.1em;font-weight:800;}
+.modal .verdict{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--green);margin-bottom:10px;}
+.modal p{margin:0 0 8px;font-size:12px;color:var(--muted);line-height:1.55;}
+.modal p b{color:var(--bone);font-weight:700;}
+.modal ul{margin:0 0 10px;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.6;}
+.modal ul b{color:var(--bone);}
+.modal hr{border:0;border-top:2px solid var(--line);margin:12px 0;}
+.tally{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.tally .stat{flex:1 1 0;min-width:70px;}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+kbd{
+  display:inline-block;
+  border:1px solid var(--line);
+  background:var(--well);
+  color:var(--bone);
+  padding:0 4px;
+  font:inherit;
+  font-size:10px;
+  font-weight:700;
+}
+.legend{display:flex;gap:14px;align-items:center;margin:8px 0 2px;flex-wrap:wrap;}
+.legend span{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);}
+.swatch{width:16px;height:16px;border:2px solid var(--line);position:relative;flex:0 0 auto;}
+.swatch.f{background:var(--fill);border-color:var(--fill);}
+.swatch.x::after{content:"";position:absolute;inset:22%;background:linear-gradient(45deg,transparent 40%,var(--muted) 40%,var(--muted) 60%,transparent 60%),linear-gradient(-45deg,transparent 40%,var(--muted) 40%,var(--muted) 60%,transparent 60%);}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::after,*::before{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}
+}
+@media (max-width:520px){
+  .stat{min-width:46px;padding:3px 5px;}
+  .stat .v{font-size:13px;}
+  footer .keys{display:none;}
+}
+@media (max-height:440px){
+  h1{font-size:14px;}
+  footer{display:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>NONO<span class="o">/</span>GRAM</h1>
+    <div class="spacer"></div>
+    <div class="stats">
+      <div class="stat"><span class="k">TIME</span><span class="v" id="sTime">0:00</span></div>
+      <div class="stat" title="Correct fills still to place"><span class="k">LEFT</span><span class="v" id="sLeft">0</span></div>
+      <div class="stat" id="mistWrap" title="Filled cells that don't belong (assist on)"><span class="k">SLIPS</span><span class="v" id="sMist">0</span></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Board size">
+      <button type="button" data-size="5" aria-pressed="false">5&times;5</button>
+      <button type="button" data-size="10" aria-pressed="true">10&times;10</button>
+      <button type="button" data-size="15" aria-pressed="false">15&times;15</button>
+    </div>
+    <div class="seg mode" role="group" aria-label="Tap action">
+      <button type="button" id="mFill" data-mode="fill" aria-pressed="true" title="Tap fills (left-click)"><span class="glyph">&#9632;</span> Fill</button>
+      <button type="button" id="mMark" data-mode="mark" aria-pressed="false" title="Tap marks X (right-click / long-press)"><span class="glyph">&times;</span> Mark</button>
+    </div>
+    <button type="button" class="btn" id="bNew">New</button>
+    <button type="button" class="btn" id="bReset">Reset</button>
+    <button type="button" class="btn" id="bHint">Hint</button>
+    <div class="spacer"></div>
+    <button type="button" class="btn on" id="bAssist" aria-pressed="true" title="Flag wrong fills in red">Assist</button>
+    <button type="button" class="btn icon" id="bSound" aria-pressed="true" aria-label="Sound on" title="Sound">&#9835;</button>
+    <button type="button" class="btn icon" id="bHelp" aria-label="How to play" title="How to play">?</button>
+  </div>
+
+  <div id="status" aria-live="polite">Fill cells to match the row &amp; column clues.</div>
+
+  <div id="wrap">
+    <div id="puzzle" role="grid" aria-label="Nonogram board"></div>
+  </div>
+
+  <footer>
+    <span>Left-click / tap fills &middot; right-click / long-press marks &times; &middot; drag to paint a line.</span>
+    <span class="keys"><kbd>&larr;&uarr;&darr;&rarr;</kbd> move <kbd>F</kbd>/<kbd>Space</kbd> fill <kbd>X</kbd> mark <kbd>N</kbd> new <kbd>R</kbd> reset <kbd>H</kbd> hint</span>
+  </footer>
+</div>
+
+<!-- win -->
+<div class="overlay" id="winOverlay" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="modal">
+    <h2 id="winTitle">PICTURE COMPLETE</h2>
+    <div class="verdict" id="winVerdict">SOLVED</div>
+    <div class="tally">
+      <div class="stat"><span class="k">SIZE</span><span class="v" id="wSize">10&times;10</span></div>
+      <div class="stat"><span class="k">TIME</span><span class="v" id="wTime">0:00</span></div>
+      <div class="stat"><span class="k">SLIPS</span><span class="v" id="wMist">0</span></div>
+    </div>
+    <p id="winNote"></p>
+    <div class="row">
+      <button type="button" class="btn on" id="wNew">New puzzle</button>
+      <button type="button" class="btn" id="wClose">Admire it</button>
+    </div>
+  </div>
+</div>
+
+<!-- help -->
+<div class="overlay" id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+  <div class="modal">
+    <h2 id="helpTitle">HOW TO PLAY</h2>
+    <div class="verdict">MATCH THE CLUES &middot; REVEAL THE PICTURE</div>
+    <p>Each number is the length of a run of filled cells, in order. A row clue <b>3&nbsp;1</b> means a run of three, then a gap, then a run of one, somewhere along that row. A <b>0</b> means the line is empty.</p>
+    <div class="legend">
+      <span><span class="swatch f"></span> filled</span>
+      <span><span class="swatch x"></span> marked empty (a note to yourself)</span>
+    </div>
+    <ul>
+      <li><b>Left-click / tap</b> fills a cell. <b>Right-click / long-press</b> marks it with an &times;: empty cells you've ruled out. Marks are just notes; only filled cells count.</li>
+      <li><b>Drag</b> to paint a straight line of the same action. The first move locks it to a row or column.</li>
+      <li>The <b>Fill / Mark</b> toggle picks what a plain tap does; handy on a phone. The other action is always one long-press away.</li>
+      <li>Finish a line correctly and its leftover cells are <b>auto-crossed</b> for you, and its clue numbers dim.</li>
+      <li><b>Assist</b> flags a filled cell that doesn't belong in red. Turn it off for an unaided solve. <b>Hint</b> reveals one true cell.</li>
+    </ul>
+    <hr>
+    <p><b>Keyboard:</b> <kbd>&larr;&uarr;&darr;&rarr;</kbd> move &middot; <kbd>F</kbd>/<kbd>Space</kbd> fill &middot; <kbd>X</kbd> mark &middot; <kbd>N</kbd> new &middot; <kbd>R</kbd> reset &middot; <kbd>H</kbd> hint &middot; <kbd>Esc</kbd> close</p>
+    <p style="font-size:11px">Every board is a <b>random</b> picture whose clues have exactly one solution, verified by a logic solver during generation, so a board is always fully solvable by deduction, never by guessing.</p>
+    <div class="row"><button type="button" class="btn on" id="hClose">Got it</button></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   Storage: an opaque-origin iframe throws on localStorage. Detect once,
+   fall back to memory so preferences still work for the session.
+   ====================================================================== */
+var mem = Object.create(null), lsOK = false;
+try{
+  var probe = "__ng_probe";
+  window.localStorage.setItem(probe,"1");
+  window.localStorage.removeItem(probe);
+  lsOK = true;
+}catch(e){ lsOK = false; }
+function stGet(k){
+  try{ return lsOK ? window.localStorage.getItem(k) : (k in mem ? mem[k] : null); }
+  catch(e){ return (k in mem) ? mem[k] : null; }
+}
+function stSet(k,v){
+  try{ if(lsOK) window.localStorage.setItem(k,v); else mem[k]=v; }
+  catch(e){ mem[k]=v; }
+}
+
+/* ======================================================================
+   Clue derivation + line logic (shared by generator and gameplay).
+   ====================================================================== */
+function lineClue(vals){          /* vals: array where truthy == filled */
+  var out=[], run=0, i;
+  for(i=0;i<vals.length;i++){
+    if(vals[i]){ run++; }
+    else if(run){ out.push(run); run=0; }
+  }
+  if(run) out.push(run);
+  return out;
+}
+function cluesEqual(a,b){
+  if(a.length!==b.length) return false;
+  for(var i=0;i<a.length;i++) if(a[i]!==b[i]) return false;
+  return true;
+}
+
+/*
+ * solveLine: given a clue and a partial line `known` (-1 unknown, 0 empty,
+ * 1 filled), enumerate every block placement consistent with `known` and
+ * return which cells are filled/empty in ALL of them. null == contradiction.
+ * Line length <= 15, so brute enumeration with pruning is trivially cheap.
+ */
+function solveLine(clue, known){
+  var L=known.length, blocks=clue, i;
+  var fAll=new Array(L), eAll=new Array(L), cur=new Array(L);
+  for(i=0;i<L;i++){ fAll[i]=true; eAll[i]=true; cur[i]=0; }
+  var count=0;
+
+  function place(bi, start){
+    if(bi===blocks.length){
+      for(var j=0;j<L;j++){
+        if(known[j]===1 && cur[j]!==1) return;
+        if(known[j]===0 && cur[j]!==0) return;
+      }
+      count++;
+      for(j=0;j<L;j++){ if(cur[j]) eAll[j]=false; else fAll[j]=false; }
+      return;
+    }
+    var len=blocks[bi], rem=0, k;
+    for(k=bi+1;k<blocks.length;k++) rem+=blocks[k]+1;
+    for(var p=start; p+len+rem<=L; p++){
+      var ok=true, m;
+      for(m=start;m<p;m++){ if(known[m]===1){ ok=false; break; } }   /* gap can't cover a known-fill */
+      if(ok){ for(m=p;m<p+len;m++){ if(known[m]===0){ ok=false; break; } } } /* block can't cover a known-empty */
+      if(!ok) continue;
+      for(m=p;m<p+len;m++) cur[m]=1;
+      place(bi+1, p+len+1);
+      for(m=p;m<p+len;m++) cur[m]=0;
+    }
+  }
+  place(0,0);
+  if(count===0) return null;
+  var fill=new Array(L), empty=new Array(L);
+  for(i=0;i<L;i++){ fill[i]=fAll[i]; empty[i]=eAll[i]; }
+  return {fill:fill, empty:empty};
+}
+
+/* Propagate row/column line-solving to a fixed point. Returns 'unique',
+   'ambiguous' or 'contradiction' plus the (partial) solved grid. */
+function logicSolve(rowClues, colClues, N){
+  var st=[], r, c;
+  for(r=0;r<N;r++){ st.push(new Array(N)); for(c=0;c<N;c++) st[r][c]=-1; }
+  var changed=true, guard=0;
+  while(changed){
+    changed=false;
+    if(++guard>5000) break;
+    for(r=0;r<N;r++){
+      var res=solveLine(rowClues[r], st[r]);
+      if(!res) return {status:"contradiction"};
+      for(c=0;c<N;c++){
+        if(res.fill[c] && st[r][c]!==1){ st[r][c]=1; changed=true; }
+        else if(res.empty[c] && st[r][c]!==0){ st[r][c]=0; changed=true; }
+      }
+    }
+    for(c=0;c<N;c++){
+      var col=new Array(N);
+      for(r=0;r<N;r++) col[r]=st[r][c];
+      var rc=solveLine(colClues[c], col);
+      if(!rc) return {status:"contradiction"};
+      for(r=0;r<N;r++){
+        if(rc.fill[r] && st[r][c]!==1){ st[r][c]=1; changed=true; }
+        else if(rc.empty[r] && st[r][c]!==0){ st[r][c]=0; changed=true; }
+      }
+    }
+  }
+  for(r=0;r<N;r++) for(c=0;c<N;c++) if(st[r][c]===-1) return {status:"ambiguous", grid:st};
+  return {status:"unique", grid:st};
+}
+
+/* ======================================================================
+   Generation: random bitmap, keep only if uniquely line-solvable.
+   Densities/budgets tuned offline (see header). Guaranteed fallback.
+   ====================================================================== */
+var GEN = {
+  5:  { dens:[0.50,0.55,0.60,0.62,0.66], budget:700 },
+  10: { dens:[0.50,0.54,0.58,0.60,0.62], budget:1500 },
+  15: { dens:[0.52,0.55,0.58,0.60],      budget:4000 }
+};
+
+function deriveGrid(grid,N){
+  var rows=[], cols=[], r, c;
+  for(r=0;r<N;r++) rows.push(lineClue(grid[r]));
+  for(c=0;c<N;c++){ var col=new Array(N); for(r=0;r<N;r++) col[r]=grid[r][c]; cols.push(lineClue(col)); }
+  return {rows:rows, cols:cols};
+}
+
+function generate(N){
+  var cfg=GEN[N], a, r, c;
+  var minFill=Math.max(3, N), maxFill=N*N-2;
+  for(a=0; a<cfg.budget; a++){
+    var d=cfg.dens[(Math.random()*cfg.dens.length)|0];
+    var grid=[], total=0;
+    for(r=0;r<N;r++){ var row=new Array(N); for(c=0;c<N;c++){ var v=Math.random()<d?1:0; row[c]=v; total+=v; } grid.push(row); }
+    if(total<minFill || total>maxFill) continue;
+    var cl=deriveGrid(grid,N);
+    var res=logicSolve(cl.rows, cl.cols, N);
+    if(res.status!=="unique") continue;
+    /* line-solver determined every cell => unique; confirm it IS this picture */
+    var match=true;
+    for(r=0;r<N && match;r++) for(c=0;c<N;c++){ if((res.grid[r][c]?1:0)!==grid[r][c]){ match=false; break; } }
+    if(match) return {grid:grid, clues:cl, fills:total};
+  }
+  /* Never observed across tuning trials, but always deal SOMETHING valid: an
+     all-filled board is trivially unique (every line clue is [N]). */
+  var full=[], tot=N*N;
+  for(r=0;r<N;r++){ var fr=new Array(N); for(c=0;c<N;c++) fr[c]=1; full.push(fr); }
+  return {grid:full, clues:deriveGrid(full,N), fills:tot};
+}
+
+/* ======================================================================
+   Audio: synthesised, no assets. Lazy context on first gesture.
+   ====================================================================== */
+var actx=null, sound = stGet("ng.sound") !== "0";
+function ac(){
+  if(!sound) return null;
+  try{
+    var C = window.AudioContext || window.webkitAudioContext;
+    if(!C) return null;
+    if(!actx) actx = new C();
+    if(actx.state==="suspended" && actx.resume) actx.resume();
+    return actx;
+  }catch(e){ return null; }
+}
+function blip(freq,dur,type,vol,delay){
+  var a=ac(); if(!a) return;
+  try{
+    var o=a.createOscillator(), g=a.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    o.connect(g); g.connect(a.destination);
+    var t=a.currentTime+(delay||0);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.05,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t); o.stop(t+dur+0.02);
+  }catch(e){}
+}
+function sfxFill(){ blip(560,0.045,"square",0.05); }
+function sfxErase(){ blip(300,0.05,"triangle",0.05); }
+function sfxMark(){ blip(760,0.035,"square",0.04); }
+function sfxError(){ blip(150,0.14,"sawtooth",0.05); }
+function sfxLine(){ blip(880,0.05,"sine",0.045); blip(1174,0.06,"sine",0.04,0.05); }
+function sfxWin(){ blip(523.25,0.11,"square",0.05,0); blip(659.25,0.11,"square",0.05,0.09); blip(783.99,0.11,"square",0.05,0.18); blip(1046.5,0.24,"square",0.055,0.27); }
+
+/* ======================================================================
+   State
+   ====================================================================== */
+/* cell values: 0 empty, 1 filled, 2 mark (manual X), 3 mark (auto X) */
+var n=10;
+var savedSize=parseInt(stGet("ng.size"),10);
+if(savedSize===5||savedSize===10||savedSize===15) n=savedSize;
+
+var mode = (stGet("ng.mode")==="mark") ? "mark" : "fill";
+var assist = stGet("ng.assist") !== "0";
+
+var sol=null;          /* Uint8Array N*N of the unique solution (0/1) */
+var rowClues=[], colClues=[];
+var st=null;           /* Int8Array N*N current values */
+var cellEls=[];        /* cell DOM by index */
+var rowNumEls=[], colNumEls=[]; /* clue number spans grouped by line */
+var clueCols=1, clueRows=1;
+var solFills=0;        /* total cells filled in solution */
+var correct=0;         /* cells currently correctly filled */
+var mistakes=0;        /* cumulative wrong fills placed (assist metric) */
+var won=false;
+var started=false, startTime=0, elapsed=0, timerId=null;
+var winTimer=null;
+
+var $ = function(id){ return document.getElementById(id); };
+var puzzle=$("puzzle"), wrap=$("wrap"), statusEl=$("status");
+
+/* ======================================================================
+   Timer
+   ====================================================================== */
+function fmt(ms){
+  var s=Math.floor(ms/1000), m=Math.floor(s/60);
+  s=s%60;
+  return m+":"+(s<10?"0":"")+s;
+}
+function tick(){ $("sTime").textContent = fmt(elapsed + (Date.now()-startTime)); }
+function startTimer(){
+  if(started||won) return;
+  started=true; startTime=Date.now();
+  if(timerId) clearInterval(timerId);
+  timerId=setInterval(tick,250);
+}
+function stopTimer(){
+  if(started){ elapsed += Date.now()-startTime; started=false; }
+  if(timerId){ clearInterval(timerId); timerId=null; }
+}
+function resetTimer(){
+  stopTimer(); elapsed=0; started=false;
+  $("sTime").textContent="0:00";
+}
+
+/* ======================================================================
+   Build the puzzle DOM for the current clues.
+   Single master grid: [clue cols][cell cols] x [clue rows][cell rows].
+   ====================================================================== */
+function maxLen(arr){ var m=1,i; for(i=0;i<arr.length;i++) if(arr[i].length>m) m=arr[i].length; return m; }
+
+function buildDOM(){
+  puzzle.textContent="";
+  puzzle.classList.remove("won");
+  cellEls=[]; rowNumEls=[]; colNumEls=[];
+  /* the old highlight tracks nodes that no longer exist and, if the board
+     shrank, an index now out of range: forget it before anything indexes it */
+  activeR=-1; activeC=-1;
+  clueCols=maxLen(rowClues);
+  clueRows=maxLen(colClues);
+
+  puzzle.style.gridTemplateColumns = "repeat("+clueCols+",var(--cc)) repeat("+n+",var(--cell))";
+  puzzle.style.gridTemplateRows    = "repeat("+clueRows+",var(--cr)) repeat("+n+",var(--cell))";
+
+  var r,c,i;
+  /* row clues (left), right-aligned into the last clue columns */
+  for(r=0;r<n;r++){
+    rowNumEls[r]=[];
+    var cl=rowClues[r], k=cl.length;
+    if(k===0){
+      var z=document.createElement("span");
+      z.className="num rc z"; z.textContent="0";
+      z.style.gridRow=(clueRows+r+1); z.style.gridColumn=clueCols;
+      puzzle.appendChild(z); rowNumEls[r].push(z);
+    }else{
+      for(i=0;i<k;i++){
+        var sp=document.createElement("span");
+        sp.className="num rc"; sp.textContent=cl[i];
+        sp.style.gridRow=(clueRows+r+1);
+        sp.style.gridColumn=(clueCols-k+i+1);
+        puzzle.appendChild(sp); rowNumEls[r].push(sp);
+      }
+    }
+  }
+  /* column clues (top), bottom-aligned into the last clue rows */
+  for(c=0;c<n;c++){
+    colNumEls[c]=[];
+    var cc=colClues[c], kk=cc.length;
+    if(kk===0){
+      var z2=document.createElement("span");
+      z2.className="num cc z"; z2.textContent="0";
+      z2.style.gridRow=clueRows; z2.style.gridColumn=(clueCols+c+1);
+      puzzle.appendChild(z2); colNumEls[c].push(z2);
+    }else{
+      for(i=0;i<kk;i++){
+        var sp2=document.createElement("span");
+        sp2.className="num cc"; sp2.textContent=cc[i];
+        sp2.style.gridRow=(clueRows-kk+i+1);
+        sp2.style.gridColumn=(clueCols+c+1);
+        puzzle.appendChild(sp2); colNumEls[c].push(sp2);
+      }
+    }
+  }
+  /* cells */
+  for(r=0;r<n;r++){
+    for(c=0;c<n;c++){
+      i=r*n+c;
+      var b=document.createElement("button");
+      b.type="button";
+      b.className="cell";
+      b.setAttribute("role","gridcell");
+      b.dataset.i=String(i);
+      b.style.gridRow=(clueRows+r+1);
+      b.style.gridColumn=(clueCols+c+1);
+      b.style.setProperty("--d", String(r+c));
+      /* single-thickness gridlines, thick every 5, bone frame at the border */
+      b.style.borderTop  = edge(r===0, r%5===0);
+      b.style.borderLeft = edge(c===0, c%5===0);
+      if(c===n-1) b.style.borderRight = "2px solid var(--bone)";
+      if(r===n-1) b.style.borderBottom= "2px solid var(--bone)";
+      cellEls.push(b);
+      puzzle.appendChild(b);
+    }
+  }
+  layout();
+  render();
+}
+function edge(isOuter, isMajor){
+  if(isOuter) return "2px solid var(--bone)";
+  if(isMajor) return "2px solid var(--grid5)";
+  return "1px solid var(--grid)";
+}
+
+/* size the master grid to fit the available area */
+function layout(){
+  if(!wrap) return;
+  var w=wrap.clientWidth, h=wrap.clientHeight;
+  if(!w||!h) return;
+  var kk=0.75;                                   /* clue track / cell ratio */
+  var denomW=clueCols*kk + n, denomH=clueRows*kk + n;
+  var cell=Math.floor(Math.min((w-2)/denomW,(h-2)/denomH));
+  cell=Math.max(10, Math.min(48, cell));
+  var clue=Math.max(9, Math.round(cell*kk));
+  var fs=Math.max(8, Math.round(cell*0.46));
+  puzzle.style.setProperty("--cell", cell+"px");
+  puzzle.style.setProperty("--cc", clue+"px");
+  puzzle.style.setProperty("--cr", clue+"px");
+  puzzle.style.setProperty("--numfs", fs+"px");
+}
+
+/* ======================================================================
+   Rendering
+   ====================================================================== */
+function say(msg, cls){
+  statusEl.textContent=msg;
+  statusEl.className="";
+  if(cls) statusEl.classList.add(cls);
+}
+function renderCell(i){
+  var v=st[i], el=cellEls[i];
+  var fill = v===1;
+  var wrong = fill && assist && !sol[i];
+  el.classList.toggle("fill", fill && !wrong);
+  el.classList.toggle("err", wrong);
+  el.classList.toggle("mark", v===2 || v===3);
+  el.classList.toggle("auto", v===3);
+  var rr=(i/n|0)+1, cc=(i%n)+1;
+  var label = "Row "+rr+", column "+cc+", "+(v===1?"filled":(v===2||v===3?"marked empty":"blank"));
+  el.setAttribute("aria-label", label);
+  el.setAttribute("aria-pressed", v===1 ? "true":"false");
+}
+function render(){
+  for(var i=0;i<cellEls.length;i++) renderCell(i);
+  updateClueDone();
+  updateStats();
+}
+function updateStats(){
+  var left=Math.max(0, solFills - correct);
+  $("sLeft").textContent=String(left);
+  var ls=$("sLeft").parentNode;
+  ls.classList.toggle("good", left===0 && !won);
+  $("sMist").textContent = assist ? String(mistakes) : "off";
+  $("mistWrap").classList.toggle("hot", assist && mistakes>0);
+}
+
+/* dim a line's clue numbers when that line is correctly and fully resolved */
+function lineFilled(type, idx){
+  var vals=new Array(n), i;
+  if(type==="r"){ for(i=0;i<n;i++) vals[i]= st[idx*n+i]===1 ? 1:0; }
+  else { for(i=0;i<n;i++) vals[i]= st[i*n+idx]===1 ? 1:0; }
+  return vals;
+}
+function lineDone(type, idx){
+  var clue = type==="r" ? rowClues[idx] : colClues[idx];
+  return cluesEqual(lineClue(lineFilled(type,idx)), clue);
+}
+function updateClueDone(){
+  var r,c,j;
+  for(r=0;r<n;r++){
+    var d=lineDone("r",r);
+    for(j=0;j<rowNumEls[r].length;j++) rowNumEls[r][j].classList.toggle("done", d && !rowNumEls[r][j].classList.contains("z"));
+    /* an empty ('0') line is "done" when it truly has no fills */
+    if(rowClues[r].length===0) rowNumEls[r][0].classList.toggle("done", d);
+  }
+  for(c=0;c<n;c++){
+    var dc=lineDone("c",c);
+    for(j=0;j<colNumEls[c].length;j++) colNumEls[c][j].classList.toggle("done", dc && !colNumEls[c][j].classList.contains("z"));
+    if(colClues[c].length===0) colNumEls[c][0].classList.toggle("done", dc);
+  }
+}
+
+/* ======================================================================
+   Auto-cross: when a line is clue-complete, X its remaining blanks; if it
+   later becomes incomplete, take the AUTO marks back (manual ones stay).
+   Only the changed cell's own row & column can flip, so re-eval just those.
+   ====================================================================== */
+function autoCross(type, idx){
+  var done=lineDone(type,idx), i, gi, changedList=[];
+  for(i=0;i<n;i++){
+    gi = type==="r" ? idx*n+i : i*n+idx;
+    if(done){
+      if(st[gi]===0){ st[gi]=3; changedList.push(gi); }
+    }else{
+      if(st[gi]===3){ st[gi]=0; changedList.push(gi); }
+    }
+  }
+  return changedList;
+}
+
+/* ======================================================================
+   Mutating a cell
+   ====================================================================== */
+function correctFor(i){ return sol[i]===1; }
+
+function setCell(i, val, quiet){
+  var prev=st[i];
+  if(prev===val) return false;
+  /* maintain the "correct fills" counter */
+  if(prev===1 && correctFor(i)) correct--;
+  if(val===1 && correctFor(i)) correct++;
+  /* count a slip when a NEW wrong fill is placed (assist metric) */
+  if(assist && val===1 && !correctFor(i) && prev!==1){ mistakes++; if(!quiet) sfxError(); }
+  st[i]=val;
+  return true;
+}
+
+/* apply one paint op to cell i under the active tool/value */
+function paintCell(i, tool, val){
+  var prev=st[i];
+  if(tool==="fill"){
+    /* fill overwrites anything (X marks are only notes) */
+    if(!setCell(i, val)) return false;
+  }else{
+    /* mark never disturbs a filled cell */
+    if(prev===1) return false;
+    if(!setCell(i, val)) return false;
+  }
+  return true;
+}
+
+/* after cells in given rows/cols changed: re-cross those lines, render, check win */
+function commitLines(rows, cols){
+  var touched={}, i, gi;
+  function markLine(type, idx){
+    var list=autoCross(type, idx);
+    for(i=0;i<list.length;i++) touched[list[i]]=1;
+  }
+  for(i=0;i<rows.length;i++) markLine("r", rows[i]);
+  for(i=0;i<cols.length;i++) markLine("c", cols[i]);
+  for(gi in touched) renderCell(parseInt(gi,10));
+  updateClueDone();
+  updateStats();
+}
+
+/* ======================================================================
+   Pointer input: fill/mark, drag paint locked to a line, long-press = X.
+   ====================================================================== */
+var drag={active:false, tool:null, val:0, axis:null, sr:0, sc:0, lr:0, lc:0};
+var touch={pending:false, r:0, c:0, x:0, y:0, moved:false, timer:null};
+var LONGPRESS=340, MOVE_TOL=10;
+
+function opposite(m){ return m==="fill" ? "mark" : "fill"; }
+
+function beginPaint(tool, r, c){
+  startTimer();
+  drag.active=true; drag.tool=tool; drag.axis=null;
+  drag.sr=r; drag.sc=c; drag.lr=r; drag.lc=c;
+  var i=r*n+c, cur=st[i];
+  if(tool==="fill") drag.val = (cur===1)?0:1;
+  else              drag.val = (cur===2||cur===3)?0:2;
+  applyAt(r,c);
+}
+function applyAt(r,c){
+  var i=r*n+c;
+  var changed=paintCell(i, drag.tool, drag.val);
+  if(changed){
+    renderCell(i);
+    if(drag.tool==="fill"){ if(drag.val===1) sfxFill(); else sfxErase(); }
+    else { if(drag.val===2) sfxMark(); else sfxErase(); }
+    var doneBefore = false;
+    commitLines([r],[c]);
+    /* line-complete jingle + win check */
+    if(lineDone("r",r) || lineDone("c",c)) {} /* handled visually; sound below */
+    checkLineSound(r,c);
+    maybeWin();
+  }
+  setActive(r,c);
+}
+var lastLineKey="";
+function checkLineSound(r,c){
+  /* chirp when a line just became fully & correctly resolved */
+  var key="";
+  if(lineDone("r",r) && rowClues[r].length>0 && correctLine("r",r)) key+="r"+r+";";
+  if(lineDone("c",c) && colClues[c].length>0 && correctLine("c",c)) key+="c"+c+";";
+  if(key && key!==lastLineKey){ sfxLine(); }
+  lastLineKey=key;
+}
+function correctLine(type, idx){
+  var i, gi;
+  for(i=0;i<n;i++){ gi=type==="r"?idx*n+i:i*n+idx; if((st[gi]===1?1:0)!==sol[gi]) return false; }
+  return true;
+}
+
+function paintTo(r,c){
+  if(r===drag.lr && c===drag.lc) return;
+  if(drag.axis===null){
+    if(r===drag.sr && c!==drag.sc) drag.axis="h";
+    else if(c===drag.sc && r!==drag.sr) drag.axis="v";
+    else drag.axis = (Math.abs(c-drag.sc) >= Math.abs(r-drag.sr)) ? "h" : "v";
+  }
+  var tr, tc;
+  if(drag.axis==="h"){ tr=drag.sr; tc=c; } else { tr=r; tc=drag.sc; }
+  /* fill every cell between last and target along the locked axis (no gaps) */
+  if(drag.axis==="h"){
+    var step=tc>drag.lc?1:-1;
+    for(var cc=drag.lc+step; ; cc+=step){ applyAt(tr, cc); if(cc===tc) break; }
+  }else{
+    var stp=tr>drag.lr?1:-1;
+    for(var rr=drag.lr+stp; ; rr+=stp){ applyAt(rr, tc); if(rr===tr) break; }
+  }
+  drag.lr=tr; drag.lc=tc;
+}
+
+function cellFromPoint(x,y){
+  var el=document.elementFromPoint(x,y);
+  if(!el) return null;
+  el = el.closest ? el.closest(".cell") : null;
+  if(!el || el.dataset.i===undefined) return null;
+  var i=parseInt(el.dataset.i,10);
+  return {r:(i/n|0), c:i%n};
+}
+
+function endDrag(){
+  drag.active=false; drag.tool=null; drag.axis=null;
+  touch.pending=false; touch.moved=false;
+  if(touch.timer){ clearTimeout(touch.timer); touch.timer=null; }
+  lastLineKey="";
+  if(!won) saveMistakes();
+}
+
+puzzle.addEventListener("contextmenu", function(e){ e.preventDefault(); });
+
+puzzle.addEventListener("pointerdown", function(e){
+  if(won) return;
+  var t=e.target.closest ? e.target.closest(".cell") : null;
+  if(!t || t.dataset.i===undefined) return;
+  var i=parseInt(t.dataset.i,10), r=(i/n|0), c=i%n;
+  try{ puzzle.setPointerCapture(e.pointerId); }catch(_){}
+  if(e.pointerType==="mouse"){
+    if(e.button!==0 && e.button!==2) return;
+    e.preventDefault();
+    var tool = e.button===2 ? opposite(mode) : mode;
+    beginPaint(tool, r, c);
+  }else{
+    /* touch / pen: wait to distinguish tap (fill) vs long-press (mark) vs drag */
+    touch.pending=true; touch.r=r; touch.c=c; touch.x=e.clientX; touch.y=e.clientY; touch.moved=false;
+    if(touch.timer) clearTimeout(touch.timer);
+    touch.timer=setTimeout(function(){
+      touch.timer=null;
+      if(touch.pending && !touch.moved){
+        touch.pending=false;
+        beginPaint(opposite(mode), touch.r, touch.c);   /* long-press = the other tool */
+      }
+    }, LONGPRESS);
+  }
+}, {passive:false});
+
+puzzle.addEventListener("pointermove", function(e){
+  if(won) return;
+  if(touch.pending){
+    var dx=e.clientX-touch.x, dy=e.clientY-touch.y;
+    if(dx*dx+dy*dy > MOVE_TOL*MOVE_TOL){
+      touch.moved=true; touch.pending=false;
+      if(touch.timer){ clearTimeout(touch.timer); touch.timer=null; }
+      beginPaint(mode, touch.r, touch.c);               /* moved before long-press = fill drag */
+    }else return;
+  }
+  if(!drag.active) return;
+  e.preventDefault();
+  var cell=cellFromPoint(e.clientX, e.clientY);
+  if(cell) paintTo(cell.r, cell.c);
+}, {passive:false});
+
+function pointerEnd(e){
+  if(touch.pending){
+    /* quick tap released before long-press => single primary action */
+    touch.pending=false;
+    if(touch.timer){ clearTimeout(touch.timer); touch.timer=null; }
+    if(!touch.moved && !won) beginPaint(mode, touch.r, touch.c);
+  }
+  if(drag.active || touch.moved) endDrag();
+  else endDrag();
+  try{ puzzle.releasePointerCapture(e.pointerId); }catch(_){}
+}
+puzzle.addEventListener("pointerup", pointerEnd);
+puzzle.addEventListener("pointercancel", pointerEnd);
+
+/* hover cross-highlight (mouse) */
+puzzle.addEventListener("pointerover", function(e){
+  if(e.pointerType!=="mouse") return;
+  var t=e.target.closest ? e.target.closest(".cell") : null;
+  if(!t || t.dataset.i===undefined){ return; }
+  var i=parseInt(t.dataset.i,10);
+  setActive(i/n|0, i%n);
+});
+puzzle.addEventListener("pointerleave", function(e){
+  if(e.pointerType==="mouse" && !drag.active) clearActive();
+});
+
+/* ======================================================================
+   Active row/column highlight
+   ====================================================================== */
+var activeR=-1, activeC=-1;
+function setActive(r,c){
+  if(r===activeR && c===activeC) return;
+  clearActive();
+  activeR=r; activeC=c;
+  var i;
+  for(i=0;i<n;i++){ cellEls[r*n+i].classList.add("rowhl"); cellEls[i*n+c].classList.add("colhl"); }
+  var j;
+  for(j=0;j<rowNumEls[r].length;j++) rowNumEls[r][j].classList.add("hl");
+  for(j=0;j<colNumEls[c].length;j++) colNumEls[c][j].classList.add("hl");
+}
+function clearActive(){
+  if(activeR<0) return;
+  if(activeR>=n||activeC>=n){ activeR=-1; activeC=-1; return; } /* stale index from a since-rebuilt board */
+  var i,j;
+  for(i=0;i<n;i++){ cellEls[activeR*n+i].classList.remove("rowhl"); cellEls[i*n+activeC].classList.remove("colhl"); }
+  for(j=0;j<rowNumEls[activeR].length;j++) rowNumEls[activeR][j].classList.remove("hl");
+  for(j=0;j<colNumEls[activeC].length;j++) colNumEls[activeC][j].classList.remove("hl");
+  activeR=-1; activeC=-1;
+}
+
+/* ======================================================================
+   Win
+   ====================================================================== */
+function allSatisfied(){
+  var r,c;
+  for(r=0;r<n;r++) if(!cluesEqual(lineClue(lineFilled("r",r)), rowClues[r])) return false;
+  for(c=0;c<n;c++) if(!cluesEqual(lineClue(lineFilled("c",c)), colClues[c])) return false;
+  return true;
+}
+function maybeWin(){
+  if(won) return;
+  if(correct!==solFills) return;         /* fast pre-check */
+  if(!allSatisfied()) return;
+  win();
+}
+function win(){
+  won=true;
+  stopTimer();
+  clearActive();
+  /* clear any stray marks over solution-empty cells so the picture is clean */
+  var i;
+  for(i=0;i<st.length;i++){ if(st[i]===2||st[i]===3){ st[i]=0; } renderCell(i); }
+  puzzle.classList.add("won");
+  updateClueDone(); updateStats();
+  say("Solved! Picture revealed in "+fmt(elapsed)+".", "win");
+  sfxWin();
+
+  var mText = mistakes===0 ? "clean" : (mistakes+" slip"+(mistakes===1?"":"s"));
+  var verdict, note;
+  if(mistakes===0){
+    verdict="FLAWLESS";
+    note="Not a single wrong fill. Pure deduction: the best kind of solve.";
+  }else if(mistakes<=3){
+    verdict="SOLVED";
+    note="A few fills to walk back, but you found the picture.";
+  }else{
+    verdict="SOLVED";
+    note="Got there. Marking ruled-out cells with &times; makes the next one easier to read.";
+  }
+  $("winVerdict").textContent=verdict;
+  $("wSize").innerHTML=n+"&times;"+n;
+  $("wTime").textContent=fmt(elapsed);
+  $("wMist").textContent = assist ? String(mistakes) : "-";
+  $("winNote").innerHTML = note + (assist ? "" : " <b>Assist was off</b>, unaided.");
+
+  if(winTimer!==null) clearTimeout(winTimer);
+  winTimer=setTimeout(function(){ winTimer=null; show($("winOverlay")); }, 720);
+}
+
+/* mistakes are a per-session curiosity only; nothing is persisted or posted */
+function saveMistakes(){ /* intentionally empty: NO score leaves this frame */ }
+
+/* ======================================================================
+   Game control
+   ====================================================================== */
+function loadPuzzle(g){
+  var N=n, i, r, c;
+  rowClues=g.clues.rows; colClues=g.clues.cols;
+  sol=new Uint8Array(N*N);
+  solFills=0;
+  for(r=0;r<N;r++) for(c=0;c<N;c++){ var v=g.grid[r][c]?1:0; sol[r*N+c]=v; solFills+=v; }
+  st=new Int8Array(N*N);
+  correct=0; mistakes=0; won=false;
+  buildDOM();
+}
+function newPuzzle(){
+  closeWin();
+  resetTimer();
+  say("Generating "+n+"×"+n+"…");
+  /* let the status paint before the (short) synchronous solve */
+  var g=generate(n);
+  loadPuzzle(g);
+  say(n+"×"+n+": "+solFills+" cells to fill. Match every clue.");
+}
+function resetPuzzle(){
+  closeWin();
+  resetTimer();
+  var i;
+  for(i=0;i<st.length;i++) st[i]=0;
+  correct=0; mistakes=0; won=false;
+  puzzle.classList.remove("won");
+  clearActive();
+  render();
+  say("Board cleared, same picture. Have another go.");
+  sfxErase();
+}
+function setSize(s){
+  if(s===n){ newPuzzle(); return; }
+  n=s; stSet("ng.size", String(n));
+  var segs=document.querySelectorAll(".seg[aria-label='Board size'] button");
+  for(var i=0;i<segs.length;i++) segs[i].setAttribute("aria-pressed", parseInt(segs[i].dataset.size,10)===n?"true":"false");
+  newPuzzle();
+}
+function setMode(m){
+  mode=m; stSet("ng.mode", m);
+  $("mFill").setAttribute("aria-pressed", m==="fill"?"true":"false");
+  $("mMark").setAttribute("aria-pressed", m==="mark"?"true":"false");
+}
+function toggleAssist(){
+  assist=!assist;
+  stSet("ng.assist", assist?"1":"0");
+  var b=$("bAssist");
+  b.classList.toggle("on", assist);
+  b.setAttribute("aria-pressed", assist?"true":"false");
+  /* recount current wrong fills so the flag/stat is honest right now */
+  mistakes=0;
+  if(assist){ for(var i=0;i<st.length;i++) if(st[i]===1 && !sol[i]) mistakes++; }
+  render();
+  say(assist ? "Assist on: wrong fills flagged in red." : "Assist off: flying blind. Good luck.");
+}
+
+function hint(){
+  if(won) return;
+  /* prefer revealing a true fill the player hasn't placed */
+  var cand=[], i;
+  for(i=0;i<st.length;i++) if(sol[i]===1 && st[i]!==1) cand.push(i);
+  var tool="fill";
+  if(cand.length===0){
+    /* otherwise mark a true-empty the player hasn't marked */
+    for(i=0;i<st.length;i++) if(sol[i]===0 && st[i]!==2 && st[i]!==3) cand.push(i);
+    tool="mark";
+  }
+  if(cand.length===0){ say("Nothing left to reveal."); return; }
+  startTimer();
+  var pick=cand[(Math.random()*cand.length)|0];
+  var r=(pick/n|0), c=pick%n;
+  if(tool==="fill"){ setCell(pick,1,true); sfxFill(); }
+  else { setCell(pick,2,true); sfxMark(); }
+  renderCell(pick);
+  cellEls[pick].classList.remove("hintpulse"); void cellEls[pick].offsetWidth; cellEls[pick].classList.add("hintpulse");
+  commitLines([r],[c]);
+  maybeWin();
+  say("Hint: row "+(r+1)+", column "+(c+1)+" is "+(tool==="fill"?"filled.":"empty."));
+}
+
+/* ======================================================================
+   Overlays
+   ====================================================================== */
+function show(el){ el.classList.add("show"); }
+function hide(el){ el.classList.remove("show"); }
+function closeWin(){
+  if(winTimer!==null){ clearTimeout(winTimer); winTimer=null; }
+  hide($("winOverlay"));
+}
+function anyOverlayOpen(){ return $("winOverlay").classList.contains("show") || $("helpOverlay").classList.contains("show"); }
+function closeOverlays(){ closeWin(); hide($("helpOverlay")); }
+
+/* ======================================================================
+   Keyboard: a movable cursor over the cells; never traps focus.
+   ====================================================================== */
+puzzle.addEventListener("keydown", function(e){
+  var el=document.activeElement;
+  if(!el || !el.classList || !el.classList.contains("cell")) return;
+  var i=parseInt(el.dataset.i,10);
+  if(isNaN(i)) return;
+  var r=(i/n|0), c=i%n, k=e.key, handled=true;
+  if(k==="ArrowUp") r=(r-1+n)%n;
+  else if(k==="ArrowDown") r=(r+1)%n;
+  else if(k==="ArrowLeft") c=(c-1+n)%n;
+  else if(k==="ArrowRight") c=(c+1)%n;
+  else if(k===" "||k==="Enter"||k==="f"||k==="F"){ kbAct(i,"fill"); handled=true; }
+  else if(k==="x"||k==="X"){ kbAct(i,"mark"); handled=true; }
+  else handled=false;
+  if(!handled) return;
+  e.preventDefault();
+  if(r!==(i/n|0)||c!==(i%n)){ cellEls[r*n+c].focus(); setActive(r,c); }
+});
+function kbAct(i,tool){
+  if(won) return;
+  startTimer();
+  var r=(i/n|0), c=i%n, cur=st[i], val;
+  if(tool==="fill") val=(cur===1)?0:1;
+  else { if(cur===1) return; val=(cur===2||cur===3)?0:2; }
+  var changed=paintCell(i, tool, val);
+  if(changed){
+    renderCell(i);
+    if(tool==="fill"){ if(val===1) sfxFill(); else sfxErase(); } else { if(val===2) sfxMark(); else sfxErase(); }
+    commitLines([r],[c]);
+    checkLineSound(r,c);
+    maybeWin();
+  }
+}
+puzzle.addEventListener("focusin", function(e){
+  var el=e.target;
+  if(el.classList && el.classList.contains("cell")){ var i=parseInt(el.dataset.i,10); if(!isNaN(i)) setActive(i/n|0,i%n); }
+});
+
+/* ======================================================================
+   Control wiring
+   ====================================================================== */
+$("bNew").addEventListener("click", newPuzzle);
+$("bReset").addEventListener("click", resetPuzzle);
+$("bHint").addEventListener("click", hint);
+$("bAssist").addEventListener("click", toggleAssist);
+$("mFill").addEventListener("click", function(){ setMode("fill"); });
+$("mMark").addEventListener("click", function(){ setMode("mark"); });
+$("wNew").addEventListener("click", newPuzzle);
+$("wClose").addEventListener("click", closeWin);
+$("bHelp").addEventListener("click", function(){ show($("helpOverlay")); });
+$("hClose").addEventListener("click", function(){ hide($("helpOverlay")); });
+$("winOverlay").addEventListener("click", function(e){ if(e.target===this) closeWin(); });
+$("helpOverlay").addEventListener("click", function(e){ if(e.target===this) hide(this); });
+
+$("bSound").addEventListener("click", function(){
+  sound=!sound;
+  stSet("ng.sound", sound?"1":"0");
+  this.setAttribute("aria-pressed", sound?"true":"false");
+  this.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  this.style.opacity = sound ? "1" : ".45";
+  if(sound) blip(660,0.06,"sine",0.05);
+});
+
+var sizeButtons=document.querySelectorAll(".seg[aria-label='Board size'] button");
+for(var sb=0; sb<sizeButtons.length; sb++){
+  sizeButtons[sb].addEventListener("click", function(){ setSize(parseInt(this.dataset.size,10)); });
+}
+
+window.addEventListener("keydown", function(e){
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  var k=(e.key||"").toLowerCase();
+  if(k==="escape"){ if(anyOverlayOpen()){ e.preventDefault(); closeOverlays(); } return; }
+  if(anyOverlayOpen()) return;
+  /* don't hijack keys while a grid cell is focused (it has its own handler) */
+  var af=document.activeElement;
+  if(af && af.classList && af.classList.contains("cell")) return;
+  if(k==="n"){ e.preventDefault(); newPuzzle(); }
+  else if(k==="r"){ e.preventDefault(); resetPuzzle(); }
+  else if(k==="h"){ e.preventDefault(); hint(); }
+  else if(k==="m"){ e.preventDefault(); setMode(opposite(mode)); }
+});
+
+puzzle.addEventListener("animationend", function(e){
+  if(e.animationName==="pop") e.target.classList.remove("pop");
+  if(e.animationName==="hintpulse") e.target.classList.remove("hintpulse");
+});
+
+window.addEventListener("resize", layout);
+try{ if(window.ResizeObserver) new ResizeObserver(layout).observe(wrap); }catch(e){}
+/* keep the clock honest if the tab is backgrounded mid-solve */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden){ if(started){ elapsed+=Date.now()-startTime; started=false; if(timerId){clearInterval(timerId);timerId=null;} } }
+});
+
+/* ======================================================================
+   Boot
+   ====================================================================== */
+(function boot(){
+  var segs=document.querySelectorAll(".seg[aria-label='Board size'] button");
+  for(var i=0;i<segs.length;i++) segs[i].setAttribute("aria-pressed", parseInt(segs[i].dataset.size,10)===n?"true":"false");
+  setMode(mode);
+  var ab=$("bAssist");
+  ab.classList.toggle("on", assist);
+  ab.setAttribute("aria-pressed", assist?"true":"false");
+  var sbn=$("bSound");
+  sbn.setAttribute("aria-pressed", sound?"true":"false");
+  sbn.setAttribute("aria-label", sound?"Sound on":"Sound off");
+  sbn.style.opacity = sound ? "1" : ".45";
+  newPuzzle();
+  requestAnimationFrame(layout);
+})();
+
+})();
+</script>
+<style id="hit-target-shim">
+/* Batchly mobile pass (2026-09-04): 44px tap targets; gated so the desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  .btn,.seg button{min-height:44px;touch-action:manipulation}
+  .seg button{min-width:44px;padding:6px 11px}
+  .btn.icon{min-width:44px}
+}
+</style>
+</body>
+</html>

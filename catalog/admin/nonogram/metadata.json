@@ -1,0 +1,20 @@
+{
+  "folder": "admin/nonogram",
+  "title": "Nonogram",
+  "description": "Solve picture logic puzzles from the row and column clues to reveal a hidden image. Sizes from a gentle 5×5 up to a tricky 15×15.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/nonogram",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 52787,
+      "sha256": "9a672dff6069d6881c207263396c96cad8253380ba5ab8db16fc65c4e8699e14",
+      "source": "published catalog HTML"
+    }
+  ]
+}
