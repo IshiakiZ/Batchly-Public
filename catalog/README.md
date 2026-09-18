@@ -1,6 +1,6 @@
 # Published game downloads
 
-Checked 2026-09-18. 29 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
+Checked 2026-09-18. 30 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
 
 These are published files, not a promise that every game runs offline. See the [repository guide](../README.md).
 
@@ -14,6 +14,7 @@ These are published files, not a promise that every game runs offline. See the [
 | Diff | admin | [Download files](admin/diff/) | [Play](https://batch-ly.com/play/diff) |
 | Dots and Boxes | admin | [Download files](admin/dots-and-boxes/) | [Play](https://batch-ly.com/play/dots-and-boxes) |
 | Encode | admin | [Download files](admin/encode/) | [Play](https://batch-ly.com/play/encode) |
+| Fractal Explorer | admin | [Download files](admin/fractal-explorer/) | [Play](https://batch-ly.com/play/fractal-explorer) |
 | Gomoku | admin | [Download files](admin/gomoku/) | [Play](https://batch-ly.com/play/gomoku) |
 | Hangman | admin | [Download files](admin/hangman/) | [Play](https://batch-ly.com/play/hangman) |
 | Lights Out | admin | [Download files](admin/lights-out/) | [Play](https://batch-ly.com/play/lights-out) |

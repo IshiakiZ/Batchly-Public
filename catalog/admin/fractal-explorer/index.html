@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Fractal Explorer</title>
+<style>
+  :root { --bg:#10100e; --fg:#f4f1e6; --mut:#a8a596; --line:#f4f1e6; --primary:0 95% 59%; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace; overflow:hidden; }
+  body { display:flex; flex-direction:column; }
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:9px 12px; border-bottom:2px solid var(--line); }
+  h1 { font-size:14px; letter-spacing:.14em; text-transform:uppercase; margin:0 8px 0 0; }
+  button { font:inherit; font-size:11px; letter-spacing:.04em; text-transform:uppercase; background:transparent; color:var(--fg); border:2px solid var(--line); padding:6px 9px; cursor:pointer; user-select:none; }
+  button:hover { background:rgba(244,241,230,.1); }
+  button.on { background:hsl(var(--primary)); color:#000; border-color:hsl(var(--primary)); font-weight:700; }
+  .sep { width:2px; align-self:stretch; background:var(--line); opacity:.35; margin:0 3px; }
+  .grow { flex:1; }
+  .hint { font-size:10px; color:var(--mut); }
+  #stage { flex:1; position:relative; }
+  canvas { display:block; width:100%; height:100%; cursor:crosshair; }
+  #status { padding:6px 14px; border-top:2px solid var(--line); font-size:11px; color:var(--mut); display:flex; gap:16px; flex-wrap:wrap; }
+  #status b { color:var(--fg); }
+</style>
+<style>
+/* Touch: 44px tap targets in the bar. Lives in <head> so fit() sizes the render buffer against the
+   post-shim stage. #status is held to one line (it wraps to two once CENTER fills in, and that
+   re-layout happens AFTER fit(): letting it push the stage would squash the canvas 5% or, with
+   min-height:auto, shove the status past the fold). Gated: the desktop document is untouched. */
+@media (max-width:900px),(pointer:coarse){
+  .bar button{min-height:44px;min-width:44px;padding:6px 12px;touch-action:manipulation}
+  #stage{min-height:0}
+  #status{flex-wrap:nowrap;gap:10px}
+  #status span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>◢ Fractal Explorer</h1>
+    <button id="mset" class="on">Mandelbrot</button>
+    <button id="jset">Julia</button>
+    <div class="sep"></div>
+    <button id="palette">Palette</button>
+    <button id="zin">＋</button>
+    <button id="zout">－</button>
+    <button id="reset">Reset</button>
+    <div class="grow"></div>
+    <span class="hint">scroll = zoom · drag = pan · in Julia, move the mouse to morph</span>
+  </div>
+  <div id="stage"><canvas id="c"></canvas></div>
+  <div id="status">
+    <span>MODE <b id="mode">Mandelbrot</b></span>
+    <span>ZOOM <b id="zoom">1×</b></span>
+    <span>ITERATIONS <b id="iter">-</b></span>
+    <span>CENTER <b id="ctr">-</b></span>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const cv = $("c"), ctx = cv.getContext("2d");
+  // view: complex-plane center + span (width in complex units)
+  let cx = -0.6, cy = 0, span = 3.2;
+  let mode = "mandelbrot";           // or "julia"
+  let jc = { re: -0.8, im: 0.156 };  // julia constant
+  let juliaLive = true;              // morph julia c with the mouse
+  let paletteIdx = 0;
+  let W = 0, H = 0;
+  let buf = null;                    // persistent pixel buffer reused across passes
+                                     // (low-res preview, then refined band-by-band)
+
+  // ---- palettes: t in [0,1) -> [r,g,b]; index 0 reserved for "inside" (black)
+  const PALETTES = [
+    (t) => { const a = t * 6.2831853; return [128 + 110 * Math.cos(a), 128 + 110 * Math.cos(a + 2.094), 128 + 110 * Math.cos(a + 4.188)]; }, // electric
+    (t) => [9 + 246 * t, 30 + 120 * t * t, 80 + 60 * Math.sin(t * 9)],                                                                       // ice/blue-gold
+    (t) => { const u = Math.pow(t, 0.6); return [255 * u, 120 * u * u, 30 * u * u * u]; },                                                   // fire
+    (t) => { const v = 255 * (0.5 - 0.5 * Math.cos(t * 6.2831853 * 3)); return [v, v, v]; },                                                 // bands (grayscale)
+  ];
+
+  function fit() {
+    const r = cv.parentElement.getBoundingClientRect();
+    // Cap the render-buffer resolution (CSS stretches it to fill).
+    const MAXW = 760;
+    const s = Math.min(1, MAXW / Math.max(1, r.width));
+    W = Math.max(1, Math.round(r.width * s));
+    H = Math.max(1, Math.round(r.height * s));
+    cv.width = W; cv.height = H;
+    buf = ctx.createImageData(W, H);
+  }
+
+  const zoomLevel = () => 3.2 / span;
+  const maxIter = () => Math.min(800, Math.round(100 + 48 * Math.log2(zoomLevel() + 1)));
+
+  function viewGeom() {
+    const aspect = H / W, spanY = span * aspect;
+    return { x0: cx - span / 2, y0: cy - spanY / 2, dx: span / W, dy: spanY / H };
+  }
+
+  // Core compute: fill rows [yStart,yEnd) of `data`, sampling every `step` px and
+  // painting the step×step block. step=1 => exact pixels; step>1 => fast blocky
+  // preview (1/step^2 of the work) used while the user is interacting.
+  function computeRegion(data, g, iters, pal, julia, jcr, jci, yStart, yEnd, step) {
+    const log2 = Math.LOG2E;
+    for (let py = yStart; py < yEnd; py += step) {
+      const iy = g.y0 + py * g.dy;
+      const yBlk = Math.min(py + step, yEnd);
+      for (let px = 0; px < W; px += step) {
+        const ix = g.x0 + px * g.dx;
+        let zr, zi, cr, ci;
+        if (julia) { zr = ix; zi = iy; cr = jcr; ci = jci; }
+        else { zr = 0; zi = 0; cr = ix; ci = iy; }
+        let n = 0, zr2 = zr * zr, zi2 = zi * zi;
+        while (n < iters && zr2 + zi2 <= 256) {
+          zi = 2 * zr * zi + ci; zr = zr2 - zi2 + cr;
+          zr2 = zr * zr; zi2 = zi * zi; n++;
+        }
+        let R, G, B;
+        if (n >= iters) { R = G = B = 12; }
+        else {
+          const mag = Math.sqrt(zr2 + zi2);
+          let t = ((n + 1 - Math.log(Math.log(mag)) * log2) / iters) % 1;
+          if (t < 0) t += 1;
+          const rgb = pal(t);
+          R = rgb[0] | 0; G = rgb[1] | 0; B = rgb[2] | 0;
+        }
+        const xBlk = Math.min(px + step, W);
+        for (let by = py; by < yBlk; by++) {
+          let q = (by * W + px) * 4;
+          for (let bx = px; bx < xBlk; bx++) { data[q] = R; data[q + 1] = G; data[q + 2] = B; data[q + 3] = 255; q += 4; }
+        }
+      }
+    }
+  }
+
+  function updateStatus(iters, julia) {
+    $("zoom").textContent = zoomLevel() >= 1000 ? zoomLevel().toExponential(1) + "×" : Math.round(zoomLevel()) + "×";
+    $("iter").textContent = iters;
+    $("ctr").textContent = cx.toFixed(4) + (cy < 0 ? " − " : " + ") + Math.abs(cy).toFixed(4) + "i";
+    $("mode").textContent = julia ? "Julia c=" + jc.re.toFixed(3) + (jc.im < 0 ? "−" : "+") + Math.abs(jc.im).toFixed(3) + "i" : "Mandelbrot";
+  }
+
+  // A monotonically-increasing token. Any in-flight progressive render whose token
+  // is stale (a newer render started) aborts itself, so rapid input never piles up
+  // expensive work: the key fix for the deep-zoom slowdown.
+  let gen = 0;
+  let fullTimer = 0;     // debounce handle for the crisp pass
+  let rafPending = false; // coalesce interactive previews to one per frame
+
+  // Fast low-res whole-frame pass for instant feedback while interacting. Reduced
+  // iteration cap keeps it snappy even at deep zoom; the crisp pass restores detail.
+  function renderQuick() {
+    if (!W) fit();
+    ++gen;
+    const iters = maxIter();
+    const qIters = Math.min(iters, 220);
+    const g = viewGeom();
+    const julia = mode === "julia";
+    computeRegion(buf.data, g, qIters, PALETTES[paletteIdx], julia, jc.re, jc.im, 0, H, 4);
+    ctx.putImageData(buf, 0, 0);
+    updateStatus(iters, julia);
+    if (fullTimer) clearTimeout(fullTimer);
+    fullTimer = setTimeout(renderFull, 150); // sharpen once input settles
+  }
+
+  // Crisp full-resolution pass computed in horizontal bands across animation frames,
+  // so even a heavy deep-zoom render yields to the event loop and never freezes the
+  // tab. Refines the low-res preview already in `buf`, top to bottom.
+  function renderFull() {
+    if (!W) fit();
+    const myGen = ++gen;
+    const iters = maxIter();
+    const g = viewGeom();
+    const julia = mode === "julia";
+    const pal = PALETTES[paletteIdx];
+    let py = 0;
+    const BAND = 14;
+    (function band() {
+      if (myGen !== gen) return;                 // superseded by a newer render
+      const yEnd = Math.min(H, py + BAND);
+      computeRegion(buf.data, g, iters, pal, julia, jc.re, jc.im, py, yEnd, 1);
+      ctx.putImageData(buf, 0, 0, 0, py, W, yEnd - py);
+      py = yEnd;
+      if (py < H) requestAnimationFrame(band);
+    })();
+    updateStatus(iters, julia);
+  }
+
+  // Interactive trigger: at most one low-res preview per frame; the crisp pass
+  // follows automatically once input stops (debounced inside renderQuick).
+  function schedule() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; renderQuick(); });
+  }
+
+  // ---- pointer: pan + julia morph -------------------------------------------
+  let dragging = false, lastX = 0, lastY = 0, moved = false;
+  cv.addEventListener("pointerdown", (e) => { dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => {
+    if (mode === "julia" && juliaLive && !dragging) {
+      const r = cv.getBoundingClientRect();
+      jc.re = -0.8 + ((e.clientX - r.left) / r.width - 0.5) * 1.4;
+      jc.im = 0.156 + ((e.clientY - r.top) / r.height - 0.5) * -1.4;
+      schedule(); return;
+    }
+    if (!dragging) return;
+    moved = true;
+    const r = cv.getBoundingClientRect();
+    const upp = span / (r.width); // complex units per CSS px
+    cx -= (e.clientX - lastX) * upp;
+    cy -= (e.clientY - lastY) * upp * (cv.height / cv.width) / (r.height / r.width);
+    lastX = e.clientX; lastY = e.clientY; schedule();
+  });
+  cv.addEventListener("pointerup", () => { dragging = false; });
+  cv.addEventListener("pointerleave", () => { dragging = false; });
+
+  // wheel zoom toward cursor
+  cv.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = cv.getBoundingClientRect();
+    const aspect = cv.height / cv.width;
+    const mx = cx + ((e.clientX - r.left) / r.width - 0.5) * span;
+    const my = cy + ((e.clientY - r.top) / r.height - 0.5) * span * aspect;
+    const f = e.deltaY < 0 ? 0.8 : 1.25;
+    cx = mx + (cx - mx) * f; cy = my + (cy - my) * f; span *= f;
+    schedule();
+  }, { passive: false });
+
+  // ---- toolbar --------------------------------------------------------------
+  function setMode(m) {
+    mode = m;
+    $("mset").classList.toggle("on", m === "mandelbrot");
+    $("jset").classList.toggle("on", m === "julia");
+    if (m === "julia") { cx = 0; cy = 0; span = 3.2; } else { cx = -0.6; cy = 0; span = 3.2; }
+    renderQuick();
+  }
+  $("mset").addEventListener("click", () => setMode("mandelbrot"));
+  $("jset").addEventListener("click", () => setMode("julia"));
+  $("palette").addEventListener("click", () => { paletteIdx = (paletteIdx + 1) % PALETTES.length; renderQuick(); });
+  $("zin").addEventListener("click", () => { span *= 0.7; renderQuick(); });
+  $("zout").addEventListener("click", () => { span /= 0.7; renderQuick(); });
+  $("reset").addEventListener("click", () => setMode(mode));
+  cv.addEventListener("dblclick", () => { // double-click in Julia mode locks/unlocks the morph
+    if (mode === "julia") { juliaLive = !juliaLive; }
+  });
+
+  window.addEventListener("message", (ev) => { if (ev.data && ev.data.type === "batchly-theme" && ev.data.accentHsl) document.documentElement.style.setProperty("--primary", ev.data.accentHsl); });
+  window.addEventListener("resize", () => { fit(); renderQuick(); });
+  fit(); renderQuick();
+})();
+</script>
+</body>
+</html>

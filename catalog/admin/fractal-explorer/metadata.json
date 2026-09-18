@@ -1,0 +1,20 @@
+{
+  "folder": "admin/fractal-explorer",
+  "title": "Fractal Explorer",
+  "description": "Dive into the Mandelbrot and Julia sets: scroll to zoom, drag to pan, and morph Julia with your mouse. Smooth-colored, infinite detail.",
+  "author": "Batchly catalog",
+  "play": "https://batch-ly.com/play/fractal-explorer",
+  "type": "html",
+  "pythonDependencies": [],
+  "pythonMode": "script",
+  "pythonRuntime": "pyodide",
+  "omittedDevelopmentOrUnsupportedAssets": 0,
+  "files": [
+    {
+      "path": "index.html",
+      "bytes": 12020,
+      "sha256": "53bab370fd7db22cdeba1854e5382b477746eda2d30f418bc66ba3068ae56c9d",
+      "source": "published catalog HTML"
+    }
+  ]
+}

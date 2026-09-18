@@ -85,5 +85,8 @@
   },
   "community/afterloop-4s2m": {
     "index.html": "7aa4a53b58c5b6e21f7c9dce84dcd707deed92834b5f1a263c05d813544cf99b"
+  },
+  "admin/fractal-explorer": {
+    "index.html": "53bab370fd7db22cdeba1854e5382b477746eda2d30f418bc66ba3068ae56c9d"
   }
 }
