@@ -1,5 +1,5 @@
 {
-  "edition": "original-ui-r2-public-source",
+  "edition": "original-ui-r3-public-source",
   "excluded": [
     "data",
     "results",
@@ -754,8 +754,14 @@
     },
     {
       "path": "hosting/build.mjs",
-      "bytes": 4807,
-      "sha256": "9ef3c5dd8bfb4c5e06286b164021f3e84f8a51f5b8138707943448056860aa0e",
+      "bytes": 3123,
+      "sha256": "542106cc56cd99879766f9258e5218ebb31213cb630b1aef17e4a814f4841773",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/public-adapter.mjs",
+      "bytes": 1688,
+      "sha256": "47d6fe92747caab37e97db187ea71191cf39ee0884165bec80c326a1437bad2b",
       "classification": "Batchly-hosting-and-MCP-adapter"
     },
     {
@@ -766,8 +772,8 @@
     },
     {
       "path": "hosting/server-worker.cjs",
-      "bytes": 10378,
-      "sha256": "7364338401b3059352b22ed8acfed8977eebf8a5e9f1b4dd2ea98d5d7edb7993",
+      "bytes": 15756,
+      "sha256": "c5d274013539df14dfcbddb512bde97ed7f17801e91ca3181623f9493ccbd110",
       "classification": "Batchly-hosting-and-MCP-adapter"
     },
     {
@@ -790,8 +796,8 @@
     },
     {
       "path": "hosting/transport.js",
-      "bytes": 17712,
-      "sha256": "0d461d119bdb6dd8442af528ee7db2f74fb9f87ca0dcb9b2dff5294a8854fa2b",
+      "bytes": 25753,
+      "sha256": "655be7b8262308d65a4f29ee12f7cc99b2928a8a77809a72bd7461c8b8ee873b",
       "classification": "Batchly-hosting-and-MCP-adapter"
     },
     {
@@ -819,16 +825,58 @@
       "classification": "Batchly-hosting-and-MCP-adapter"
     },
     {
+      "path": "hosting/pace-sync.js",
+      "bytes": 3039,
+      "sha256": "64b6dd7ca7355ec8aeaf1598052929f75bc3db42cc0a787a34e6a346c1181142",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
       "path": "hosting/transport.test.mjs",
-      "bytes": 6238,
-      "sha256": "1a0be3be45bb8bb88088d5fc28d25501365e90c55dc9589d694c9bafc804b6c5",
+      "bytes": 14312,
+      "sha256": "3a3fa1e178c84bb85471ff9926c178a384a2a0e93dea6d336fe78b5ba67e76b4",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/pace-sync.test.mjs",
+      "bytes": 2552,
+      "sha256": "6a9c92a72a1b1d56728ea6493ac12c65c51f5f438d0d72a06a7a137134bbc5ae",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/server-clock.test.mjs",
+      "bytes": 4989,
+      "sha256": "f71f4f6c9c9566f419ed2136686e0dcfad2b5aed0c07b45693457607661a8b52",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/worker-test-harness.mjs",
+      "bytes": 3649,
+      "sha256": "df0bcba5e9992d58ec5fd578b0da8cf948fda60ada1eb5ff47fd2e3dc074a74f",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/pace-qa.mjs",
+      "bytes": 6117,
+      "sha256": "1ec533f51c9be1756d15900a116024ffe2236c60804aaba78a9f019a5b564013",
+      "classification": "Batchly-hosting-and-MCP-adapter"
+    },
+    {
+      "path": "hosting/pace-qa-browser.js",
+      "bytes": 10641,
+      "sha256": "d29a530b0e188bc8d1c9a24c875fac543c6bfcaee1e22b9dbcfbdc7de69ffbde",
       "classification": "Batchly-hosting-and-MCP-adapter"
     },
     {
       "path": "BATCHLY-HOSTING.md",
-      "bytes": 8480,
-      "sha256": "dc6912c7133e9e9bed01f0e18a946bb50892869f44c9ffcc6f402313c1da283b",
+      "bytes": 10026,
+      "sha256": "8bd7203b47491f8eb581b6952a113478bb94f84a8a81e47cf196725c75f26c20",
       "classification": "integration-documentation"
+    },
+    {
+      "path": "MCP-PLAY.md",
+      "bytes": 2748,
+      "sha256": "432f8cfe6ff195920848f8d2441717c0022ebc1fc2278af2da2df8efe13c2846",
+      "classification": "hosted-MCP-workflow"
     },
     {
       "path": ".gitignore",
@@ -952,8 +1000,8 @@
     },
     {
       "path": "web/js/app.js",
-      "bytes": 40627,
-      "sha256": "94518037fb01e9f64cb6e8bdc08b2308d6383b0031c6cfdde85af0f39b991764",
+      "bytes": 40637,
+      "sha256": "f6d08c3899ad59d1355287f3ca46fc6f09923638c00aa710713d380d5d5ffc33",
       "classification": "generated-original-web-no-recordings"
     },
     {
@@ -1102,8 +1150,8 @@
     },
     {
       "path": "web/original-server-worker.js",
-      "bytes": 1555471,
-      "sha256": "da001c118c7c938a37345b9c25e5990f54a0750588e45301befa69d7fdf4dd0c",
+      "bytes": 1560849,
+      "sha256": "1ad3392ee87650d5045ed2d7d1ab2d6ad7b4e2ac3c89ffc0c61ca7fb97c3be6a",
       "classification": "generated-original-web-no-recordings"
     },
     {
@@ -1114,14 +1162,20 @@
     },
     {
       "path": "web/original-ui-manifest.json",
-      "bytes": 26801,
-      "sha256": "ebd71505dc9e72a93cf55bf1ba8d56a382a72a93c918ad378ec02d75219419c4",
+      "bytes": 26948,
+      "sha256": "d5b662b97daf7ba9d6bbebeb12026bb237d6cb6efeecc7069d8d375e80113b0b",
       "classification": "generated-original-web-no-recordings"
     },
     {
       "path": "web/original-validation-worker.js",
       "bytes": 1546306,
       "sha256": "566da4c2598b479886257e93d3fe513bfac95a924de2693a5f5c56ac7831abdf",
+      "classification": "generated-original-web-no-recordings"
+    },
+    {
+      "path": "web/pace-sync.js",
+      "bytes": 3039,
+      "sha256": "64b6dd7ca7355ec8aeaf1598052929f75bc3db42cc0a787a34e6a346c1181142",
       "classification": "generated-original-web-no-recordings"
     },
     {
@@ -1138,8 +1192,8 @@
     },
     {
       "path": "web/transport.js",
-      "bytes": 17712,
-      "sha256": "0d461d119bdb6dd8442af528ee7db2f74fb9f87ca0dcb9b2dff5294a8854fa2b",
+      "bytes": 25753,
+      "sha256": "655be7b8262308d65a4f29ee12f7cc99b2928a8a77809a72bd7461c8b8ee873b",
       "classification": "generated-original-web-no-recordings"
     },
     {

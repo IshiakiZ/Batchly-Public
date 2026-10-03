@@ -2,6 +2,7 @@ import {isolatedWorker,runOriginalSimulation,runOriginalValidation} from './isol
 import {hostRequest} from './host-bridge.js';
 import {storageRequest,validateSnapshot,loadSavedFiles} from './storage-bridge.js';
 import {stable,snapshotFromFiles,sameSnapshot,sessionStillMatches} from './session-binding.js';
+import {originalClockInfo,sourceSyncKey,sessionSyncKey,sessionStatus,queuedCheckTarget,checkStillCurrent,compactCheckResult} from './pace-sync.js';
 import {toast as originalToast} from './js/util.js';
 
 const nativeFetch=globalThis.fetch.bind(globalThis);
@@ -10,6 +11,9 @@ let sessionId=new URL(location.href).searchParams.get('session');
 const pending=new Map(),streams=new Set(),simulations=new Map();
 let worker,session,lastRevision=-1,sseBuffer='',completionRevision=null;
 let hostControlPending=false,generation=0,completionBinding=null,localState=null;
+let clockControlPending=false,sessionReceivedAt=0,lastSyncKey=null,lastSourceKey=null,lastPersistentStateKey=null;
+let sessionSyncQueue=Promise.resolve();
+const checksInFlight=new Map(),checkResults=new Map();
 let storageRevision=0,storageLoaded=false,storageStopped=false,saveTimer,saveRunning=false,saveAgain=false,syncedSessionId=null;
 async function saveSnapshot(){
   clearTimeout(saveTimer);
@@ -34,12 +38,93 @@ function scheduleSave(immediate=false){
 function adoptSession(value,requestedId){
   if(requestedId!==sessionId||value.id!==requestedId)return false;
   if(session?.id===requestedId&&session.revision>value.revision)return false;
+  if(session?.id===requestedId&&session.revision===value.revision
+    &&session.clock?.server_now_ms>value.clock?.server_now_ms)return false;
   if(session&&session.round!==value.round){generation++;completionBinding=null;}
-  session=value;return true;
+  session=value;sessionReceivedAt=Date.now();return true;
 }
 let resolveBoot,rejectBoot;
 const boot=new Promise((resolve,reject)=>{resolveBoot=resolve;rejectBoot=reject;});
 boot.catch(()=>{});
+
+function syncAccountSession({restart=false,control=null}={}){
+  const id=sessionId,epoch=generation;
+  const apply=async()=>{
+    await boot;
+    if(id!==sessionId||epoch!==generation||!session)return false;
+    const applying=session,key=sessionSyncKey(applying);
+    const clockInfo=originalClockInfo(applying.clock,sessionReceivedAt);
+    const full=restart||syncedSessionId!==id||lastSyncKey!==key;
+    if(full){
+      await send({type:'session',session:applying,clockInfo,reset:syncedSessionId!==id,restart});
+      if(id!==sessionId||epoch!==generation)return false;
+      lastRevision=applying.revision;lastSyncKey=key;lastSourceKey=sourceSyncKey(applying);syncedSessionId=id;
+    }
+    // Status contains no build source. Clock, say and queued-check changes do not
+    // advance the build revision and must reach the original UI on every poll.
+    if(!full||control)await send({type:'session-status',session:sessionStatus(applying),clockInfo,control});
+    return id===sessionId&&epoch===generation;
+  };
+  sessionSyncQueue=sessionSyncQueue.then(apply,apply);
+  return sessionSyncQueue;
+}
+
+async function mirrorClockControl(action,body={}){
+  if(clockControlPending||hostControlPending)throw new Error('A host action is already pending');
+  const id=sessionId,round=session?.round??localState?.round,epoch=generation;
+  if(!Number.isInteger(round))throw new Error('Wait for the account round to load');
+  const command=action==='settings'?'settings':action.slice('clock-'.length);
+  const settings=command==='settings'?{
+    first_round_seconds:body.firstRoundLimitSec??session?.clock_settings?.first_round_seconds??localState?.settings?.firstRoundLimitSec??360,
+    round_seconds:body.roundLimitSec??session?.clock_settings?.round_seconds??localState?.settings?.roundLimitSec??300,
+  }:{};
+  clockControlPending=true;
+  try{
+    const confirmed=await hostRequest('clock',{session_id:id,expected_round:round,command,settings});
+    if(id!==sessionId||epoch!==generation||confirmed.round!==round)throw new Error('The match changed while updating the clock');
+    adoptSession(confirmed,id);
+    await syncAccountSession({control:command});
+    scheduleSave(true);
+    return {ok:true};
+  }finally{clockControlPending=false;}
+}
+
+function processQueuedChecks(){
+  const activeKeys=new Set();
+  for(let side=0;side<2;side++){
+    const target=queuedCheckTarget(session,side,generation);
+    if(!target)continue;
+    const key=stable(target);activeKeys.add(key);
+    if(checksInFlight.has(key)||checksInFlight.size>=2||hostControlPending)continue;
+    const files=session.builds[side],mirror=localState?.mirrorFirstRound!==false;
+    const run=async()=>{
+      let result=checkResults.get(key);
+      if(!result){
+        try{
+          const validation=await runOriginalValidation({mode:target.mode,level:target.round,mirror,snapshot:snapshotFromFiles(target.mode,files)});
+          result=compactCheckResult(validation);
+        }catch(error){result=compactCheckResult({check:{ok:false,errors:[error.message],warnings:[]}});}
+        checkResults.set(key,result);
+      }
+      if(!checkStillCurrent(target,session,sessionId,generation)||hostControlPending)return;
+      // Re-read before posting so a patch accepted during validation discards the
+      // old result. The endpoint independently checks the exact source digest.
+      const refreshed=await hostRequest('get',{session_id:target.id});
+      if(target.generation!==generation||target.id!==sessionId)return;
+      adoptSession(refreshed,target.id);
+      if(!checkStillCurrent(target,session,sessionId,generation)||hostControlPending)return;
+      const reported=await hostRequest('check_result',{session_id:target.id,side:target.side,expected_round:target.round,check_id:target.checkId,result});
+      if(target.generation!==generation||target.id!==sessionId)return;
+      adoptSession(reported,target.id);
+      await syncAccountSession();
+    };
+    const promise=run().catch(error=>{
+      if(checkStillCurrent(target,session,sessionId,generation))emit('toast',{level:'error',text:error.message});
+    }).finally(()=>checksInFlight.delete(key));
+    checksInFlight.set(key,promise);
+  }
+  for(const key of checkResults.keys())if(!activeKeys.has(key)&&!checksInFlight.has(key))checkResults.delete(key);
+}
 
 function emit(name,value){const text=typeof value==='string'?value:JSON.stringify(value);for(const stream of streams)stream.dispatchEvent(new MessageEvent(name,{data:text}));}
 function fail(error){rejectBoot(error);for(const request of pending.values()){clearTimeout(request.timer);request.reject(error);}pending.clear();emit('toast',{level:'error',text:error.message});for(const stream of streams)stream.dispatchEvent(new Event('error'));}
@@ -48,11 +133,11 @@ function adaptBootstrap(data){
   for(const [side,id] of data.config.fighters.map((fighter,side)=>[side,fighter.id])) {
     if(!sessionId){
       data.prompts[id]=side===0
-        ? `Connect to Batchly MCP with your creator token. Call ai_fight_create_session with mode "${data.mode.id}". Share its host_url and session ID with me so I can open the original game in Batchly and give the session ID to the other agent. You are side 0. Then follow mode_help: get the session, submit your full files with the current expected_revision, ready, and poll for the result. Do not run the local arena.js CLI.`
-        : `Connect to Batchly MCP using a different creator token on the same owner's account. Use the AI Fight session ID shared by the first agent; do not create a separate session. You are side 1. Call ai_fight_get_session, read mode_help, submit your full files with the current expected_revision, ready, and poll for the result. The owner must keep the host page open. Do not run the local arena.js CLI.`;
+        ? `Connect to Batchly MCP with your creator token. Call ai_fight_create_session with {mode:"${data.mode.id}",compact:true}. Share its host_url and session ID with me so I can open the original game and give the same ID to the other agent. You are side 0. Once the host is open, call ai_fight_begin_turn with session_id, side:0, expected_round:1 immediately. If the rules are unknown, call ai_fight_get_rules once with session_id and sections:recommended_sections from begin. Write file strings directly with ai_fight_patch_build (include remove:[]), optionally check with ai_fight_check_build, lock with ready:true in patch, then ai_fight_wait. Aim for 90-150 seconds of focused work if the shared clock allows it; clock.remaining_ms is the hard limit. Once ready or clock.expired, STOP EDITING; wait for the result. Do not use local files, terminal commands or arena.js.`
+        : `Connect to Batchly MCP using a different creator token on the same owner's account. Use the session ID shared by the first agent; do not create another session. You are side 1. With the host page open, call ai_fight_begin_turn with session_id, side:1, expected_round:1 immediately. If the rules are unknown, call ai_fight_get_rules once with session_id and sections:recommended_sections from begin. Write file strings directly with ai_fight_patch_build (include remove:[]), optionally check with ai_fight_check_build, lock with ready:true in patch, then ai_fight_wait. Aim for 90-150 seconds if the shared clock allows it; clock.remaining_ms is the hard limit. Once ready or clock.expired, STOP EDITING; wait for the result. Do not use local files, terminal commands or arena.js.`;
       continue;
     }
-    data.prompts[id]=`You are ${data.config.fighters[side].label} playing the original AI Fight ${data.mode.name} through Batchly MCP.\nSession: ${sessionId}\nYour side: ${side}. Use your own creator token; the other agent must use a different token on the same owner's account.\n1. Call ai_fight_get_session with session_id. Read mode_help and the original guide at ${new URL(data.mode.guide,base).href}.\n2. Edit the complete design and JavaScript source files for this mode.\n3. Call ai_fight_submit_build with session_id, side, expected_revision from the latest read, and files.\n4. Call ai_fight_ready with session_id, side, and the new expected_revision.\n5. Poll ai_fight_get_session for the result. On the next round, evolve your files and repeat. Stop when phase is complete.\nKeep the signed-in host page open. Browser results are unranked. Do not run arena.js or access another agent's files.`;
+    data.prompts[id]=`You are ${data.config.fighters[side].label} playing original AI Fight ${data.mode.name} through Batchly MCP.\nSession: ${sessionId}\nYour side: ${side}. Use a separate creator token from the other agent on the same owner's account. Keep the signed-in host open.\n1. Call ai_fight_begin_turn NOW with session_id:"${sessionId}", side:${side}, expected_round:${data.state?.round||1}. This starts the shared build clock. Use its compact starter, own files, rules_index and recommended_sections. If these rules are unknown, call ai_fight_get_rules once with session_id and sections:recommended_sections. Hosted workflow instructions take precedence over local CLI instructions in gameplay rules.\n2. Decide and write file strings directly using ai_fight_patch_build with session_id, side, expected_round, expected_revision from the latest response, files, remove:[] and ready:false. Include required files for a new build; later calls need only changed files. Aim for 90-150 seconds of focused work if time permits. The returned clock.remaining_ms is the actual limit, including pauses and host changes.\n3. Use ai_fight_say with session_id, side, expected_round and a short message for real progress. If validation is needed, call ai_fight_check_build with session_id, side, expected_round and expected_revision, then ai_fight_wait until your check has a result. Check results are unranked browser validation. Fix errors while time remains.\n4. Lock with ai_fight_patch_build using ready:true, remove:[] and any final changed files (files:{} if none). Use the latest revision; on a conflict, call ai_fight_status and retry only for the same round.\n5. Call ai_fight_wait with session_id, current expected_round, after_revision from the latest response and max_seconds:20 for check or round results. On a new round, call begin_turn immediately with that round and evolve your build. Stop when phase is complete.\nOnce ready or clock.expired, STOP EDITING; wait for the result. Do not create local files, run terminal commands or arena.js, access another agent's files, or spend time searching for a CLI. Use the connected tools directly.`;
   }
   return data;
 }
@@ -68,7 +153,10 @@ function acceptSse(chunk){
     if(name==='bootstrap')adaptBootstrap(data);
     if(name==='state'||name==='bootstrap')localState=name==='state'?data:data.state;
     emit(name,data);
-    if(['bootstrap','card','feed','activity','test','match','state'].includes(name))scheduleSave(name==='match'||name==='state');
+    if(name==='state'){
+      const key=stable([data.matchId,data.mode,data.round,data.phase,data.score,data.fighters,data.settings,data.prediction,sessionId?null:data.clock]);
+      if(key!==lastPersistentStateKey){lastPersistentStateKey=key;scheduleSave(true);}
+    }else if(['bootstrap','card','feed','activity','test','match'].includes(name))scheduleSave(name==='match');
     if(sessionId&&['state','bootstrap'].includes(name)&&['round_over','match_over'].includes(localState?.phase))void publishCompletion(localState);
   }
 }
@@ -83,7 +171,7 @@ async function publishCompletion(state){
     if(sessionStillMatches(target,session,sessionId,generation))adoptSession(completed,target.id);
   } catch(error){if(target.generation===generation){completionRevision=null;emit('toast',{level:'error',text:error.message});}}
 }
-async function ensureHostReady(job,matchId,jobGeneration){
+async function ensureHostReady(job,matchId,jobGeneration,autoLocked=false){
   if(!sessionId)return null;
   const id=sessionId;
   const stillCurrent=()=>id===sessionId&&jobGeneration===generation&&!hostControlPending&&localState?.matchId===matchId;
@@ -93,11 +181,15 @@ async function ensureHostReady(job,matchId,jobGeneration){
     adoptSession(refreshed,id);
     if(!stillCurrent()||session.round!==job.round||(job.mode||'fighter')!==session.mode)throw new Error('The account round has already changed');
     if(!['ready','building'].includes(session.phase))throw new Error('The account round has already changed');
+    if(autoLocked&&session.phase==='building'&&(!session.clock?.expired||lastSourceKey!==sourceSyncKey(session))){
+      await syncAccountSession({restart:true});
+      const error=new Error('Refreshing the original clock and files before automatic lock');error.superseded=true;throw error;
+    }
     const stale=session.ready.some((ready,side)=>ready&&!sameSnapshot(session.mode,job.snapshots[side],snapshotFromFiles(session.mode,session.builds[side])));
     if(stale){
       // Rebuild the original locks and job from the confirmed account files. The
       // old job never runs, even if another agent became ready during this read.
-      await send({type:'session',session,restart:true});
+      await syncAccountSession({restart:true});
       const error=new Error('Rebuilding the fight from the confirmed locked files');error.superseded=true;throw error;
     }
     if(session.phase!=='ready'){
@@ -137,7 +229,7 @@ export async function installOriginalTransport(){
       const marker={generation,matchId:message.matchId};simulations.set(message.id,marker);
       // Exhibitions have no effect on the account match. Real rounds must first
       // synchronize the original forced/clock-triggered lock with the owner lane.
-      (message.job.kind==='exhibition'?Promise.resolve(null):ensureHostReady(message.job,message.matchId,marker.generation)).then(async target=>{
+      (message.job.kind==='exhibition'?Promise.resolve(null):ensureHostReady(message.job,message.matchId,marker.generation,message.autoLocked)).then(async target=>{
         if(simulations.get(message.id)!==marker||marker.generation!==generation)return;
         const result=await runOriginalSimulation(message.job);
         if(simulations.get(message.id)!==marker||marker.generation!==generation||(target&&!sessionStillMatches(target,session,sessionId,generation)))return;
@@ -161,14 +253,24 @@ export async function installOriginalTransport(){
     const text=typeof input==='string'?input:input instanceof URL?input.href:input.url;
     if(text.startsWith('/api/')){
       if((options.body?.length||0)>180*1024)return Response.json({ok:false,message:'Request too large'},{status:413});
+      if(sessionId&&options.method==='POST'&&(text.startsWith('/api/host/clock-')||text==='/api/host/settings')){
+        try{
+          const body=JSON.parse(options.body||'{}'),action=text.slice('/api/host/'.length);
+          if(action!=='settings'||body.firstRoundLimitSec!==undefined||body.roundLimitSec!==undefined){
+            await mirrorClockControl(action,body);
+            if(body.impactFreeze!==undefined)await request('/api/host/settings','POST',JSON.stringify({impactFreeze:body.impactFreeze}));
+            return Response.json({ok:true});
+          }
+        }catch(error){return Response.json({ok:false,message:error.message},{status:409});}
+      }
       if(text==='/api/host/force-start'&&sessionId){
-        try{const id=sessionId;const fresh=await hostRequest('get',{session_id:id});if(adoptSession(fresh,id))await send({type:'session',session:fresh});}
+        try{const id=sessionId;const fresh=await hostRequest('get',{session_id:id});if(adoptSession(fresh,id))await syncAccountSession();}
         catch(error){return Response.json({ok:false,message:error.message},{status:409});}
       }
       if(sessionId&&text.startsWith('/api/host/')) {
         const action=text.slice('/api/host/'.length);
         if(['end','new-match','next'].includes(action)){
-          if(hostControlPending)return Response.json({ok:false,message:'A host action is already pending'},{status:409});
+          if(hostControlPending||clockControlPending)return Response.json({ok:false,message:'A host action is already pending'},{status:409});
           hostControlPending=true;
           generation++;completionRevision=null;
           try{
@@ -177,11 +279,12 @@ export async function installOriginalTransport(){
             if(action==='new-match'){
               if(session.phase!=='complete')adoptSession(await hostRequest('end',{session_id:id,expected_revision:session.revision}),id);
               const created=await hostRequest('create',{mode:JSON.parse(options.body||'{}').mode||session.mode});
-              session=created;sessionId=created.id;lastRevision=-1;completionRevision=null;completionBinding=null;
+              session=created;sessionId=created.id;sessionReceivedAt=Date.now();lastRevision=-1;lastSyncKey=null;lastSourceKey=null;completionRevision=null;completionBinding=null;
             }
             if(action==='next')adoptSession(await hostRequest('next',{session_id:id,expected_revision:session.revision}),id);
             const response=await request(text,options.method||'GET',options.body||'');
             if(action==='new-match')syncedSessionId=sessionId;
+            await syncAccountSession();
             scheduleSave(true);
             return new Response(response.body,{status:response.status,headers:response.headers});
           }catch(error){return Response.json({ok:false,message:error.message},{status:409});}
@@ -217,26 +320,23 @@ export async function installOriginalTransport(){
     }
     storageLoaded=true;
   }catch(error){storageStopped=true;fail(error);setTimeout(()=>originalToast(error.message,'error'),0);return;}
-  worker.send({type:'init',files:restored.files||{}});
+  worker.send({type:'init',files:restored.files||{},sharedSession:!!sessionId});
   addEventListener('pagehide',()=>{void saveSnapshot();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')void saveSnapshot();});
   if(sessionId) {
     const poll=async()=>{
       const id=sessionId;
       try{
-        if(hostControlPending)return;
+        if(hostControlPending||clockControlPending)return;
         const refreshed=await hostRequest('get',{session_id:id});
-        if(hostControlPending||!adoptSession(refreshed,id))return;
-        if(session.revision!==lastRevision){
-          const applying=session;
-          await boot;
-          if(hostControlPending||id!==sessionId||session.revision!==applying.revision)return;
-          try{await send({type:'session',session:applying,reset:syncedSessionId!==id});if(id===sessionId){lastRevision=applying.revision;syncedSessionId=id;}}
-          catch(error){
-            if(id===sessionId&&applying.phase==='ready')adoptSession(await hostRequest('complete',{session_id:id,expected_revision:applying.revision,result:{validation_failed:true,error:error.message,unranked:true}}),id);
-            throw error;
-          }
+        if(hostControlPending||clockControlPending||!adoptSession(refreshed,id))return;
+        const applying=session;
+        try{await syncAccountSession();}
+        catch(error){
+          if(id===sessionId&&applying.phase==='ready')adoptSession(await hostRequest('complete',{session_id:id,expected_revision:applying.revision,result:{validation_failed:true,error:error.message,unranked:true}}),id);
+          throw error;
         }
+        processQueuedChecks();
         if(['round_over','match_over'].includes(localState?.phase))void publishCompletion(localState);
       }catch(error){emit('toast',{level:'error',text:error.message});}
       finally{setTimeout(poll,4000);}

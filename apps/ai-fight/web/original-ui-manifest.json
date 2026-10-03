@@ -1,5 +1,5 @@
 {
-  "edition": "original-ui-r2-candidate",
+  "edition": "original-ui-r3-candidate",
   "includeAudio": false,
   "originals": [
     {
@@ -661,8 +661,8 @@
     },
     {
       "path": "js/app.js",
-      "bytes": 40627,
-      "sha256": "94518037fb01e9f64cb6e8bdc08b2308d6383b0031c6cfdde85af0f39b991764"
+      "bytes": 40637,
+      "sha256": "f6d08c3899ad59d1355287f3ca46fc6f09923638c00aa710713d380d5d5ffc33"
     },
     {
       "path": "js/art-fx.js",
@@ -806,8 +806,8 @@
     },
     {
       "path": "original-server-worker.js",
-      "bytes": 1555471,
-      "sha256": "da001c118c7c938a37345b9c25e5990f54a0750588e45301befa69d7fdf4dd0c"
+      "bytes": 1560849,
+      "sha256": "1ad3392ee87650d5045ed2d7d1ab2d6ad7b4e2ac3c89ffc0c61ca7fb97c3be6a"
     },
     {
       "path": "original-sim-worker.js",
@@ -826,8 +826,8 @@
     },
     {
       "path": "transport.js",
-      "bytes": 17712,
-      "sha256": "0d461d119bdb6dd8442af528ee7db2f74fb9f87ca0dcb9b2dff5294a8854fa2b"
+      "bytes": 25753,
+      "sha256": "655be7b8262308d65a4f29ee12f7cc99b2928a8a77809a72bd7461c8b8ee873b"
     },
     {
       "path": "isolation.js",
@@ -843,6 +843,11 @@
       "path": "session-binding.js",
       "bytes": 1585,
       "sha256": "cff5b2d3078613f98d3b3a69c22edd827d94b177ee7053f2eea61d24ccda8815"
+    },
+    {
+      "path": "pace-sync.js",
+      "bytes": 3039,
+      "sha256": "64b6dd7ca7355ec8aeaf1598052929f75bc3db42cc0a787a34e6a346c1181142"
     },
     {
       "path": "host-bridge.js",

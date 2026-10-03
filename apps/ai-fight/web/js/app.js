@@ -419,7 +419,7 @@ function openSetup() {
         h('pre', null, text));
     })),
     h('div', { class: 'foot' },
-      h('span', null, 'Keep the signed-in host open. Creator tools provide ', h('code', null, 'mode_help'), '. The AIs read the linked ', h('code', null, 'AI_GUIDE.md'), ' for the full rules.'),
+      h('span', null, 'Keep the signed-in host open. Creator tools provide ', h('code', null, 'ai_fight_begin_turn'), '. The AIs read the linked ', h('code', null, 'AI_GUIDE.md'), ' for the full rules.'),
       h('button', { class: 'btn primary', onclick: closeModal }, 'Got it')),
   ], { label: 'Setup and prompts' });
 }

@@ -100,6 +100,7 @@ let environment, serverHooks;
 const simulations = new Map();
 const validations=new Map(),checks=new Map(),loads=new Map();
 let sequence = 0;
+let preparedSourceKey=null;
 const stable=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
 function canonicalSnapshot(mode,snapshot){
   snapshot={...snapshot,lib:snapshot.lib&&Object.keys(snapshot.lib).length?snapshot.lib:null};
@@ -177,15 +178,89 @@ async function prepareValidation(message={}){
 class SimulationWorker {
   constructor(file,{workerData}) {
     this.id=++sequence;this.handlers={};simulations.set(this.id,this);
-    send({type:'simulate',id:this.id,job:workerData,matchId:serverHooks?.current().state.matchId});
+    const current=serverHooks?.current().state;
+    send({type:'simulate',id:this.id,job:workerData,matchId:current?.matchId,
+      autoLocked:Object.values(current?.fighters||{}).some(fighter=>!!fighter.autoLocked)});
   }
   once(name,handler){this.handlers[name]=handler;return this;}
   terminate(){simulations.delete(this.id);send({type:'cancel-simulation',id:this.id});}
 }
 const HOOKS = `
+let sharedClockActive=false,sharedClock=null,sharedClockApplying=false;
+const localClockView=clockView,localClockDeadline=clockDeadline,localCheckClock=checkClock,localAutoStartClock=maybeAutoStartClock;
+clockView=function(){
+  if(!sharedClockActive)return localClockView();
+  if(!sharedClock)return {enabled:false,started:false,paused:false,running:false,expired:false,limitMs:0,remainingMs:null,deadline:null,startedAt:null};
+  const info=sharedClock.info;
+  const remaining=info.enabled&&info.started&&!info.paused&&info.deadline!==null?Math.max(0,info.deadline-Date.now()):info.remainingMs;
+  const expired=info.expired||(info.enabled&&info.started&&!info.paused&&remaining===0);
+  return {...info,remainingMs:remaining,expired,running:info.running&&!expired};
+};
+clockDeadline=function(...args){return sharedClockActive?(sharedClock?.info.deadline??null):localClockDeadline(...args);};
+maybeAutoStartClock=function(){if(!sharedClockActive)localAutoStartClock();};
+checkClock=function(){
+  if(sharedClockActive&&(!sharedClock||sharedClockApplying))return;
+  localCheckClock();
+};
+function syncSharedStatus(session,clockInfo,control){
+  if(session.round!==state.round||session.mode!==state.mode)return {ok:false,stale:true};
+  if(sharedClock&&sharedClock.id!==session.id)return {ok:false,stale:true};
+  if(sharedClock?.serverNow>session.clock?.server_now_ms)return {ok:false,stale:true};
+  sharedClockActive=true;
+  if(clockInfo){
+    const previous=sharedClock;
+    const sameRound=previous&&previous.id===session.id&&previous.round===session.round;
+    const expiredLocally=sameRound&&state.clock?.expired;
+    sharedClock={id:session.id,round:session.round,serverNow:session.clock.server_now_ms,info:clockInfo};
+    state.settings={...state.settings,firstRoundLimitSec:session.clock_settings.first_round_seconds,roundLimitSec:session.clock_settings.round_seconds};
+    state.clock={limitMs:clockInfo.limitMs,startedAt:clockInfo.started?clockInfo.startedAt||Date.now():null,
+      pausedAt:clockInfo.paused?Date.now():null,pausedMs:0,bonusMs:0,expired:!!expiredLocally,
+      warned:sameRound?(state.clock?.warned||{}):{}};
+  }
+  const saved=state._batchlyRemote;
+  const cursor=saved?.id===session.id&&saved?.round===session.round?saved
+    :{id:session.id,round:session.round,activity:[null,null],checks:[null,null]};
+  state._batchlyRemote=cursor;
+  for(let side=0;side<2;side++){
+    const id=IDS[side],activity=session.activity?.[side],job=session.checks?.[side];
+    if(activity&&typeof activity.message==='string'){
+      const key=JSON.stringify([activity.at,activity.message]);
+      if(cursor.activity[side]!==key){
+        cursor.activity[side]=key;
+        touch(id,'say');
+        const a=state.activity[id],remoteAt=Date.parse(activity.at);
+        const localAt=Number.isFinite(remoteAt)&&clockInfo
+          ?clockInfo.sampleAt+remoteAt-session.clock.server_now_ms:Date.now();
+        if(a){a.firstAt=a.firstAt===null?localAt:Math.min(a.firstAt,localAt);a.lastAt=Math.max(a.lastAt||0,localAt);broadcast('activity',{id,activity:a});}
+        feed(id,'say',activity.message,{source:'mcp',at:activity.at});
+      }
+    }
+    if(job&&job.round===session.round){
+      const previous=cursor.checks[side];
+      if(previous?.id!==job.id){touch(id,'check');feed(id,'check','Validation requested through MCP');}
+      if(job.result&&(previous?.id!==job.id||previous.status!==job.status)){
+        const detail=job.result.ok?'Check passed':(job.result.errors?.[0]||job.result.load_error||'Check failed');
+        feed(id,job.result.ok?'check':'error',detail,{source:'mcp',check_id:job.id});
+      }
+      cursor.checks[side]={id:job.id,status:job.status};
+    }
+  }
+  if(control){
+    const descriptions={start:'The host started the build clock',pause:'The host paused the build clock',resume:'The host resumed the build clock',add:'The host added 1 minute to the build clock',settings:'Build time limits updated'};
+    if(descriptions[control])feed('system','clock',descriptions[control]);
+  }
+  return {ok:true};
+}
 module.exports = {
   current: () => ({state:publicState(),match:matchPublic()}),
   flush: () => { saveState();saveFeeds();saveMatch(); },
+  setSharedMode: enabled => {sharedClockActive=enabled;sharedClock=null;},
+  setSyncing: enabled => {sharedClockApplying=enabled;if(!enabled)checkClock();},
+  syncStatus(session,clockInfo,control){
+    const result=syncSharedStatus(session,clockInfo,control);
+    if(result.ok){broadcastState();checkClock();}
+    return result;
+  },
   lockedFiles: () => IDS.map(id => {
     const snap=locked[id]?.snapshot;
     if(!snap)throw new Error('Both original builds must be locked first');
@@ -196,9 +271,12 @@ module.exports = {
     if(snap.notes)files['notes.md']=snap.notes;
     return files;
   }),
-  syncSession(session, reset, restart) {
+  syncSession(session, reset, restart, clockInfo) {
+    sharedClockActive=true;
+    if(reset||sharedClock?.id!==session.id||sharedClock?.round!==session.round||restart)sharedClock=null;
     if (reset || state.mode !== session.mode) newMatch({mode:session.mode});
     if (restart || state.round !== session.round) startBuilding(session.round);
+    syncSharedStatus(session,clockInfo);
     for(let side=0;side<2;side++) {
       const id=IDS[side], files=session.builds[side];
       if(state.phase==='building' && files && Object.keys(files).length) {
@@ -235,6 +313,7 @@ async function handleMessage(event) {
       environment=originalEnvironment(sources,{files:message.files,workerThreads:{Worker:SimulationWorker},noBrainExecution:true,mapModule:mapServerModule});
       await prepareValidation();
       serverHooks=environment.load('server.js');
+      serverHooks.setSharedMode(message.sharedSession===true);
       await environment.request('/events','GET','',chunk=>send({type:'sse',chunk}));
       send({type:'initialized'});
       return;
@@ -246,7 +325,7 @@ async function handleMessage(event) {
       return;
     }
     if(message.type==='request') {
-      if(message.method==='POST')await prepareValidation(message);
+      if(message.method==='POST'&&['/api/host/force-start','/api/host/new-match','/api/host/next'].includes(message.url))await prepareValidation(message);
       const response=await environment.request(message.url,message.method,message.body);
       send({type:'response',id:message.id,response});
       return;
@@ -258,9 +337,18 @@ async function handleMessage(event) {
       serverHooks.flush();send({type:'response',id:message.id,response:environment.snapshot()});return;
     }
     if(message.type==='session') {
-      await prepareValidation(message);
-      const result=serverHooks.syncSession(message.session,message.reset,message.restart);
-      send({type:'response',id:message.id,response:{status:200,body:JSON.stringify(result)}});
+      serverHooks.setSyncing(true);
+      try{
+        const key=stable([message.session.id,message.session.mode,message.session.round,message.session.builds]);
+        if(key!==preparedSourceKey||message.reset||message.restart){await prepareValidation(message);preparedSourceKey=key;}
+        const result=serverHooks.syncSession(message.session,message.reset,message.restart,message.clockInfo);
+        send({type:'response',id:message.id,response:{status:200,body:JSON.stringify(result)}});
+      }finally{serverHooks.setSyncing(false);}
+      return;
+    }
+    if(message.type==='session-status'){
+      const result=serverHooks.syncStatus(message.session,message.clockInfo,message.control);
+      send({type:'response',id:message.id,response:result});
     }
   } catch(error) {
     send({type:'failure',id:message.id,error:String(error.message||error).slice(0,1000)});
