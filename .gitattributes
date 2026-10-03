@@ -3,3 +3,6 @@ catalog/** -text
 *.mjs text eol=lf
 *.md text eol=lf
 *.yml text eol=lf
+
+# AI Fight's source and web manifests pin the exact reviewed artifact bytes.
+apps/ai-fight/** -text
