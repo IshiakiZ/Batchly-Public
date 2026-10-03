@@ -1,0 +1,137 @@
+{
+  "name": "Wind Archer",
+  "title": "Sparring Bot Mk. II",
+  "catchphrase": "Too slow.",
+  "description": "A longbow kiter. Keeps its distance, snares your path, volleys, and knocks you back with a gust arrow.",
+  "colors": {
+    "primary": "#4caf6a",
+    "secondary": "#efe3bd"
+  },
+  "weapon": "bow",
+  "look": {
+    "base": "elf",
+    "build": "slim",
+    "hair": "long",
+    "hairColor": "platinum",
+    "eyes": "#2f8a62",
+    "headgear": "hood",
+    "outfit": "leather",
+    "cape": "short",
+    "colors": {
+      "primary": "#3f9a5c",
+      "secondary": "#e8d8a8",
+      "accent": "#b7f5ff",
+      "metal": "#c9d3e0",
+      "pants": "#4a3a2a"
+    },
+    "trail": "#d8f5c0"
+  },
+  "stats": {
+    "vitality": 13,
+    "power": 20,
+    "armor": 5,
+    "speed": 25,
+    "energy": 10,
+    "regen": 10,
+    "crit": 10,
+    "haste": 0,
+    "tenacity": 0,
+    "precision": 7,
+    "focus": 5
+  },
+  "traits": [
+    "swift",
+    "marksman",
+    "sharpshooter"
+  ],
+  "abilities": [
+    {
+      "name": "Piercing Shot",
+      "type": "projectile",
+      "damage": 90,
+      "speed": 1300,
+      "radius": 6,
+      "range": 900,
+      "windup": 0.4,
+      "cooldown": 5,
+      "style": "shard",
+      "color": "#b7f5ff"
+    },
+    {
+      "name": "Volley",
+      "type": "projectile",
+      "damage": 26,
+      "count": 5,
+      "spread": 30,
+      "speed": 900,
+      "radius": 6,
+      "range": 600,
+      "windup": 0.2,
+      "cooldown": 6,
+      "style": "arrow"
+    },
+    {
+      "name": "Tumble",
+      "type": "dash",
+      "distance": 220,
+      "invulnerable": true,
+      "cooldown": 5,
+      "style": "blink"
+    },
+    {
+      "name": "Snare Trap",
+      "type": "trap",
+      "damage": 30,
+      "radius": 40,
+      "arm": 0.5,
+      "duration": 12,
+      "range": 350,
+      "cooldown": 6,
+      "effects": {
+        "root": 1.2
+      },
+      "style": "snare"
+    },
+    {
+      "name": "Gust Arrow",
+      "type": "projectile",
+      "damage": 30,
+      "speed": 1000,
+      "radius": 10,
+      "range": 500,
+      "cooldown": 7,
+      "effects": {
+        "knockback": 150
+      },
+      "style": "wave"
+    }
+  ],
+  "stance": "swift",
+  "offhand": "dagger",
+  "relics": [
+    "hunters_mark",
+    "winged_boots",
+    "mirror_charm"
+  ],
+  "awakening": {
+    "name": "Eagle Eye",
+    "color": "#b7f5ff"
+  },
+  "godPowers": [
+    "thunder",
+    "judgment"
+  ],
+  "ultimate": {
+    "name": "Storm of Arrows",
+    "type": "projectile",
+    "damage": 60,
+    "count": 7,
+    "spread": 36,
+    "speed": 1200,
+    "radius": 8,
+    "range": 800,
+    "windup": 0.4,
+    "style": "arrow",
+    "color": "#d8f5c0"
+  }
+}

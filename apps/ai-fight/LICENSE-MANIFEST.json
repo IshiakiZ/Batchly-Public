@@ -1,0 +1,1319 @@
+{
+  "schema": 1,
+  "edition": "four-original-modes-browser-and-trusted-local-source",
+  "publication": "Owner authorized public source preparation; no repository has been created or pushed.",
+  "codeLicense": "No open-source license selected. No new license grant is made by this package.",
+  "included": "Owner-authorized source and procedural artwork, plus source-preparation changes.",
+  "excluded": [
+    "public/audio/**",
+    "public/fonts/**",
+    "tools/fonts/**",
+    "fighters/**",
+    "data/**",
+    "results/**",
+    "prompts/**",
+    ".git/**",
+    ".env*",
+    "engine/modes/tug/**",
+    "public/js/modes/tug/**"
+  ],
+  "assets": [
+    {
+      "kind": "Audio",
+      "included": false,
+      "reason": "Owner requested exclusion; source credits identify account-licensed recordings."
+    },
+    {
+      "kind": "Fonts",
+      "included": false,
+      "reason": "Bundled fonts and external font links removed; use installed system fonts."
+    },
+    {
+      "kind": "Canvas and SVG artwork",
+      "included": true,
+      "reason": "Procedural source and favicon from the owner-authorized application; no imported image files."
+    }
+  ],
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 100,
+      "sha256": "5ec3d257ec4815203ee5e7e2836d6feec34aed0d9077962a6f0cd6d952a3be0a",
+      "originalPath": null,
+      "originalSha256": null,
+      "classification": "preparation-source"
+    },
+    {
+      "path": "AI_GUIDE.md",
+      "bytes": 51294,
+      "sha256": "8871ae17e7f39a82e431b79d8f52306e9e69fae1ab76ebfd093cb86e1d13edcc",
+      "originalPath": "AI_GUIDE.md",
+      "originalSha256": "db0c549634ca5e3aad3fe0bec24ce724c6bb32793eb42e05f504c17a5177f1e2",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "arena.js",
+      "bytes": 86197,
+      "sha256": "1ed7d33fa783dfe29f43ee42f2418039a6a59ccaca14e7640bb93bae1e5aa670",
+      "originalPath": "arena.js",
+      "originalSha256": "7e82406f36941b0216f3d1c45d4032bc97cf52a3a3aebf16277ea4bbed834fae",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "ARMY_GUIDE.md",
+      "bytes": 34337,
+      "sha256": "5198de50cc2860275f19f168c957f6856f197a38fb70baa6c2a4e381495865be",
+      "originalPath": "ARMY_GUIDE.md",
+      "originalSha256": "5198de50cc2860275f19f168c957f6856f197a38fb70baa6c2a4e381495865be",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "batchly-integration/migration/217_ai_fight_sessions.sql",
+      "bytes": 12009,
+      "sha256": "5d06a9067daf027d1987570d3d47d66c15193de33faca606608c5dd4c47c99eb",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/ai-fight-session/handler.test.ts",
+      "bytes": 1906,
+      "sha256": "58df5fe04ab53f3252531dc3825e811d013559b8bf09cb0393da424f9406d24b",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/ai-fight-session/handler.ts",
+      "bytes": 3272,
+      "sha256": "04e4ac55f1bcc5ddc470c19f02815034617431c2da75917aacb364664f25f998",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/ai-fight-session/index.ts",
+      "bytes": 654,
+      "sha256": "689adf4981d2d942501b92387e2ad37d837ea5b07570ad96da61ce6ce448df7f",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/mcp/ai-fight/guide.ts",
+      "bytes": 3010,
+      "sha256": "96205c3215e7290a15c1c82f75a4a2ad542ecf1829c71a75e0c446339c79a40a",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/mcp/ai-fight/mode-help.ts",
+      "bytes": 175145,
+      "sha256": "d9efdbc37ddcfbea740c5669634cf0ba95bccd7e0cb122d65f3bf472cac79837",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/mcp/ai-fight/tools.test.ts",
+      "bytes": 3254,
+      "sha256": "da931440d1412d1a6a472e0194c83161f4bc9218010236ada7c1f9de97a68acc",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "batchly-integration/supabase/functions/mcp/ai-fight/tools.ts",
+      "bytes": 7798,
+      "sha256": "3090886ead0f18d596235e4113ac5b13af7bc707f901fb4adc433fbb41f2e932",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/app.css",
+      "bytes": 4124,
+      "sha256": "4b697fd01cd3856294e41a4b7352d0745b52aceb3ad61da0a7d067c935229164",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/client.js",
+      "bytes": 12105,
+      "sha256": "d910770d203af96dadf386c2ce4a026e8cfc611e9f4e555c1785b0271342c309",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/host-bridge.js",
+      "bytes": 1224,
+      "sha256": "043c39e3adc7d3ee2bd99a3a143cc22ed19368f433fa86f9e8e3f1c7944df3d4",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/index.html",
+      "bytes": 4086,
+      "sha256": "3687b3b11527e4023d2d501bf456fe0e2ac509adb46a9bad2685d5e749a17012",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/runner.js",
+      "bytes": 4019,
+      "sha256": "93c6c3887ac28ef7fc17969f7d21771754780ea713fe60302f194ff5d3e532ad",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/runtime.cjs",
+      "bytes": 3482,
+      "sha256": "089ce0fa839337da696e1da87230cf77eda68b89ce70a8c3a2d62c12451ccf4d",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "browser/worker.cjs",
+      "bytes": 4254,
+      "sha256": "384ba0d22caebe5498c130f61efe0e260e87f8b83ae3284e47e9ebb498fe5f99",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "build-web.mjs",
+      "bytes": 2460,
+      "sha256": "609f5e5e57c554d2094754d8fbdcbe3345b769458052e1a6c2bee8df2b19e50d",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "build.mjs",
+      "bytes": 9033,
+      "sha256": "5fef2c38843b148f31c125ff668200dfbe213cfec85513b26814228ffd5db482",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "BUSINESS_GUIDE.md",
+      "bytes": 30962,
+      "sha256": "805676b5c40f68df3d5394dcbf8f8ea27f06f30093c41c3f67a8c3cd7e137b18",
+      "originalPath": "BUSINESS_GUIDE.md",
+      "originalSha256": "805676b5c40f68df3d5394dcbf8f8ea27f06f30093c41c3f67a8c3cd7e137b18",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "config.json",
+      "bytes": 167,
+      "sha256": "5078af1461e5d19b4078a6bda5910bdae4e8f222b46b3240997ea16cae3a5f0a",
+      "originalPath": "config.json",
+      "originalSha256": "5078af1461e5d19b4078a6bda5910bdae4e8f222b46b3240997ea16cae3a5f0a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/archer/brain.js",
+      "bytes": 12871,
+      "sha256": "1ced0fa4c1fe38bb86f755e382630d5ea1bfd5bf60b35cae1badc2768db672e6",
+      "originalPath": "engine/bots/archer/brain.js",
+      "originalSha256": "5a426a483c9624821c365541019cf443385f7472c961d5de5a3c8c0ce3b183de",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/archer/fighter.json",
+      "bytes": 2621,
+      "sha256": "58d7b8bd3da07e0815c02b4bddc20582739beb64232323d5259fd636cdc7be45",
+      "originalPath": "engine/bots/archer/fighter.json",
+      "originalSha256": "58d7b8bd3da07e0815c02b4bddc20582739beb64232323d5259fd636cdc7be45",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/berserker/brain.js",
+      "bytes": 12886,
+      "sha256": "9724c77861f9bd73bd2a0620077dad2249a8c6bc947a20634c9107b383e80a3f",
+      "originalPath": "engine/bots/berserker/brain.js",
+      "originalSha256": "1ea31aebf5359a461aa09143ef676686c9e4d16abcc69730d0a92484ced843bd",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/berserker/fighter.json",
+      "bytes": 2835,
+      "sha256": "eeb2c6aa9b365c45f3e1a83fe2ab60a3eaa2f96da4db68fd529af683c2eb4d86",
+      "originalPath": "engine/bots/berserker/fighter.json",
+      "originalSha256": "eeb2c6aa9b365c45f3e1a83fe2ab60a3eaa2f96da4db68fd529af683c2eb4d86",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/brawler/brain.js",
+      "bytes": 12873,
+      "sha256": "9a47fe625b4883c33bda84df3fc952daacaf3fa9b589a2bd2fd1d2b2f3c3e7c6",
+      "originalPath": "engine/bots/brawler/brain.js",
+      "originalSha256": "e374f566c311d4ec5ad1dc79ebebc6280d5b87362b88a2070e8f77882efea48c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/brawler/fighter.json",
+      "bytes": 2391,
+      "sha256": "60550fd462979e8984c5660e867355d340213c32e5d708d01fc864839988a50e",
+      "originalPath": "engine/bots/brawler/fighter.json",
+      "originalSha256": "60550fd462979e8984c5660e867355d340213c32e5d708d01fc864839988a50e",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/dummy/brain.js",
+      "bytes": 83,
+      "sha256": "24db6196dd72d4ac213cfd0768e5c476564f4ffb432017482ae3e62b5fcfdb71",
+      "originalPath": "engine/bots/dummy/brain.js",
+      "originalSha256": "24db6196dd72d4ac213cfd0768e5c476564f4ffb432017482ae3e62b5fcfdb71",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/dummy/fighter.json",
+      "bytes": 638,
+      "sha256": "447e46747431bcb1168f1811d61728a41e33d6ec9a46e5d85850f05b27776ad7",
+      "originalPath": "engine/bots/dummy/fighter.json",
+      "originalSha256": "447e46747431bcb1168f1811d61728a41e33d6ec9a46e5d85850f05b27776ad7",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/frost/brain.js",
+      "bytes": 12875,
+      "sha256": "c2b84770d594807b5402d01a7635b731af2f5c994bd471977584ce6047a3c565",
+      "originalPath": "engine/bots/frost/brain.js",
+      "originalSha256": "8b2cc07cd20e2061b9c9450b3a5ae5168e708d216a1cd396e740b296e0c5b58b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/frost/fighter.json",
+      "bytes": 2733,
+      "sha256": "2ef49507ace516ff9de69f9f8718a5584528296edcc111d8d4e2370d73d7ad22",
+      "originalPath": "engine/bots/frost/fighter.json",
+      "originalSha256": "2ef49507ace516ff9de69f9f8718a5584528296edcc111d8d4e2370d73d7ad22",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/gunslinger/brain.js",
+      "bytes": 12885,
+      "sha256": "bef0d847725a10fa94b36920bcb174e5f9b4e93f403e1c9b7d6564f5fd807a4b",
+      "originalPath": "engine/bots/gunslinger/brain.js",
+      "originalSha256": "6d6fc7a090a45f065641960ece61cd04c1105b4f39a99d46db5414678e861aea",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/gunslinger/fighter.json",
+      "bytes": 2829,
+      "sha256": "a46b9273ac873bceb8b021f4ec380f3efa09fdf11879938cdf72c7a1afed1c42",
+      "originalPath": "engine/bots/gunslinger/fighter.json",
+      "originalSha256": "a46b9273ac873bceb8b021f4ec380f3efa09fdf11879938cdf72c7a1afed1c42",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/mage/brain.js",
+      "bytes": 12876,
+      "sha256": "76df5245538b32b6984c196fc445bd62fbd7e6a360c93da6c24bd282dd1802a9",
+      "originalPath": "engine/bots/mage/brain.js",
+      "originalSha256": "bef6a9f726766e991de65bf1d364a964a6241f9671a781d9d7b2d0733ebd3e4b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/mage/fighter.json",
+      "bytes": 2576,
+      "sha256": "268b147f336eb58efd80c4f79c0c112523be4213c63553c83066ee599d3c405b",
+      "originalPath": "engine/bots/mage/fighter.json",
+      "originalSha256": "268b147f336eb58efd80c4f79c0c112523be4213c63553c83066ee599d3c405b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/ninja/brain.js",
+      "bytes": 12890,
+      "sha256": "b15c5e5efa771880578545e6d03dfc7124f530ade77e57eedf09005630de58be",
+      "originalPath": "engine/bots/ninja/brain.js",
+      "originalSha256": "ec854baee6d4f1fc4d8ca96b5cbe702abf50b7248fb2aff751f8f1e10e8fe2ff",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/ninja/fighter.json",
+      "bytes": 2633,
+      "sha256": "b89c75334e052406f1e1e9e6ca7e5f3b72ae887e7282746edb1f0f038eddbc54",
+      "originalPath": "engine/bots/ninja/fighter.json",
+      "originalSha256": "b89c75334e052406f1e1e9e6ca7e5f3b72ae887e7282746edb1f0f038eddbc54",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/paladin/brain.js",
+      "bytes": 12876,
+      "sha256": "e184b4cf87da2c674003f8b5c72b468b66920451b31980381e95cb5861235ba8",
+      "originalPath": "engine/bots/paladin/brain.js",
+      "originalSha256": "1808f44d8e98e2bf6034a2d41c748e69eaee62f1b3748a778a588524119ccc40",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/paladin/fighter.json",
+      "bytes": 2653,
+      "sha256": "657908b7cd6d1fb293df4e96e72f33980feeb6a13ea5b48cee20072637073247",
+      "originalPath": "engine/bots/paladin/fighter.json",
+      "originalSha256": "657908b7cd6d1fb293df4e96e72f33980feeb6a13ea5b48cee20072637073247",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/pyro/brain.js",
+      "bytes": 12884,
+      "sha256": "e585e67c35862ad08b30f7470adb30b07bea4019d748843a421c27e276670294",
+      "originalPath": "engine/bots/pyro/brain.js",
+      "originalSha256": "6256b5ab4ca5c8586e0a845f2c93b6ffb2ebe0c24ceb15194394fb1e550574d9",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/pyro/fighter.json",
+      "bytes": 2833,
+      "sha256": "a8fd54b27c21bfc96392cdafbd418380634a25a680fd1f39b029fa78b3be7d45",
+      "originalPath": "engine/bots/pyro/fighter.json",
+      "originalSha256": "a8fd54b27c21bfc96392cdafbd418380634a25a680fd1f39b029fa78b3be7d45",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/tank/brain.js",
+      "bytes": 12877,
+      "sha256": "97411c513a758e2f0efb6cc6c0c37b9e2065285fbcaadbf7a7a8cdd0f6273f0a",
+      "originalPath": "engine/bots/tank/brain.js",
+      "originalSha256": "8392a8a0a70571b867a86a288812faad5a5822330e241726a0ef1f4a2cdcd5f2",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/bots/tank/fighter.json",
+      "bytes": 2491,
+      "sha256": "b0b58867f394ffbc02a1e61ef7a200a69c20b1f03b12eb2ed7e6d19adddb9b49",
+      "originalPath": "engine/bots/tank/fighter.json",
+      "originalSha256": "b0b58867f394ffbc02a1e61ef7a200a69c20b1f03b12eb2ed7e6d19adddb9b49",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/comms.js",
+      "bytes": 5661,
+      "sha256": "e7d802e6586c1338d024b817a41b4dbbaaf675993fe6dadb70aa48a4eec4010f",
+      "originalPath": "engine/comms.js",
+      "originalSha256": "ffd887af09b7357d270abc23d015c7cc6ba811d3f3e5a1aceb6429e5539dfa16",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/csv.js",
+      "bytes": 9255,
+      "sha256": "97fbfd6155867ccbcb040f65542a2c0e17e5a8646e16618b8a981c2170f1c7da",
+      "originalPath": "engine/csv.js",
+      "originalSha256": "58e66ac7f5ea86b9a33de6b0f521922ae03504ab468027c5497cb65b386ed164",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/diff.js",
+      "bytes": 3377,
+      "sha256": "5f4bf17fe1f5a89ab3906c5a467309621754a95c34d8054829811a1548cd195d",
+      "originalPath": "engine/diff.js",
+      "originalSha256": "b2adb7fb28fec95295c8f5a903a710b721a9050686ab45486da7b8ebb6147759",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/loader.js",
+      "bytes": 14452,
+      "sha256": "6afce1bef47f1b996c07681b9e28e2da81ad7cacb6d4a7873b095ce49e7b9431",
+      "originalPath": "engine/loader.js",
+      "originalSha256": "a572c13b7704a48ec2aaec5db2507a108a60003d271a618060259760bf8e41cc",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/look.js",
+      "bytes": 222961,
+      "sha256": "d49745624df95961d75df0d110c1e1bcbb38fad952eb3b9ba484003a6bb7045e",
+      "originalPath": "engine/look.js",
+      "originalSha256": "d49745624df95961d75df0d110c1e1bcbb38fad952eb3b9ba484003a6bb7045e",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/match.js",
+      "bytes": 14315,
+      "sha256": "10ee8020caa917312fbd8fcb02bbcc5291999d6a96e24c964a733befd36650ed",
+      "originalPath": "engine/match.js",
+      "originalSha256": "10ee8020caa917312fbd8fcb02bbcc5291999d6a96e24c964a733befd36650ed",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/botlib.js",
+      "bytes": 6984,
+      "sha256": "03a87055804d251eaabdd824e96bc934dc67b02dd5a9355b9e20f6d37529b77f",
+      "originalPath": "engine/modes/army/bots/botlib.js",
+      "originalSha256": "03a87055804d251eaabdd824e96bc934dc67b02dd5a9355b9e20f6d37529b77f",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/horde.js",
+      "bytes": 2824,
+      "sha256": "f40e50604145db4d82f5d9344d43b34ea71cafc69b90515074e016a9e49c5f8a",
+      "originalPath": "engine/modes/army/bots/horde.js",
+      "originalSha256": "f40e50604145db4d82f5d9344d43b34ea71cafc69b90515074e016a9e49c5f8a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/ironwall.js",
+      "bytes": 2195,
+      "sha256": "6774f4e3893f89f2aa306228715a02fc7562d0761002067a97bb0c6549bc2028",
+      "originalPath": "engine/modes/army/bots/ironwall.js",
+      "originalSha256": "6774f4e3893f89f2aa306228715a02fc7562d0761002067a97bb0c6549bc2028",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/marshal.js",
+      "bytes": 2106,
+      "sha256": "08cc595df09822675faf108e5d42b333fb6cbb050bd2f89897485b00c55b2c73",
+      "originalPath": "engine/modes/army/bots/marshal.js",
+      "originalSha256": "08cc595df09822675faf108e5d42b333fb6cbb050bd2f89897485b00c55b2c73",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/stormriders.js",
+      "bytes": 2955,
+      "sha256": "ce07d9afe01739d3b9f8aaf40c6d007a181657d57235d485a3c5b9938e6d82da",
+      "originalPath": "engine/modes/army/bots/stormriders.js",
+      "originalSha256": "ce07d9afe01739d3b9f8aaf40c6d007a181657d57235d485a3c5b9938e6d82da",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/bots/warlock.js",
+      "bytes": 2002,
+      "sha256": "f35c8f6954f96456d79954d267d209096d41170f7f00806bcf3faee1c26d924a",
+      "originalPath": "engine/modes/army/bots/warlock.js",
+      "originalSha256": "f35c8f6954f96456d79954d267d209096d41170f7f00806bcf3faee1c26d924a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/data.js",
+      "bytes": 15652,
+      "sha256": "1a76a0ab90acbc9e5a9d78b2b5a542f14e792833210c82f00602c0fe936ced8c",
+      "originalPath": "engine/modes/army/data.js",
+      "originalSha256": "1a76a0ab90acbc9e5a9d78b2b5a542f14e792833210c82f00602c0fe936ced8c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/guide.js",
+      "bytes": 5724,
+      "sha256": "0f06dde521f97444ddbedd2110d1d0bccff2c8d207fc475a9080cf0d9aa8cf8a",
+      "originalPath": "engine/modes/army/guide.js",
+      "originalSha256": "0f06dde521f97444ddbedd2110d1d0bccff2c8d207fc475a9080cf0d9aa8cf8a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/guide.md.tpl",
+      "bytes": 23686,
+      "sha256": "ab20f3c42923d7d6e527c5cb3082b56a08531b7a2a75e08edf720c8fc839eaa6",
+      "originalPath": "engine/modes/army/guide.md.tpl",
+      "originalSha256": "ab20f3c42923d7d6e527c5cb3082b56a08531b7a2a75e08edf720c8fc839eaa6",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/index.js",
+      "bytes": 32646,
+      "sha256": "8ef364a8823a1fe71bb5b83728b10ceb65daea39f8f4b2dc8784b32b053fa85d",
+      "originalPath": "engine/modes/army/index.js",
+      "originalSha256": "8ef364a8823a1fe71bb5b83728b10ceb65daea39f8f4b2dc8784b32b053fa85d",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/report.js",
+      "bytes": 14149,
+      "sha256": "9a7c11f4dd1b0b6796159cb02725df202a3b57aa3440d86cdb7bf39a010e9589",
+      "originalPath": "engine/modes/army/report.js",
+      "originalSha256": "9a7c11f4dd1b0b6796159cb02725df202a3b57aa3440d86cdb7bf39a010e9589",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/sandbox.js",
+      "bytes": 18175,
+      "sha256": "290d7a3984d7040507b8e9eab9675b9a75c0b0a87b993ed5c70d2b50a0b38c98",
+      "originalPath": "engine/modes/army/sandbox.js",
+      "originalSha256": "290d7a3984d7040507b8e9eab9675b9a75c0b0a87b993ed5c70d2b50a0b38c98",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/sim.js",
+      "bytes": 61464,
+      "sha256": "ab04ca077342296252a3619d3129bf4eaa63a6e3f58aa28d76c3b89db6757477",
+      "originalPath": "engine/modes/army/sim.js",
+      "originalSha256": "ab04ca077342296252a3619d3129bf4eaa63a6e3f58aa28d76c3b89db6757477",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/starter/army.json",
+      "bytes": 860,
+      "sha256": "bb0425becfd02f0516b6542187eca86d86b0592cc24df3d558ddacc3391cf6e2",
+      "originalPath": "engine/modes/army/starter/army.json",
+      "originalSha256": "bb0425becfd02f0516b6542187eca86d86b0592cc24df3d558ddacc3391cf6e2",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/army/starter/commander.js",
+      "bytes": 1968,
+      "sha256": "30513bb043aa315da5d378795923d7be8007c901d5303f96863ad61fa07c109f",
+      "originalPath": "engine/modes/army/starter/commander.js",
+      "originalSha256": "30513bb043aa315da5d378795923d7be8007c901d5303f96863ad61fa07c109f",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/bots.js",
+      "bytes": 17105,
+      "sha256": "ed30a6c37960ea2be675b4c493315b3ee828f5b5d45c4b870db7dee7f86775db",
+      "originalPath": "engine/modes/business/bots.js",
+      "originalSha256": "ed30a6c37960ea2be675b4c493315b3ee828f5b5d45c4b870db7dee7f86775db",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/index.js",
+      "bytes": 21688,
+      "sha256": "4fb16ff22bea981b6ed235ced7f42161ee94299a8b5ce69c90a087c8a20e2253",
+      "originalPath": "engine/modes/business/index.js",
+      "originalSha256": "4fb16ff22bea981b6ed235ced7f42161ee94299a8b5ce69c90a087c8a20e2253",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/report.js",
+      "bytes": 13881,
+      "sha256": "088e82fba0a89d65be82cd8dba1e9e82506a2e421c7d9b2f6f48def4f5af34a1",
+      "originalPath": "engine/modes/business/report.js",
+      "originalSha256": "088e82fba0a89d65be82cd8dba1e9e82506a2e421c7d9b2f6f48def4f5af34a1",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/rules.js",
+      "bytes": 31267,
+      "sha256": "8ad8a0e5ff073149fc71d9eb3d26c54b0126783a6c423f51e2532aa98f883969",
+      "originalPath": "engine/modes/business/rules.js",
+      "originalSha256": "8ad8a0e5ff073149fc71d9eb3d26c54b0126783a6c423f51e2532aa98f883969",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/sandbox.js",
+      "bytes": 12204,
+      "sha256": "812f3c0bc7ba0edb4cad831b40a94f890f3de4bca71e77600c9ebe9efbbd4da1",
+      "originalPath": "engine/modes/business/sandbox.js",
+      "originalSha256": "812f3c0bc7ba0edb4cad831b40a94f890f3de4bca71e77600c9ebe9efbbd4da1",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/business/sim.js",
+      "bytes": 68524,
+      "sha256": "417cb539b6c209b1a509313cdb1ce87540646e830a210b3baafde25232c597a3",
+      "originalPath": "engine/modes/business/sim.js",
+      "originalSha256": "417cb539b6c209b1a509313cdb1ce87540646e830a210b3baafde25232c597a3",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/index.js",
+      "bytes": 6029,
+      "sha256": "8255f968178635d8c1bcc4a6944ae0eac782cd3001d635d844c77975de3266e2",
+      "originalPath": "engine/modes/index.js",
+      "originalSha256": "8255f968178635d8c1bcc4a6944ae0eac782cd3001d635d844c77975de3266e2",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/README.md",
+      "bytes": 7009,
+      "sha256": "3d1cc7b1925500171294d5b6c9c7e85131781c7f7494cca26e7c691437d47027",
+      "originalPath": "engine/modes/README.md",
+      "originalSha256": "93e6e5202a3d30ad500a0f3fc969d7b8fcf34d0bc32596e3b978798175e21e1a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/botlib.js",
+      "bytes": 12022,
+      "sha256": "60f2223898dd9ef11b29659bd4838bb5d0b11a9bf79ef8f2d394bd193fa95152",
+      "originalPath": "engine/modes/war/bots/botlib.js",
+      "originalSha256": "a4a9cf1792db40d179b23a027819bb3092ac942e01cbd0a1bfa1ed529841c1a8",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/coalition.js",
+      "bytes": 483,
+      "sha256": "630f21f582c6837b3fb114de5479a10baa7d21e5fc772065b88a2bb0f966d0c8",
+      "originalPath": "engine/modes/war/bots/coalition.js",
+      "originalSha256": "630f21f582c6837b3fb114de5479a10baa7d21e5fc772065b88a2bb0f966d0c8",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/ironfist.js",
+      "bytes": 418,
+      "sha256": "c8cb9aad8020ee7689265f1a560ec3670f33e875bc6db8ae9d70c75f832951fe",
+      "originalPath": "engine/modes/war/bots/ironfist.js",
+      "originalSha256": "c8cb9aad8020ee7689265f1a560ec3670f33e875bc6db8ae9d70c75f832951fe",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/redtide.js",
+      "bytes": 472,
+      "sha256": "e527a22c456eb453b22476482f6f20ff3ee457d6db623d46ee03ff51ac7da615",
+      "originalPath": "engine/modes/war/bots/redtide.js",
+      "originalSha256": "c899fb9f4fdfd3ebf1a9de5d4e381289c340fc30815851296329d79601745aaf",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/skycommand.js",
+      "bytes": 748,
+      "sha256": "728c5f567fdc785fddc68c45f512731922a498d4b54a15937a2c5ff914bcd3ef",
+      "originalPath": "engine/modes/war/bots/skycommand.js",
+      "originalSha256": "a6d2236aad3cb000bcb9438a02b1323dd2cc34ef9a18c364a2becac022422cb4",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/bots/steelrain.js",
+      "bytes": 437,
+      "sha256": "aec618d1de7f7435f29273f919046865b222144a2feb935585bb684ee2b3cf26",
+      "originalPath": "engine/modes/war/bots/steelrain.js",
+      "originalSha256": "aec618d1de7f7435f29273f919046865b222144a2feb935585bb684ee2b3cf26",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/data.js",
+      "bytes": 25102,
+      "sha256": "17f8e73e56d967a15de4d991eae75f08c15da80a77a77c35b6ba4ea372129c8c",
+      "originalPath": "engine/modes/war/data.js",
+      "originalSha256": "17f8e73e56d967a15de4d991eae75f08c15da80a77a77c35b6ba4ea372129c8c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/guide.js",
+      "bytes": 6100,
+      "sha256": "18a28ab842d87fbbd2cbd784e9491566e2ba553c6be8b559861524ae3ea08259",
+      "originalPath": "engine/modes/war/guide.js",
+      "originalSha256": "18a28ab842d87fbbd2cbd784e9491566e2ba553c6be8b559861524ae3ea08259",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/guide.md.tpl",
+      "bytes": 23326,
+      "sha256": "e70630d01ed17b36c463a63a24f54cede505e9264da13ae1fada9a59a6b565a1",
+      "originalPath": "engine/modes/war/guide.md.tpl",
+      "originalSha256": "0207d0210c1a1850317d53fd6a50164494af7e5fcb7fcddfdc1e7ab8da7f972a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/index.js",
+      "bytes": 36970,
+      "sha256": "ebeac9ed05c0e944683d542ff92d62521652b1f769ecc01eece43d03ea7e1ec8",
+      "originalPath": "engine/modes/war/index.js",
+      "originalSha256": "f1b65a39c5e0a1e35679e64540d5d9a213bd4653c3bfaebd8349eee27251892d",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/report.js",
+      "bytes": 13637,
+      "sha256": "d25c7d26c35cea32208f5b34d0e73c24efee9cf9e847b3a187fec528f6f6d676",
+      "originalPath": "engine/modes/war/report.js",
+      "originalSha256": "d25c7d26c35cea32208f5b34d0e73c24efee9cf9e847b3a187fec528f6f6d676",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/sandbox.js",
+      "bytes": 19487,
+      "sha256": "2096e91ca5a71c009f85d120ac0f76e0d5890837323af1c94c10f97c7a40353a",
+      "originalPath": "engine/modes/war/sandbox.js",
+      "originalSha256": "b37ba987af10aab0fed460de91ba4fff3508b59a147a3bf1fd8491fe0c228410",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/sim.js",
+      "bytes": 70836,
+      "sha256": "c4c17d5a17949ec55a7aee8ecbb4f987f9b339d51f12ef4ded83c7623a0908d5",
+      "originalPath": "engine/modes/war/sim.js",
+      "originalSha256": "80b617ace983630e414bb7b39bc8615e149b2951e54f01cfedacdd2890437644",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/starter/commander.js",
+      "bytes": 1450,
+      "sha256": "d9565e6f8bd629c7cf250ccb388f2c691bfd9c941219b928dd5e54dc359ec030",
+      "originalPath": "engine/modes/war/starter/commander.js",
+      "originalSha256": "d9565e6f8bd629c7cf250ccb388f2c691bfd9c941219b928dd5e54dc359ec030",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/modes/war/starter/forces.json",
+      "bytes": 814,
+      "sha256": "7f1ebe776a7dd1d79362317d844e4f9dd67f4168999edb7c42312ac5542d0743",
+      "originalPath": "engine/modes/war/starter/forces.json",
+      "originalSha256": "7f1ebe776a7dd1d79362317d844e4f9dd67f4168999edb7c42312ac5542d0743",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/powers.js",
+      "bytes": 23760,
+      "sha256": "7414b0fb6add7dc89b96762b849f001a3c00429a37725a7a7374bfbcfcd0bab2",
+      "originalPath": "engine/powers.js",
+      "originalSha256": "6d6461f6251e6fd8cd4efa1cef4e76c162824c239d35dd407ccd2dc134ead283",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/report.js",
+      "bytes": 20589,
+      "sha256": "15682968b3c439300b6822b3293b98c57bc3179a5503f88d7fa3c9226fd6687c",
+      "originalPath": "engine/report.js",
+      "originalSha256": "f51dba3113a093c73ea24225679f95fa74e928deb581671d19ffc274fc15ca3f",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/rules.js",
+      "bytes": 75600,
+      "sha256": "55d32bf3476b8a1a71cc5494e4253f876b2142064d451deb55c352b1fee464b5",
+      "originalPath": "engine/rules.js",
+      "originalSha256": "0d3149bc4ac2debcc4afb599f5176f08b2060e5f88e6ccc70bcca874e5336115",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/sandbox.js",
+      "bytes": 22522,
+      "sha256": "8ce234af644d31648b72277329bc9e41ecbd9826d2fc1ee6630f0997cc59699a",
+      "originalPath": "engine/sandbox.js",
+      "originalSha256": "8ce234af644d31648b72277329bc9e41ecbd9826d2fc1ee6630f0997cc59699a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/sim.js",
+      "bytes": 95142,
+      "sha256": "e4262c91124e166e3c2510409829a19940c20186b9f3eb9b5119be3799ad9bd6",
+      "originalPath": "engine/sim.js",
+      "originalSha256": "9acb63daede64384e71ff3a910d299b9af5b487aa1d6c4cbe56c276bbebaf7bc",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/skin/bot-looks.json",
+      "bytes": 4373,
+      "sha256": "7b32e51c6d84fa67532dd025c46b544acc2f7b78309942bb5f4ef8453e7dbf91",
+      "originalPath": "engine/skin/bot-looks.json",
+      "originalSha256": "7b32e51c6d84fa67532dd025c46b544acc2f7b78309942bb5f4ef8453e7dbf91",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/starter/brain.js",
+      "bytes": 1266,
+      "sha256": "750d23aa2d92cbd35512e7032917f55f31cca3b8edf2071a28e1f26fcd529f39",
+      "originalPath": "engine/starter/brain.js",
+      "originalSha256": "750d23aa2d92cbd35512e7032917f55f31cca3b8edf2071a28e1f26fcd529f39",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/starter/fighter.json",
+      "bytes": 1688,
+      "sha256": "410d8ee1cf0ade57c75114c7e6482c330e308eb42145d920f36e819849a5f44d",
+      "originalPath": "engine/starter/fighter.json",
+      "originalSha256": "410d8ee1cf0ade57c75114c7e6482c330e308eb42145d920f36e819849a5f44d",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/text.js",
+      "bytes": 786,
+      "sha256": "274636b8a6a71c458f4c9fe7371cbb40d6db9fe30221dc4e7372d52de1b1ab15",
+      "originalPath": "engine/text.js",
+      "originalSha256": "3f09fa679f34f57c45edc207c562e029181f9e0cc7c9ac01601f4f7842e89f47",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/themes.js",
+      "bytes": 9005,
+      "sha256": "80dd95551da65279301e637d6eab4776bc935393d3e87fa06f930d326bc079ce",
+      "originalPath": "engine/themes.js",
+      "originalSha256": "80dd95551da65279301e637d6eab4776bc935393d3e87fa06f930d326bc079ce",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "engine/worker.js",
+      "bytes": 1627,
+      "sha256": "4bc4d1f98bd7bcb9294831a275d158ec724f9a9f5bf2b9ec7ba5f3ddf22d972a",
+      "originalPath": "engine/worker.js",
+      "originalSha256": "abda0ecb47700771081bc156a222f09dc08349b836f20a1783c79f47f445d3fa",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "LICENSE-NOTICE.md",
+      "bytes": 1070,
+      "sha256": "6ef5e4e8ea14651412cb1f88bb6d4045b5017becb43716f5c9c87e29a91d21a4",
+      "originalPath": null,
+      "originalSha256": null,
+      "classification": "preparation-source"
+    },
+    {
+      "path": "LOCAL-GUIDE.md",
+      "bytes": 9660,
+      "sha256": "265972c673d9af9ece552848ff877465c4a72e227c5058973008535d79366dbb",
+      "originalPath": "README.md",
+      "originalSha256": "5500d7c0551971dab9242ae89fdc17f67ca9a49751a26167e0012a094a26f723",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "MCP-GUIDE.md",
+      "bytes": 2997,
+      "sha256": "d06e76b686d8df38de1148ab98b728926ae32fd8545c75efbd55c910d4bc38ed",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "package-docs/LICENSE-NOTICE.md",
+      "bytes": 1070,
+      "sha256": "6ef5e4e8ea14651412cb1f88bb6d4045b5017becb43716f5c9c87e29a91d21a4",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "package-docs/README.md",
+      "bytes": 3190,
+      "sha256": "b3543f9456e6a7356409a0775195ce2bdbd0d2892fc63574aa04cdb378d382e7",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "package-docs/SECURITY.md",
+      "bytes": 1559,
+      "sha256": "5ad073b798ffb957993a14b26d6dfa926b08ff5dc6aac4861ca4ae3dcdc4db25",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "package.json",
+      "bytes": 355,
+      "sha256": "adb511285fe4b875d81dd4cc2cbef39080d5d8ca47a4262ec31d02d3cda2d83f",
+      "originalPath": "package.json",
+      "originalSha256": "73886e35728aac0d6571110974c34f9067e882c809adfdba541a447ef1a88360",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/css/arena.css",
+      "bytes": 27643,
+      "sha256": "9fce6494b03d585b4e4ecf8611acdc68149084a8687b1bdec120355eb381abfd",
+      "originalPath": "public/css/arena.css",
+      "originalSha256": "9fce6494b03d585b4e4ecf8611acdc68149084a8687b1bdec120355eb381abfd",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/css/live.css",
+      "bytes": 19815,
+      "sha256": "40a2f980f69d7ad4fc245ba5dfefd577eeddc6927e4f4c96695ac0b81ee56a02",
+      "originalPath": "public/css/live.css",
+      "originalSha256": "5cbb932d3c47e503de67051daced330fe551e36ebaa0c981795e7359ab15b69b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/css/pages.css",
+      "bytes": 22024,
+      "sha256": "734aa503bd79c45cef8d449b7e3fa42286767fcebba0988e2d29cf5f00549135",
+      "originalPath": "public/css/pages.css",
+      "originalSha256": "93eb2d2d02c0adc7c26ca97ea6d1c5b727dfafa94e64983b5285a5c95496523b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/css/style.css",
+      "bytes": 34765,
+      "sha256": "9e25cfae2233612f1f17b2bddda21f1d5b3b3c5df641836ac00b5919aa507001",
+      "originalPath": "public/css/style.css",
+      "originalSha256": "01811fedabb2c3a8ad93da5fdb5bec85c689783e62cc05a6a9d0b7b04a82d8a0",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/favicon.svg",
+      "bytes": 467,
+      "sha256": "f15bff9dab6298ecb2a60fa27aac0d46e8af23f1f55d0d20f4565dbe13627e85",
+      "originalPath": "public/favicon.svg",
+      "originalSha256": "a83729a046c45fc9da3eae9e95653462e4fa90cfbc3f1d906d59393f066233a5",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/index.html",
+      "bytes": 4083,
+      "sha256": "d6f9b1ce176a93985093a6f5ed7ddee20146d9bad6dcc0e885b835076689d0dd",
+      "originalPath": "public/index.html",
+      "originalSha256": "31cf35619d08d338461e4578b4382ea03e9fe2d8a593dc21e8cc081d62c5f83c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/app.js",
+      "bytes": 39915,
+      "sha256": "6580290c1c70b2ffd6d274dca6a394163cccaf7433d6d4a708288ba27d59c078",
+      "originalPath": "public/js/app.js",
+      "originalSha256": "668d13a7f80f669458bbf03254223585c1cf016aab7fdc7227916a98b1b2437b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-fx.js",
+      "bytes": 23684,
+      "sha256": "bbd5e71dc9907de0292d4da2189e9586e75c57977bb0b041813f0668fb0b60cf",
+      "originalPath": "public/js/art-fx.js",
+      "originalSha256": "bbd5e71dc9907de0292d4da2189e9586e75c57977bb0b041813f0668fb0b60cf",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-look.js",
+      "bytes": 222801,
+      "sha256": "deb5af4290946db64541a89f16eb9b06f49e995d4c8235b32b95d93c84826154",
+      "originalPath": "public/js/art-look.js",
+      "originalSha256": "deb5af4290946db64541a89f16eb9b06f49e995d4c8235b32b95d93c84826154",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-obstacles.js",
+      "bytes": 68311,
+      "sha256": "56a4854958241f182b059fde12c79c12ee8a16ee09174776b3e92e20379abd9f",
+      "originalPath": "public/js/art-obstacles.js",
+      "originalSha256": "77f01e3fb05817a5b3e4f66350eea697f75519c3e9606ba48a2b2279b91095f2",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-powers.js",
+      "bytes": 51080,
+      "sha256": "f232d4042a429ed2a487068f19d3babe232d19cb0ee42780c3286232be67046b",
+      "originalPath": "public/js/art-powers.js",
+      "originalSha256": "24ecde47fe7838bece41a885f82f664d51ba8d3882f19db2985a27cf5dd40557",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-props-built.js",
+      "bytes": 55957,
+      "sha256": "1b9534be41782fe685e050488fda5140142c3f55dfb0719d6fb485816e67ccce",
+      "originalPath": "public/js/art-props-built.js",
+      "originalSha256": "1b9534be41782fe685e050488fda5140142c3f55dfb0719d6fb485816e67ccce",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-props-mystic.js",
+      "bytes": 51157,
+      "sha256": "9ba00d232313f72e19dda91c8c6ccd495b82bb543ce6a16582984aea735cc901",
+      "originalPath": "public/js/art-props-mystic.js",
+      "originalSha256": "0cd4117962a11d42a3b659deaa9c08f9823aaad27361914f1959e050185e6d24",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/art-props-nature.js",
+      "bytes": 43980,
+      "sha256": "2e9b31916990e2d360be631654a8f6e867e953af54725829d9ef2de5b3e829bc",
+      "originalPath": "public/js/art-props-nature.js",
+      "originalSha256": "2e9b31916990e2d360be631654a8f6e867e953af54725829d9ef2de5b3e829bc",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/build.js",
+      "bytes": 45316,
+      "sha256": "971a1c824841f011d9da1f203f8eeab4a38c9e8d2e175d17701e7811fbe67e32",
+      "originalPath": "public/js/build.js",
+      "originalSha256": "b7686ba0b76b56b59365093d24ea1e3c50d6adb858d43512f79020f9e3fb0c43",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/fight.js",
+      "bytes": 53830,
+      "sha256": "c5218e43980a28394eb778564cc9f1cdda778c581e79214eff251de024147831",
+      "originalPath": "public/js/fight.js",
+      "originalSha256": "d4399c49706df598d216a3c94a0ef0347e2298b6c8e8b8ca387587c40c6782bb",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modearena.js",
+      "bytes": 20326,
+      "sha256": "c6d028e6de271f54c5c8d06e323b94ed0e42685acd3dd51d6d8d2ea6911199a9",
+      "originalPath": "public/js/modearena.js",
+      "originalSha256": "69d6962cd592ca4d68fa637e4ea6d7e2f7cfabe56383b596161f9439cb4b992c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modes/army/sprites.js",
+      "bytes": 10543,
+      "sha256": "9c9238afedd2f38353376dc514fb07473cc854511f12fd373aaed27e2fe50297",
+      "originalPath": "public/js/modes/army/sprites.js",
+      "originalSha256": "9c9238afedd2f38353376dc514fb07473cc854511f12fd373aaed27e2fe50297",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modes/army/view.js",
+      "bytes": 64098,
+      "sha256": "0ee34b82ad15990f2a2d75a2dade64fd23a81396e60592cea9bc57a21fafc13c",
+      "originalPath": "public/js/modes/army/view.js",
+      "originalSha256": "0ee34b82ad15990f2a2d75a2dade64fd23a81396e60592cea9bc57a21fafc13c",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modes/business/view.js",
+      "bytes": 51082,
+      "sha256": "6e6834973ee900ed4674a4c1951cbedd7db8e012a87ffdd50facf337186ef7af",
+      "originalPath": "public/js/modes/business/view.js",
+      "originalSha256": "6e6834973ee900ed4674a4c1951cbedd7db8e012a87ffdd50facf337186ef7af",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modes/war/sprites.js",
+      "bytes": 12132,
+      "sha256": "f97c3d78af87dbfb85bb1146eab0e4adc11efeef1c011f86a24d09069d6f5864",
+      "originalPath": "public/js/modes/war/sprites.js",
+      "originalSha256": "d85a6cd8189b49081433873726098e116989acc068eacd67ea3ea234c30a7b58",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/modes/war/view.js",
+      "bytes": 92907,
+      "sha256": "d2348d587b32cf1b4293306d803fab1638bb07b380344b7619e4678da9dcb47d",
+      "originalPath": "public/js/modes/war/view.js",
+      "originalSha256": "80e6b2e3b76edbc8d6eb6761f5c577aa3aabf9efd62cb04b59e347f3666d331a",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/renderer.js",
+      "bytes": 141262,
+      "sha256": "9e50b0c418114b68a0e9e8dbeeb5452039201ae3b4a4a641bdd387d6ffaff098",
+      "originalPath": "public/js/renderer.js",
+      "originalSha256": "9e50b0c418114b68a0e9e8dbeeb5452039201ae3b4a4a641bdd387d6ffaff098",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/sound.js",
+      "bytes": 1447,
+      "sha256": "02c22baac44e1198f9dbaa2b92fb424c752013419d612261604e556a3e02618d",
+      "originalPath": null,
+      "originalSha256": null,
+      "classification": "preparation-source"
+    },
+    {
+      "path": "public/js/sprites.js",
+      "bytes": 11706,
+      "sha256": "b594363ad49ec87a5e575c79c22b9651c96305c359342db70cd5a188c746bc38",
+      "originalPath": "public/js/sprites.js",
+      "originalSha256": "b594363ad49ec87a5e575c79c22b9651c96305c359342db70cd5a188c746bc38",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/stats.js",
+      "bytes": 40533,
+      "sha256": "62e02805ada1eee7b072df29a7792fcc1c4905a9ab707c1b1356d7bdbf13a138",
+      "originalPath": "public/js/stats.js",
+      "originalSha256": "e4e770588af5ece617c80a70e8d574d8f613a13bc639b0b8aa96e4de0b6faf48",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/ui-fighters.js",
+      "bytes": 26191,
+      "sha256": "b8e59e2a75345c9ff00beb04cc58b53c9be7b35900230f95921478c26f32831a",
+      "originalPath": "public/js/ui-fighters.js",
+      "originalSha256": "925c3461e9ded8c111a2b4402d6db4cdde0046ca0e8abb64efe8f0eeb9f3850b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/ui-kit.js",
+      "bytes": 28181,
+      "sha256": "045b7fc88e8a1ace0533ab59f6e335ee9660aa818f3cf2b9a882a0a9f0c39b5d",
+      "originalPath": "public/js/ui-kit.js",
+      "originalSha256": "b74d0578861d7e81b5dabe5aa8af64b754a3936c7b98a238ea289b712603e37f",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/ui-replays.js",
+      "bytes": 11478,
+      "sha256": "7934d8a191d965982e84de0da703e16605a7ff27be46f4d1bf752d4a8354f654",
+      "originalPath": "public/js/ui-replays.js",
+      "originalSha256": "162f111dc87b1b1bc67761a69185fa408c5af3e08ae2a6285b6aea1565f13f2d",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "public/js/util.js",
+      "bytes": 35359,
+      "sha256": "0f5d9e447b113f343c4cd64f78f9570e9cbe9591d55d0c5248e8121f65f2ab1c",
+      "originalPath": "public/js/util.js",
+      "originalSha256": "4364d206a5a1c3dfd4e77437b5aa01e01eeb1b73fc218cbf309adfd07dd097c9",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3190,
+      "sha256": "b3543f9456e6a7356409a0775195ce2bdbd0d2892fc63574aa04cdb378d382e7",
+      "originalPath": null,
+      "originalSha256": null,
+      "classification": "preparation-source"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 1559,
+      "sha256": "5ad073b798ffb957993a14b26d6dfa926b08ff5dc6aac4861ca4ae3dcdc4db25",
+      "originalPath": null,
+      "originalSha256": null,
+      "classification": "preparation-source"
+    },
+    {
+      "path": "server.js",
+      "bytes": 99543,
+      "sha256": "107ae8934262248e3b380b7ee085bc47f2c56ced997bae9de44158e78e922a04",
+      "originalPath": "server.js",
+      "originalSha256": "4fd5f709346a589882e52c6848f446d8b5089a44b34fdd85a573b649b93c91ec",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "silent-audio.mjs",
+      "bytes": 1447,
+      "sha256": "02c22baac44e1198f9dbaa2b92fb424c752013419d612261604e556a3e02618d",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "source-inputs.json",
+      "bytes": 15120,
+      "sha256": "37c6f326d330b96207ed05efb45e27fb95d1c31dfadd3631230ce109c0faa3ea",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "start.bat",
+      "bytes": 213,
+      "sha256": "25c42ff3032d945547b06ea8909e88e952015549bc97dd89956e60c8dccd3c26",
+      "originalPath": "start.bat",
+      "originalSha256": "25c42ff3032d945547b06ea8909e88e952015549bc97dd89956e60c8dccd3c26",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "WAR_GUIDE.md",
+      "bytes": 39882,
+      "sha256": "b390de95c99a016f9c8b29689c088729bb87313399011adba79d7372f47dbfd5",
+      "originalPath": "WAR_GUIDE.md",
+      "originalSha256": "879906d6dd0375f5bf80a532ed90a0fa0db5d886d584dcff7a3a5aacc1ad0d5b",
+      "classification": "owner-authorized-source"
+    },
+    {
+      "path": "web/app.css",
+      "bytes": 4124,
+      "sha256": "4b697fd01cd3856294e41a4b7352d0745b52aceb3ad61da0a7d067c935229164",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/client.js",
+      "bytes": 12105,
+      "sha256": "d910770d203af96dadf386c2ce4a026e8cfc611e9f4e555c1785b0271342c309",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/engine-worker.js",
+      "bytes": 1305753,
+      "sha256": "a3270a6c0351e634c4f07bdbebf8c0342d54fc441a59a6ce6183e33ca63a2ac0",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/favicon.svg",
+      "bytes": 467,
+      "sha256": "f15bff9dab6298ecb2a60fa27aac0d46e8af23f1f55d0d20f4565dbe13627e85",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/guides/AI_GUIDE.md",
+      "bytes": 51294,
+      "sha256": "8871ae17e7f39a82e431b79d8f52306e9e69fae1ab76ebfd093cb86e1d13edcc",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/guides/ARMY_GUIDE.md",
+      "bytes": 34337,
+      "sha256": "5198de50cc2860275f19f168c957f6856f197a38fb70baa6c2a4e381495865be",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/guides/BUSINESS_GUIDE.md",
+      "bytes": 30962,
+      "sha256": "805676b5c40f68df3d5394dcbf8f8ea27f06f30093c41c3f67a8c3cd7e137b18",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/guides/WAR_GUIDE.md",
+      "bytes": 39882,
+      "sha256": "b390de95c99a016f9c8b29689c088729bb87313399011adba79d7372f47dbfd5",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/host-bridge.js",
+      "bytes": 1224,
+      "sha256": "043c39e3adc7d3ee2bd99a3a143cc22ed19368f433fa86f9e8e3f1c7944df3d4",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/index.html",
+      "bytes": 4086,
+      "sha256": "3687b3b11527e4023d2d501bf456fe0e2ac509adb46a9bad2685d5e749a17012",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-fx.js",
+      "bytes": 23684,
+      "sha256": "bbd5e71dc9907de0292d4da2189e9586e75c57977bb0b041813f0668fb0b60cf",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-look.js",
+      "bytes": 222801,
+      "sha256": "deb5af4290946db64541a89f16eb9b06f49e995d4c8235b32b95d93c84826154",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-obstacles.js",
+      "bytes": 68311,
+      "sha256": "56a4854958241f182b059fde12c79c12ee8a16ee09174776b3e92e20379abd9f",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-powers.js",
+      "bytes": 51080,
+      "sha256": "f232d4042a429ed2a487068f19d3babe232d19cb0ee42780c3286232be67046b",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-props-built.js",
+      "bytes": 55957,
+      "sha256": "1b9534be41782fe685e050488fda5140142c3f55dfb0719d6fb485816e67ccce",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-props-mystic.js",
+      "bytes": 51157,
+      "sha256": "9ba00d232313f72e19dda91c8c6ccd495b82bb543ce6a16582984aea735cc901",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/art-props-nature.js",
+      "bytes": 43980,
+      "sha256": "2e9b31916990e2d360be631654a8f6e867e953af54725829d9ef2de5b3e829bc",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/modes/army/sprites.js",
+      "bytes": 10543,
+      "sha256": "9c9238afedd2f38353376dc514fb07473cc854511f12fd373aaed27e2fe50297",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/modes/army/view.js",
+      "bytes": 64098,
+      "sha256": "0ee34b82ad15990f2a2d75a2dade64fd23a81396e60592cea9bc57a21fafc13c",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/modes/business/view.js",
+      "bytes": 51082,
+      "sha256": "6e6834973ee900ed4674a4c1951cbedd7db8e012a87ffdd50facf337186ef7af",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/modes/war/sprites.js",
+      "bytes": 12132,
+      "sha256": "f97c3d78af87dbfb85bb1146eab0e4adc11efeef1c011f86a24d09069d6f5864",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/modes/war/view.js",
+      "bytes": 92907,
+      "sha256": "d2348d587b32cf1b4293306d803fab1638bb07b380344b7619e4678da9dcb47d",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/renderer.js",
+      "bytes": 141262,
+      "sha256": "9e50b0c418114b68a0e9e8dbeeb5452039201ae3b4a4a641bdd387d6ffaff098",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/sound.js",
+      "bytes": 1447,
+      "sha256": "02c22baac44e1198f9dbaa2b92fb424c752013419d612261604e556a3e02618d",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/sprites.js",
+      "bytes": 11706,
+      "sha256": "b594363ad49ec87a5e575c79c22b9651c96305c359342db70cd5a188c746bc38",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/js/util.js",
+      "bytes": 35359,
+      "sha256": "0f5d9e447b113f343c4cd64f78f9570e9cbe9591d55d0c5248e8121f65f2ab1c",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/LICENSE-NOTICE.md",
+      "bytes": 1070,
+      "sha256": "6ef5e4e8ea14651412cb1f88bb6d4045b5017becb43716f5c9c87e29a91d21a4",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/runner.js",
+      "bytes": 4019,
+      "sha256": "93c6c3887ac28ef7fc17969f7d21771754780ea713fe60302f194ff5d3e532ad",
+      "classification": "browser-port-and-integration-source"
+    },
+    {
+      "path": "web/web-manifest.json",
+      "bytes": 4337,
+      "sha256": "edc0e9c5ef0a61f2d1d19ad51bb0c5bc1e18f3931d7253ea4813409b3629ef43",
+      "classification": "browser-port-and-integration-source"
+    }
+  ]
+}

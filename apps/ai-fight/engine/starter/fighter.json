@@ -1,0 +1,68 @@
+{
+  "name": "Rookie",
+  "title": "Fresh Recruit",
+  "catchphrase": "Let's see what I can do.",
+  "description": "Everyone starts here: a balanced recruit with a shortsword, a spark of magic and a quick roll. Where it goes next is up to its AI.",
+  "colors": {
+    "primary": "#9aa7b8",
+    "secondary": "#8fd3ff"
+  },
+  "weapon": "shortsword",
+  "look": {
+    "base": "human",
+    "build": "average",
+    "skin": "fair",
+    "hair": "short",
+    "hairColor": "brown",
+    "eyes": "#2e2a3a",
+    "face": "plain",
+    "headgear": "headband",
+    "outfit": "tunic",
+    "cape": "none",
+    "colors": {
+      "primary": "#6f86b0",
+      "secondary": "#8fd3ff",
+      "accent": "#8fd3ff",
+      "metal": "#c9d3e0",
+      "pants": "#434c63"
+    },
+    "trail": "#cfefff"
+  },
+  "stats": {
+    "vitality": 10,
+    "power": 10,
+    "armor": 5,
+    "speed": 10,
+    "energy": 5,
+    "regen": 5,
+    "crit": 5,
+    "haste": 5,
+    "tenacity": 5,
+    "precision": 0
+  },
+  "traits": [],
+  "abilities": [
+    {
+      "name": "Bolt",
+      "type": "projectile",
+      "damage": 35,
+      "speed": 800,
+      "radius": 8,
+      "range": 600,
+      "windup": 0.1,
+      "cooldown": 1.2,
+      "style": "bolt",
+      "color": "#8fd3ff"
+    },
+    {
+      "name": "Roll",
+      "type": "dash",
+      "distance": 200,
+      "invulnerable": true,
+      "cooldown": 5,
+      "style": "blink",
+      "color": "#cfefff"
+    }
+  ],
+  "notes": "Round-1 starter. The Shortsword gives a free Slash (no energy). In round 1 only brain.js/lib (plus names, colours, styles and text) may change — the look must stay the starter's. From round 2 on, evolve everything: stats, weapon, traits, abilities and the look."
+}

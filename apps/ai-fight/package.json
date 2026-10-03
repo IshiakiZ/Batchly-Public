@@ -1,0 +1,15 @@
+{
+  "name": "ai-fight-silent-source",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trusted local AI arena. Silent source edition; no hosted MCP gameplay.",
+  "scripts": {
+    "start": "node server.js --open",
+    "serve": "node server.js",
+    "arena": "node arena.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

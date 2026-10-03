@@ -1,0 +1,16 @@
+{
+  "name": "Rookie Legion",
+  "colors": { "primary": "#8a94b0", "secondary": "#e8e0c8" },
+  "banner": "star",
+  "motto": "Hold the line!",
+  "general": { "name": "Captain Rook", "x": -690, "y": 0 },
+  "squads": [
+    { "type": "infantry", "name": "1st Swords", "x": -420, "y": -180, "formation": "line" },
+    { "type": "infantry", "name": "2nd Swords", "x": -420, "y": -60, "formation": "line" },
+    { "type": "infantry", "name": "3rd Swords", "x": -420, "y": 60, "formation": "line" },
+    { "type": "infantry", "name": "4th Swords", "x": -420, "y": 180, "formation": "line" },
+    { "type": "archers", "name": "North Bows", "x": -560, "y": -120, "formation": "line" },
+    { "type": "archers", "name": "Centre Bows", "x": -560, "y": 0, "formation": "line" },
+    { "type": "archers", "name": "South Bows", "x": -560, "y": 120, "formation": "line" }
+  ]
+}

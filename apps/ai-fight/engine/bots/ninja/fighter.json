@@ -1,0 +1,136 @@
+{
+  "name": "Shadow Ninja",
+  "title": "Sparring Bot Mk. V",
+  "catchphrase": "You will not see me coming.",
+  "description": "A twin-dagger assassin. Teleports behind you, backstabs, throws poisoned shuriken and vanishes in smoke.",
+  "colors": {
+    "primary": "#4a4170",
+    "secondary": "#d8283b"
+  },
+  "weapon": "dagger",
+  "look": {
+    "base": "human",
+    "build": "slim",
+    "skin": "light",
+    "hair": "none",
+    "eyes": "#1d1a2e",
+    "face": "mask",
+    "headgear": "hood",
+    "outfit": "ninja",
+    "cape": "scarf",
+    "colors": {
+      "primary": "#3a3358",
+      "secondary": "#d8283b",
+      "accent": "#d8283b",
+      "metal": "#b8c0cc",
+      "pants": "#2e2946"
+    },
+    "aura": "shadow",
+    "trail": "#ff5c6c"
+  },
+  "stats": {
+    "vitality": 22,
+    "power": 20,
+    "armor": 8,
+    "speed": 20,
+    "energy": 10,
+    "regen": 10,
+    "crit": 10,
+    "haste": 0,
+    "tenacity": 0,
+    "precision": 0,
+    "focus": 5
+  },
+  "traits": [
+    "deadeye",
+    "momentum",
+    "opportunist"
+  ],
+  "abilities": [
+    {
+      "name": "Backstab",
+      "type": "melee",
+      "damage": 100,
+      "range": 35,
+      "arc": 90,
+      "windup": 0.1,
+      "cooldown": 3.5,
+      "style": "thrust",
+      "color": "#ff5c6c"
+    },
+    {
+      "name": "Shadow Step",
+      "type": "dash",
+      "distance": 280,
+      "teleport": true,
+      "cooldown": 5,
+      "style": "shadow",
+      "color": "#8a7fc0"
+    },
+    {
+      "name": "Shuriken Fan",
+      "type": "projectile",
+      "damage": 20,
+      "count": 3,
+      "spread": 14,
+      "speed": 1100,
+      "radius": 6,
+      "range": 550,
+      "cooldown": 3,
+      "effects": {
+        "poison": {
+          "dps": 5,
+          "duration": 3
+        }
+      },
+      "style": "shard",
+      "color": "#d7dee8"
+    },
+    {
+      "name": "Poison Cloud",
+      "type": "zone",
+      "dps": 25,
+      "duration": 4,
+      "radius": 90,
+      "range": 400,
+      "slow": 0.2,
+      "cooldown": 9,
+      "style": "poison"
+    },
+    {
+      "name": "Smoke Bomb",
+      "type": "cleanse",
+      "immunity": 1,
+      "cooldown": 12,
+      "style": "shake",
+      "color": "#b7b0c8"
+    }
+  ],
+  "stance": "aggressive",
+  "offhand": "bow",
+  "relics": [
+    "phoenix_feather",
+    "hunters_mark",
+    "venom_gland"
+  ],
+  "awakening": {
+    "name": "Shadow Form",
+    "color": "#8a7fc0"
+  },
+  "godPowers": [
+    "blackhole",
+    "thunder"
+  ],
+  "ultimate": {
+    "name": "Thousand Cuts",
+    "type": "melee",
+    "damage": 110,
+    "hits": 4,
+    "range": 50,
+    "arc": 120,
+    "lunge": 80,
+    "windup": 0.3,
+    "style": "slash",
+    "color": "#ff5c6c"
+  }
+}

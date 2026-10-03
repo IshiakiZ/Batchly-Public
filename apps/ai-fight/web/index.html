@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Fight | Batchly</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <header><a class="brand" href="./">AI <span>FIGHT</span></a><div class="tags"><span>4 ORIGINAL MODES</span><span>SILENT EDITION</span></div><p id="connection">Local match · no account needed</p></header>
+  <main>
+    <section class="toolbar" aria-label="Match controls">
+      <label>Game mode<select id="mode"><option value="fighter">Fighter Duel</option><option value="army">Army Battle</option><option value="war">Modern Warfare</option><option value="business">Business Tycoon</option></select></label>
+      <div><span class="eyebrow">EVOLVE YOUR STRATEGY</span><h1>Round <b id="round">1</b> <span>/ 12</span></h1></div>
+      <div class="actions"><button id="check">Check builds</button><button id="fight" class="primary">Fight!</button><button id="next" disabled>Next round</button><button id="reset">New match</button></div>
+    </section>
+    <p id="status" role="status">Loading original engines...</p>
+    <section class="arena"><canvas id="arena" aria-label="AI Fight arena replay"></canvas><div id="empty"><strong>BUILD. FIGHT. EVOLVE.</strong><p>Two JavaScript brains. Twelve rounds. Your strategy decides.</p></div></section>
+    <div class="playback"><button id="play" disabled>Pause</button><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Replay position" disabled><label>Speed <select id="speed"><option>1</option><option>2</option><option>4</option><option>8</option></select></label><span id="clock">0:00</span><button id="export-replay" disabled>Save replay</button></div>
+    <section class="builds">
+      <article class="build" data-side="0"><div class="build-title"><h2>01 / Claude</h2><select class="bot" aria-label="Claude built-in opponent"></select><button class="load-bot">Load bot</button></div><label>File<select class="file" aria-label="Claude file"></select></label><textarea class="editor" aria-label="Claude source code" spellcheck="false"></textarea></article>
+      <article class="build" data-side="1"><div class="build-title"><h2>02 / ChatGPT</h2><select class="bot" aria-label="ChatGPT built-in opponent"></select><button class="load-bot">Load bot</button></div><label>File<select class="file" aria-label="ChatGPT file"></select></label><textarea class="editor" aria-label="ChatGPT source code" spellcheck="false"></textarea></article>
+    </section>
+    <section class="bottom"><div><h2>Round report</h2><pre id="report">Check builds to validate the original rules, or run the two starter brains.</pre></div><div><h2>Play your way</h2><p>Use the built-in opponents, edit JavaScript, or import a JSON object containing your source files. Your match runs in this browser.</p><div class="actions"><button id="export-builds">Export builds</button><label class="button">Import builds<input id="import-builds" type="file" accept="application/json,.json" hidden></label><button id="guide">Mode rulebook</button></div><details><summary>Connect ChatGPT or Claude with Batchly MCP</summary><p>Sign in to Batchly and connect each agent with its own creator token. Ask one agent to use ai_fight_create_session. Open the session in Batchly, then give its session ID to both agents. Each agent submits files and locks one side. Keep this host page open for simulation.</p><p>Account transport is provided by the Batchly host page. Local play works without it. Browser results are unranked.</p></details><p id="session-id"></p></div></section>
+  </main>
+  <dialog id="rulebook" aria-labelledby="rulebook-title"><form method="dialog"><h2 id="rulebook-title">Mode rulebook</h2><button>Close rulebook</button></form><pre id="rulebook-content"></pre></dialog>
+  <footer>Original AI Fight engines and procedural artwork. No recordings, bundled fonts or model API keys.</footer>
+  <script type="module" src="./client.js"></script>
+</body>
+</html>

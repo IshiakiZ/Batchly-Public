@@ -1,0 +1,139 @@
+{
+  "name": "Iron Paladin",
+  "title": "Sparring Bot Mk. VI",
+  "catchphrase": "By the light!",
+  "description": "A sword-and-shield knight. Blocks head-on, parries your big hits, consecrates the ground and heals itself.",
+  "colors": {
+    "primary": "#aab4c0",
+    "secondary": "#2f5fb3"
+  },
+  "weapon": "shield",
+  "look": {
+    "base": "human",
+    "build": "bulky",
+    "headgear": "plume",
+    "outfit": "plate",
+    "cape": "long",
+    "shoulders": "pauldrons",
+    "colors": {
+      "primary": "#2f5fb3",
+      "secondary": "#2f5fb3",
+      "accent": "#e8c35a",
+      "metal": "#c3cbd6"
+    },
+    "aura": "holy",
+    "trail": "#fff1b0"
+  },
+  "stats": {
+    "vitality": 25,
+    "power": 25,
+    "armor": 20,
+    "speed": 10,
+    "energy": 0,
+    "regen": 10,
+    "crit": 0,
+    "haste": 5,
+    "tenacity": 5,
+    "precision": 0,
+    "vigor": 10
+  },
+  "traits": [
+    "bulwark",
+    "unstoppable",
+    "iron_will"
+  ],
+  "abilities": [
+    {
+      "name": "Judgment",
+      "type": "melee",
+      "damage": 110,
+      "range": 55,
+      "arc": 110,
+      "windup": 0.3,
+      "cooldown": 4,
+      "effects": {
+        "stun": 0.5
+      },
+      "style": "smash",
+      "color": "#e8c35a"
+    },
+    {
+      "name": "Consecrate",
+      "type": "zone",
+      "dps": 30,
+      "duration": 5,
+      "radius": 110,
+      "range": 250,
+      "slow": 0.25,
+      "cooldown": 10,
+      "style": "holy"
+    },
+    {
+      "name": "Holy Light",
+      "type": "heal",
+      "amount": 200,
+      "duration": 2,
+      "cooldown": 12,
+      "style": "glow",
+      "color": "#fff1b0"
+    },
+    {
+      "name": "Divine Parry",
+      "type": "counter",
+      "duration": 0.6,
+      "damage": 80,
+      "range": 120,
+      "cooldown": 6,
+      "effects": {
+        "stun": 0.5
+      },
+      "style": "parry",
+      "color": "#9fe8ff"
+    },
+    {
+      "name": "Radiant Bolt",
+      "type": "projectile",
+      "damage": 60,
+      "speed": 800,
+      "radius": 12,
+      "range": 600,
+      "windup": 0.2,
+      "cooldown": 3,
+      "effects": {
+        "slow": {
+          "amount": 0.3,
+          "duration": 1.5
+        }
+      },
+      "style": "orb",
+      "color": "#fff1b0"
+    }
+  ],
+  "stance": "defensive",
+  "offhand": "hammer",
+  "relics": [
+    "phoenix_feather",
+    "bloodstone",
+    "warding_rune"
+  ],
+  "awakening": {
+    "name": "Avatar of Light",
+    "color": "#fff1b0"
+  },
+  "godPowers": [
+    "avatar",
+    "judgment"
+  ],
+  "ultimate": {
+    "name": "Divine Wrath",
+    "type": "area",
+    "damage": 330,
+    "radius": 170,
+    "windup": 0.5,
+    "effects": {
+      "stun": 0.8
+    },
+    "style": "nova",
+    "color": "#fff1b0"
+  }
+}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Fight</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/live.css">
+  <link rel="stylesheet" href="/css/arena.css">
+  <link rel="stylesheet" href="/css/pages.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="tb-left">
+      <button class="brand" id="brand" type="button" title="AI Fight — back to Live (L)">
+        <svg class="brand-mark" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+          <path fill="#e8825c" d="M1 1h2v1h1v1h1v1h1v1h1v1h1v1H7v1H6V7H5V6H4V5H3V4H2V3H1z"/>
+          <path fill="#2fc58e" d="M15 1h-2v1h-1v1h-1v1h-1v1H9v1H8v1h1v1h1V7h1V6h1V5h1V4h1V3h1z"/>
+          <path fill="#ffd166" d="M4 11h1v-1h1V9h1v1H6v1H5v1H4zM12 11h-1v-1h-1V9H9v1h1v1h1v1h1z"/>
+          <path fill="#c9d3e0" d="M2 13h2v2H2zM12 13h2v2h-2z"/>
+        </svg>
+        <span class="brand-name">AI&nbsp;FIGHT</span>
+      </button>
+      <nav id="main-tabs" aria-label="Main"></nav>
+    </div>
+    <div class="scoreboard" id="scoreboard"></div>
+    <div class="tb-right">
+      <div class="menu-wrap">
+        <button class="btn ghost small" id="btn-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" title="Exhibition, setup & prompts, arena log, settings, help">☰ <span class="menu-lbl">Menu</span></button>
+        <div class="menu" id="menu" role="menu" aria-label="Menu" hidden></div>
+      </div>
+      <button class="icon-btn" id="btn-sound" type="button" title="Sound (M)">🔊</button>
+      <span class="conn" id="conn" role="status" title="Connection to the arena server"><i></i><b>connecting…</b></span>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- LIVE while building: both AIs designing their fighters -->
+    <section class="screen" id="screen-build" aria-label="Live: the AIs are building">
+      <div class="live-grid">
+        <article class="fcard" id="fcard-0"></article>
+        <aside class="mc" id="match-control" aria-label="Match control"></aside>
+        <article class="fcard" id="fcard-1"></article>
+      </div>
+    </section>
+
+    <!-- LIVE fight / replays: countdown, the fight, round result -->
+    <section class="screen" id="screen-modearena" aria-label="Arena (game modes)"></section>
+    <section class="screen" id="screen-arena" aria-label="Arena">
+      <div class="hud" id="hud"></div>
+      <div class="arena-grid" id="arena-grid">
+        <aside class="hud-side" id="hud-side-0" aria-label="Left fighter details"></aside>
+        <div class="arena-stage" id="arena-stage">
+          <canvas id="arena-canvas"></canvas>
+          <div class="fx-layer" id="fx-layer"></div>
+          <div class="overlay" id="overlay"></div>
+          <div class="replay-bar" id="replay-bar" hidden></div>
+        </div>
+        <aside class="hud-side" id="hud-side-1" aria-label="Right fighter details"></aside>
+      </div>
+      <div class="arena-foot">
+        <div class="ticker" id="ticker"></div>
+        <div class="arena-toggles" id="arena-toggles"></div>
+      </div>
+    </section>
+
+    <!-- FIGHTERS: deep dive per fighter -->
+    <section class="screen page" id="screen-fighters" aria-label="Fighters"><div class="page-wrap" id="fighters"></div></section>
+
+    <!-- STATS: match summary, rounds, charts, evolution, all-time -->
+    <section class="screen page" id="screen-stats" aria-label="Statistics"><div class="page-wrap" id="stats"></div></section>
+
+    <!-- REPLAYS: rounds, earlier matches, exhibitions -->
+    <section class="screen page" id="screen-replays" aria-label="Replays"><div class="page-wrap" id="replays"></div></section>
+  </main>
+
+  <aside class="drawer" id="drawer" aria-label="Arena log" hidden></aside>
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="tooltip" class="viz-tooltip" hidden></div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

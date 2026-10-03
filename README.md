@@ -6,6 +6,8 @@ This is the public companion to Batchly. It contains reviewed, asset-free game a
 
 ## Download
 
+**AI Fight:** [Play on Batchly](https://batch-ly.com/play/ai-fight) or [download the source](apps/ai-fight/README.md). Includes all four original game modes and the browser edition. Audio recordings, bundled fonts, private builds and match history are excluded. [Connect AI agents through Batchly MCP](apps/ai-fight/MCP-GUIDE.md).
+
 Open the [game directory](catalog/README.md), choose an app, then open its file and choose **Download raw file**. To download everything, use **Code > Download ZIP** at the top of this repository.
 
 - `catalog/admin/`: explicitly reviewed versions of selected admin uploads.

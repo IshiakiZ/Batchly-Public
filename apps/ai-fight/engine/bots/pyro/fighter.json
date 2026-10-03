@@ -1,0 +1,148 @@
+{
+  "name": "Blaze Pyromancer",
+  "title": "Sparring Bot Mk. VII",
+  "catchphrase": "Everything burns!",
+  "description": "A wand pyromancer. Keeps you burning with bolts, walls off your path, blasts rushers away and channels a flame beam.",
+  "colors": {
+    "primary": "#d9473a",
+    "secondary": "#ffd166"
+  },
+  "weapon": "wand",
+  "look": {
+    "base": "human",
+    "build": "average",
+    "skin": "tan",
+    "hair": "spiky",
+    "hairColor": "fire",
+    "eyes": "#ffcf3a",
+    "face": "warpaint",
+    "headgear": "none",
+    "outfit": "robe",
+    "cape": "none",
+    "colors": {
+      "primary": "#b8332a",
+      "secondary": "#ffd166",
+      "accent": "#ff8a1f",
+      "metal": "#e0b048"
+    },
+    "aura": "fire",
+    "trail": "#ffb347"
+  },
+  "stats": {
+    "vitality": 23,
+    "power": 20,
+    "armor": 10,
+    "speed": 17,
+    "energy": 15,
+    "regen": 15,
+    "crit": 0,
+    "haste": 0,
+    "tenacity": 0,
+    "precision": 0,
+    "focus": 5
+  },
+  "traits": [
+    "pyromaniac",
+    "efficient",
+    "thick_skin"
+  ],
+  "abilities": [
+    {
+      "name": "Fire Bolt",
+      "type": "projectile",
+      "damage": 30,
+      "speed": 950,
+      "radius": 8,
+      "range": 650,
+      "cooldown": 1,
+      "effects": {
+        "burn": {
+          "dps": 10,
+          "duration": 2
+        }
+      },
+      "style": "fireball",
+      "color": "#ff8a1f"
+    },
+    {
+      "name": "Flame Wall",
+      "type": "zone",
+      "dps": 40,
+      "duration": 4,
+      "radius": 90,
+      "range": 450,
+      "cooldown": 8,
+      "style": "fire"
+    },
+    {
+      "name": "Inferno Nova",
+      "type": "area",
+      "damage": 60,
+      "radius": 140,
+      "windup": 0.2,
+      "cooldown": 8,
+      "effects": {
+        "burn": {
+          "dps": 20,
+          "duration": 3
+        },
+        "knockback": 180
+      },
+      "style": "nova",
+      "color": "#ff5a1f"
+    },
+    {
+      "name": "Kindle",
+      "type": "buff",
+      "stat": "power",
+      "amount": 30,
+      "duration": 4,
+      "cooldown": 12,
+      "style": "rage",
+      "color": "#ff7a1a"
+    },
+    {
+      "name": "Flame Beam",
+      "type": "beam",
+      "dps": 80,
+      "duration": 1.5,
+      "range": 450,
+      "width": 16,
+      "turnRate": 70,
+      "cooldown": 7,
+      "style": "fire",
+      "color": "#ffb347"
+    }
+  ],
+  "stance": "aggressive",
+  "offhand": "staff",
+  "relics": [
+    "thunder_idol",
+    "storm_battery",
+    "energy_crystal"
+  ],
+  "awakening": {
+    "name": "Inferno",
+    "color": "#ff7a1a"
+  },
+  "godPowers": [
+    "meteor",
+    "phoenix"
+  ],
+  "ultimate": {
+    "name": "Supernova",
+    "type": "area",
+    "damage": 300,
+    "radius": 190,
+    "windup": 0.5,
+    "effects": {
+      "burn": {
+        "dps": 25,
+        "duration": 3
+      },
+      "knockback": 200
+    },
+    "style": "nova",
+    "color": "#ff7a1a"
+  }
+}

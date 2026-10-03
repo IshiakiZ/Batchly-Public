@@ -1,0 +1,133 @@
+{
+  "name": "Storm Mage",
+  "title": "Sparring Bot Mk. IV",
+  "catchphrase": "Feel the storm!",
+  "description": "A staff caster. Calls meteors on your path, channels lightning, freezes anyone who gets close and blinks away.",
+  "colors": {
+    "primary": "#8f5bff",
+    "secondary": "#ffd84a"
+  },
+  "weapon": "staff",
+  "look": {
+    "base": "human",
+    "build": "slim",
+    "skin": "fair",
+    "hair": "long",
+    "hairColor": "white",
+    "face": "longbeard",
+    "eyes": "#2a1d4a",
+    "headgear": "wizard",
+    "outfit": "robe",
+    "cape": "none",
+    "colors": {
+      "primary": "#6a45c8",
+      "secondary": "#ffd84a",
+      "accent": "#ffe066",
+      "metal": "#d0c8e8"
+    },
+    "aura": "storm",
+    "trail": "#ffe066"
+  },
+  "stats": {
+    "vitality": 36,
+    "power": 20,
+    "armor": 12,
+    "speed": 15,
+    "energy": 9,
+    "regen": 8,
+    "crit": 0,
+    "haste": 0,
+    "tenacity": 0,
+    "precision": 0,
+    "focus": 10
+  },
+  "traits": [
+    "thick_skin",
+    "efficient",
+    "blast_radius"
+  ],
+  "abilities": [
+    {
+      "name": "Meteor",
+      "type": "area",
+      "target": "point",
+      "damage": 150,
+      "radius": 90,
+      "range": 600,
+      "delay": 0.7,
+      "windup": 0.3,
+      "cooldown": 5,
+      "style": "meteor",
+      "color": "#ff9a3d"
+    },
+    {
+      "name": "Lightning",
+      "type": "beam",
+      "dps": 90,
+      "duration": 2,
+      "range": 500,
+      "width": 14,
+      "turnRate": 60,
+      "cooldown": 8,
+      "style": "laser",
+      "color": "#ffe066"
+    },
+    {
+      "name": "Frost Nova",
+      "type": "area",
+      "damage": 40,
+      "radius": 130,
+      "windup": 0.15,
+      "cooldown": 9,
+      "effects": {
+        "stun": 0.8
+      },
+      "style": "frost",
+      "color": "#7fdcff"
+    },
+    {
+      "name": "Blink",
+      "type": "dash",
+      "distance": 260,
+      "teleport": true,
+      "cooldown": 6,
+      "style": "blink"
+    },
+    {
+      "name": "Mana Shield",
+      "type": "shield",
+      "amount": 160,
+      "duration": 3,
+      "cooldown": 10,
+      "style": "bubble",
+      "color": "#b894ff"
+    }
+  ],
+  "stance": "balanced",
+  "offhand": "wand",
+  "relics": [
+    "hourglass",
+    "phoenix_feather",
+    "scholars_tome"
+  ],
+  "awakening": {
+    "name": "Arcane Surge",
+    "color": "#b894ff"
+  },
+  "godPowers": [
+    "phoenix",
+    "timestop"
+  ],
+  "ultimate": {
+    "name": "Starfall",
+    "type": "area",
+    "target": "point",
+    "damage": 380,
+    "radius": 140,
+    "range": 650,
+    "delay": 1,
+    "windup": 0.4,
+    "style": "meteor",
+    "color": "#ffe066"
+  }
+}

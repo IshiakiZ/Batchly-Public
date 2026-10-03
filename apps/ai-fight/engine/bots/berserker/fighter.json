@@ -1,0 +1,146 @@
+{
+  "name": "Blood Berserker",
+  "title": "Sparring Bot Mk. IX",
+  "catchphrase": "BLOOD FOR THE ARENA!",
+  "description": "A battle-axe berserker. Leaps in, cleaves, makes you bleed and gets stronger the more hurt it is.",
+  "colors": {
+    "primary": "#c0182a",
+    "secondary": "#b4bcc6"
+  },
+  "weapon": "axe",
+  "look": {
+    "base": "human",
+    "build": "bulky",
+    "skin": "tan",
+    "hair": "wild",
+    "hairColor": "red",
+    "eyes": "#ffd23a",
+    "face": "warpaint",
+    "headgear": "horned",
+    "outfit": "barbarian",
+    "shoulders": "fur",
+    "cape": "none",
+    "colors": {
+      "primary": "#6e4a2e",
+      "secondary": "#8a5a34",
+      "accent": "#c0182a",
+      "metal": "#b4bcc6"
+    },
+    "leather": "#5a3a22",
+    "trail": "#ff4d5e"
+  },
+  "stats": {
+    "vitality": 28,
+    "power": 20,
+    "armor": 15,
+    "speed": 15,
+    "energy": 7,
+    "regen": 10,
+    "crit": 0,
+    "haste": 0,
+    "tenacity": 5,
+    "precision": 0,
+    "vigor": 5
+  },
+  "traits": [
+    "berserker",
+    "thick_skin",
+    "momentum"
+  ],
+  "abilities": [
+    {
+      "name": "Wide Cleave",
+      "type": "melee",
+      "damage": 60,
+      "range": 55,
+      "arc": 150,
+      "cooldown": 2.3,
+      "style": "slash",
+      "color": "#c9d0d8"
+    },
+    {
+      "name": "Leap Smash",
+      "type": "dash",
+      "distance": 320,
+      "damage": 50,
+      "cooldown": 6,
+      "effects": {
+        "stun": 0.4
+      },
+      "style": "charge",
+      "color": "#ff4d5e"
+    },
+    {
+      "name": "Blood Rage",
+      "type": "buff",
+      "stat": "power",
+      "amount": 25,
+      "duration": 5,
+      "cooldown": 12,
+      "style": "rage",
+      "color": "#ff2a3a"
+    },
+    {
+      "name": "Rending Chop",
+      "type": "melee",
+      "damage": 125,
+      "range": 45,
+      "arc": 80,
+      "windup": 0.35,
+      "cooldown": 6,
+      "effects": {
+        "vulnerable": {
+          "amount": 0.2,
+          "duration": 3
+        }
+      },
+      "style": "smash",
+      "color": "#ff4d5e"
+    },
+    {
+      "name": "Throwing Axe",
+      "type": "projectile",
+      "damage": 50,
+      "speed": 800,
+      "radius": 12,
+      "range": 450,
+      "cooldown": 4,
+      "returns": true,
+      "effects": {
+        "slow": {
+          "amount": 0.35,
+          "duration": 1.2
+        }
+      },
+      "style": "shard",
+      "color": "#c9d0d8"
+    }
+  ],
+  "stance": "aggressive",
+  "offhand": "greatsword",
+  "relics": [
+    "berserker_helm",
+    "hunters_mark",
+    "energy_crystal"
+  ],
+  "awakening": {
+    "name": "Blood Frenzy",
+    "color": "#ff2a3a"
+  },
+  "godPowers": [
+    "avatar",
+    "worldtree"
+  ],
+  "ultimate": {
+    "name": "Blood Tornado",
+    "type": "melee",
+    "damage": 85,
+    "hits": 3,
+    "range": 90,
+    "arc": 360,
+    "lunge": 60,
+    "windup": 0.3,
+    "style": "slash",
+    "color": "#ff4d5e"
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "name": "Clockwork Gunslinger",
+  "title": "Sparring Bot Mk. X",
+  "catchphrase": "Draw, partner.",
+  "description": "A flintlock marksman. Fans the hammer from range, flash-bangs rushers, scatter-blasts, rolls away and leaves tripmines.",
+  "colors": {
+    "primary": "#c8963e",
+    "secondary": "#39e0ff"
+  },
+  "weapon": "pistol",
+  "look": {
+    "base": "robot",
+    "build": "average",
+    "skin": "#d0a050",
+    "eyes": "#39e0ff",
+    "headgear": "cowboy",
+    "outfit": "coat",
+    "face": "plain",
+    "colors": {
+      "primary": "#3e4658",
+      "secondary": "#c8963e",
+      "accent": "#39e0ff",
+      "metal": "#d8a84a",
+      "pants": "#2e3442"
+    },
+    "leather": "#5a3a22",
+    "trail": "#ffd166"
+  },
+  "stats": {
+    "vitality": 27,
+    "power": 16,
+    "armor": 10,
+    "speed": 12,
+    "energy": 10,
+    "regen": 10,
+    "crit": 10,
+    "haste": 0,
+    "tenacity": 0,
+    "precision": 5,
+    "focus": 5
+  },
+  "traits": [
+    "sharpshooter",
+    "marksman",
+    "quick_hands"
+  ],
+  "abilities": [
+    {
+      "name": "Fan the Hammer",
+      "type": "projectile",
+      "damage": 21,
+      "count": 3,
+      "spread": 12,
+      "speed": 1300,
+      "radius": 5,
+      "range": 650,
+      "cooldown": 3.5,
+      "style": "bolt",
+      "color": "#ffd166"
+    },
+    {
+      "name": "Scatter Blast",
+      "type": "projectile",
+      "damage": 24,
+      "count": 4,
+      "spread": 36,
+      "speed": 1000,
+      "radius": 6,
+      "range": 350,
+      "windup": 0.15,
+      "cooldown": 5,
+      "effects": {
+        "knockback": 120
+      },
+      "style": "bolt",
+      "color": "#ffb84d"
+    },
+    {
+      "name": "Combat Roll",
+      "type": "dash",
+      "distance": 220,
+      "invulnerable": true,
+      "cooldown": 5,
+      "style": "blink",
+      "color": "#e08a5a"
+    },
+    {
+      "name": "Flash Bang",
+      "type": "projectile",
+      "damage": 20,
+      "speed": 800,
+      "radius": 14,
+      "range": 500,
+      "windup": 0.2,
+      "cooldown": 10,
+      "effects": {
+        "stun": 0.6
+      },
+      "style": "orb",
+      "color": "#fff3c4"
+    },
+    {
+      "name": "Tripmine",
+      "type": "trap",
+      "damage": 80,
+      "radius": 40,
+      "arm": 0.6,
+      "duration": 15,
+      "range": 300,
+      "cooldown": 7,
+      "effects": {
+        "root": 0.5
+      },
+      "style": "mine",
+      "color": "#ff6b3d"
+    }
+  ],
+  "stance": "swift",
+  "offhand": "crossbow",
+  "relics": [
+    "hunters_mark",
+    "thunder_idol",
+    "storm_battery"
+  ],
+  "awakening": {
+    "name": "Overclock",
+    "color": "#39e0ff"
+  },
+  "godPowers": [
+    "thunder",
+    "timestop"
+  ],
+  "ultimate": {
+    "name": "Dead Eye",
+    "type": "projectile",
+    "damage": 200,
+    "speed": 1400,
+    "radius": 10,
+    "range": 900,
+    "windup": 0.8,
+    "style": "bolt",
+    "color": "#ffd166"
+  }
+}

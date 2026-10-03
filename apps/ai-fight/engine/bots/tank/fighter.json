@@ -1,0 +1,131 @@
+{
+  "name": "Stone Warden",
+  "title": "Sparring Bot Mk. III",
+  "catchphrase": "I do not move.",
+  "description": "A warhammer golem. Hooks you in, slams the ground, hurls boulders at your feet and hardens its stone skin.",
+  "colors": {
+    "primary": "#8d8a86",
+    "secondary": "#39c0ff"
+  },
+  "weapon": "hammer",
+  "look": {
+    "base": "golem",
+    "build": "bulky",
+    "skin": "stone",
+    "eyes": "#39c0ff",
+    "outfit": "none",
+    "shoulders": "none",
+    "colors": {
+      "primary": "#8d8a86",
+      "secondary": "#5f5b57",
+      "accent": "#39c0ff",
+      "metal": "#a8a29a"
+    },
+    "weaponColor": "#9a948a",
+    "trail": "#7fdcff"
+  },
+  "stats": {
+    "vitality": 35,
+    "power": 10,
+    "armor": 30,
+    "speed": 5,
+    "energy": 0,
+    "regen": 10,
+    "crit": 0,
+    "haste": 0,
+    "tenacity": 10,
+    "precision": 0,
+    "vigor": 10
+  },
+  "traits": [
+    "thorns",
+    "bulwark",
+    "iron_will"
+  ],
+  "abilities": [
+    {
+      "name": "Slam",
+      "type": "area",
+      "damage": 70,
+      "radius": 110,
+      "windup": 0.3,
+      "cooldown": 6,
+      "effects": {
+        "stun": 0.6
+      },
+      "style": "quake",
+      "color": "#b4f0ff"
+    },
+    {
+      "name": "Chain Hook",
+      "type": "projectile",
+      "damage": 30,
+      "speed": 900,
+      "radius": 12,
+      "range": 450,
+      "windup": 0.2,
+      "cooldown": 7,
+      "effects": {
+        "knockback": -250
+      },
+      "style": "wave"
+    },
+    {
+      "name": "Mend",
+      "type": "heal",
+      "amount": 240,
+      "duration": 4,
+      "cooldown": 12,
+      "style": "nature"
+    },
+    {
+      "name": "Boulder",
+      "type": "area",
+      "target": "point",
+      "damage": 90,
+      "radius": 70,
+      "range": 500,
+      "delay": 0.7,
+      "windup": 0.2,
+      "cooldown": 6,
+      "style": "meteor",
+      "color": "#bdb9b3"
+    },
+    {
+      "name": "Stone Skin",
+      "type": "buff",
+      "stat": "armor",
+      "amount": 40,
+      "duration": 4,
+      "cooldown": 10,
+      "style": "aura"
+    }
+  ],
+  "stance": "defensive",
+  "offhand": "crossbow",
+  "relics": [
+    "titan_belt",
+    "warding_rune",
+    "bloodstone"
+  ],
+  "awakening": {
+    "name": "Mountain Heart",
+    "color": "#7fdcff"
+  },
+  "godPowers": [
+    "avatar",
+    "timestop"
+  ],
+  "ultimate": {
+    "name": "Earthshatter",
+    "type": "area",
+    "damage": 230,
+    "radius": 180,
+    "windup": 0.6,
+    "effects": {
+      "stun": 0.9
+    },
+    "style": "quake",
+    "color": "#b4f0ff"
+  }
+}

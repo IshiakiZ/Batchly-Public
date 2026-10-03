@@ -1,0 +1,142 @@
+{
+  "name": "Frost Witch",
+  "title": "Sparring Bot Mk. VIII",
+  "catchphrase": "Stay a while. Forever.",
+  "description": "A control mage. Slows with ice shards and frozen ground, freezes anyone close, hooks you back and shrugs off control.",
+  "colors": {
+    "primary": "#6aa8ff",
+    "secondary": "#bff4ff"
+  },
+  "weapon": "staff",
+  "look": {
+    "base": "elf",
+    "build": "slim",
+    "skin": "#dfe8f4",
+    "hair": "long",
+    "hairColor": "ice",
+    "eyes": "#5fd8ff",
+    "headgear": "witch",
+    "outfit": "robe",
+    "cape": "none",
+    "colors": {
+      "primary": "#3f78d0",
+      "secondary": "#bff4ff",
+      "accent": "#bff4ff",
+      "metal": "#d8f4ff"
+    },
+    "aura": "frost",
+    "trail": "#bff4ff"
+  },
+  "stats": {
+    "vitality": 24,
+    "power": 17,
+    "armor": 10,
+    "speed": 15,
+    "energy": 12,
+    "regen": 12,
+    "crit": 0,
+    "haste": 0,
+    "tenacity": 10,
+    "precision": 0,
+    "focus": 5,
+    "vigor": 5
+  },
+  "traits": [
+    "opportunist",
+    "blast_radius",
+    "focused"
+  ],
+  "abilities": [
+    {
+      "name": "Ice Shard",
+      "type": "projectile",
+      "damage": 32,
+      "speed": 1000,
+      "radius": 7,
+      "range": 700,
+      "cooldown": 1,
+      "effects": {
+        "slow": {
+          "amount": 0.3,
+          "duration": 1.2
+        }
+      },
+      "style": "shard",
+      "color": "#bff4ff"
+    },
+    {
+      "name": "Deep Freeze",
+      "type": "area",
+      "damage": 40,
+      "radius": 130,
+      "windup": 0.15,
+      "cooldown": 9,
+      "effects": {
+        "stun": 1
+      },
+      "style": "frost",
+      "color": "#7fdcff"
+    },
+    {
+      "name": "Frozen Ground",
+      "type": "zone",
+      "dps": 18,
+      "duration": 5,
+      "radius": 110,
+      "range": 500,
+      "slow": 0.5,
+      "cooldown": 9,
+      "style": "ice"
+    },
+    {
+      "name": "Frost Hook",
+      "type": "projectile",
+      "damage": 35,
+      "speed": 900,
+      "radius": 10,
+      "range": 500,
+      "windup": 0.25,
+      "cooldown": 7,
+      "effects": {
+        "knockback": -250
+      },
+      "style": "wave",
+      "color": "#6fcfe8"
+    },
+    {
+      "name": "Purify",
+      "type": "cleanse",
+      "immunity": 1,
+      "cooldown": 12,
+      "style": "purify",
+      "color": "#bff4ff"
+    }
+  ],
+  "stance": "defensive",
+  "offhand": "wand",
+  "relics": [
+    "frost_heart",
+    "thunder_idol",
+    "scholars_tome"
+  ],
+  "awakening": {
+    "name": "Winter Queen",
+    "color": "#bff4ff"
+  },
+  "godPowers": [
+    "timestop",
+    "avatar"
+  ],
+  "ultimate": {
+    "name": "Absolute Zero",
+    "type": "area",
+    "damage": 280,
+    "radius": 190,
+    "windup": 0.5,
+    "effects": {
+      "stun": 1.1
+    },
+    "style": "frost",
+    "color": "#7fdcff"
+  }
+}

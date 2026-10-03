@@ -1,0 +1,11 @@
+data/
+fighters/
+results/
+prompts/
+node_modules/
+.env
+.env.*
+*.pem
+*.key
+public/audio/
+public/fonts/

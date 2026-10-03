@@ -1,0 +1,101 @@
+{
+  "rookie": {
+    "weapon": "shortsword",
+    "look": {
+      "base": "human", "build": "average", "skin": "fair", "hair": "short", "hairColor": "brown", "eyes": "#2e2a3a",
+      "face": "plain", "headgear": "headband", "outfit": "tunic", "cape": "none",
+      "colors": { "primary": "#6f86b0", "secondary": "#8fd3ff", "accent": "#8fd3ff", "metal": "#c9d3e0", "pants": "#434c63" },
+      "trail": "#cfefff"
+    }
+  },
+  "brawler": {
+    "weapon": "fists",
+    "look": {
+      "base": "robot", "build": "bulky", "skin": "steel", "eyes": "#ff5a3a", "headgear": "none", "outfit": "none",
+      "colors": { "primary": "#a9b3bf", "secondary": "#e0413a", "accent": "#ff9a3d", "metal": "#a9b3bf" },
+      "trail": "#ff7a5c"
+    }
+  },
+  "archer": {
+    "weapon": "bow",
+    "look": {
+      "base": "elf", "build": "slim", "hair": "long", "hairColor": "platinum", "eyes": "#2f8a62",
+      "headgear": "hood", "outfit": "leather", "cape": "short",
+      "colors": { "primary": "#3f9a5c", "secondary": "#e8d8a8", "accent": "#b7f5ff", "metal": "#c9d3e0", "pants": "#4a3a2a" },
+      "trail": "#d8f5c0"
+    }
+  },
+  "tank": {
+    "weapon": "hammer",
+    "look": {
+      "base": "golem", "build": "bulky", "skin": "stone", "eyes": "#39c0ff", "outfit": "none", "shoulders": "none",
+      "colors": { "primary": "#8d8a86", "secondary": "#5f5b57", "accent": "#39c0ff", "metal": "#a8a29a" },
+      "weaponColor": "#9a948a", "trail": "#7fdcff"
+    }
+  },
+  "mage": {
+    "weapon": "staff",
+    "look": {
+      "base": "human", "build": "slim", "skin": "fair", "hair": "long", "hairColor": "white", "face": "longbeard", "eyes": "#2a1d4a",
+      "headgear": "wizard", "outfit": "robe", "cape": "none",
+      "colors": { "primary": "#6a45c8", "secondary": "#ffd84a", "accent": "#ffe066", "metal": "#d0c8e8" },
+      "aura": "storm", "trail": "#ffe066"
+    }
+  },
+  "ninja": {
+    "weapon": "dagger",
+    "look": {
+      "base": "human", "build": "slim", "skin": "light", "hair": "none", "eyes": "#1d1a2e", "face": "mask",
+      "headgear": "hood", "outfit": "ninja", "cape": "scarf",
+      "colors": { "primary": "#3a3358", "secondary": "#d8283b", "accent": "#d8283b", "metal": "#b8c0cc", "pants": "#2e2946" },
+      "aura": "shadow", "trail": "#ff5c6c"
+    }
+  },
+  "paladin": {
+    "weapon": "shield",
+    "look": {
+      "base": "human", "build": "bulky", "headgear": "plume", "outfit": "plate", "cape": "long", "shoulders": "pauldrons",
+      "colors": { "primary": "#2f5fb3", "secondary": "#2f5fb3", "accent": "#e8c35a", "metal": "#c3cbd6" },
+      "aura": "holy", "trail": "#fff1b0"
+    }
+  },
+  "pyro": {
+    "weapon": "wand",
+    "look": {
+      "base": "human", "build": "average", "skin": "tan", "hair": "spiky", "hairColor": "fire", "eyes": "#ffcf3a", "face": "warpaint",
+      "headgear": "none", "outfit": "robe", "cape": "none",
+      "colors": { "primary": "#b8332a", "secondary": "#ffd166", "accent": "#ff8a1f", "metal": "#e0b048" },
+      "aura": "fire", "trail": "#ffb347"
+    }
+  },
+  "frost": {
+    "weapon": "staff",
+    "look": {
+      "base": "elf", "build": "slim", "skin": "#dfe8f4", "hair": "long", "hairColor": "ice", "eyes": "#5fd8ff",
+      "headgear": "witch", "outfit": "robe", "cape": "none",
+      "colors": { "primary": "#3f78d0", "secondary": "#bff4ff", "accent": "#bff4ff", "metal": "#d8f4ff" },
+      "aura": "frost", "trail": "#bff4ff"
+    }
+  },
+  "berserker": {
+    "weapon": "axe",
+    "look": {
+      "base": "human", "build": "bulky", "skin": "tan", "hair": "wild", "hairColor": "red", "eyes": "#ffd23a", "face": "warpaint",
+      "headgear": "horned", "outfit": "barbarian", "shoulders": "fur", "cape": "none",
+      "colors": { "primary": "#6e4a2e", "secondary": "#8a5a34", "accent": "#c0182a", "metal": "#b4bcc6" },
+      "leather": "#5a3a22", "trail": "#ff4d5e"
+    }
+  },
+  "gunslinger": {
+    "weapon": "pistol",
+    "look": {
+      "base": "robot", "build": "average", "skin": "#d0a050", "eyes": "#39e0ff", "headgear": "cowboy", "outfit": "coat", "face": "plain",
+      "colors": { "primary": "#3e4658", "secondary": "#c8963e", "accent": "#39e0ff", "metal": "#d8a84a", "pants": "#2e3442" },
+      "leather": "#5a3a22", "trail": "#ffd166"
+    }
+  },
+  "dummy": {
+    "weapon": "fists",
+    "look": { "base": "dummy", "skin": "burlap", "colors": { "primary": "#d9b77e", "secondary": "#6b4a2b", "accent": "#c0392b", "metal": "#8f6538" } }
+  }
+}

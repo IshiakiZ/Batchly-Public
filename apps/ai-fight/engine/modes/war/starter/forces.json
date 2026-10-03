@@ -1,0 +1,17 @@
+{
+  "name": "First Battalion",
+  "colors": { "primary": "#6b7b5a", "secondary": "#e8e0c8" },
+  "emblem": "star",
+  "motto": "Hold the line!",
+  "hq": { "name": "Battalion HQ", "x": -980, "y": 0 },
+  "units": [
+    { "type": "riflemen", "name": "Alpha Company", "x": -560, "y": -400 },
+    { "type": "riflemen", "name": "Bravo Company", "x": -560, "y": -200 },
+    { "type": "riflemen", "name": "Charlie Company", "x": -560, "y": 0 },
+    { "type": "riflemen", "name": "Delta Company", "x": -560, "y": 200 },
+    { "type": "riflemen", "name": "Echo Company", "x": -560, "y": 400 },
+    { "type": "machinegun", "name": "North MG Team", "x": -680, "y": -240 },
+    { "type": "machinegun", "name": "Centre MG Team", "x": -680, "y": 0 },
+    { "type": "machinegun", "name": "South MG Team", "x": -680, "y": 240 }
+  ]
+}

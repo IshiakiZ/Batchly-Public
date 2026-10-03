@@ -1,0 +1,31 @@
+{
+  "name": "Training Dummy",
+  "title": "Stuffed With Regret",
+  "catchphrase": "...",
+  "description": "A sturdy straw dummy. It never moves and never fights back. Use it to measure your damage.",
+  "colors": {
+    "primary": "#d9b77e",
+    "secondary": "#6b4a2b"
+  },
+  "weapon": "fists",
+  "look": {
+    "base": "dummy",
+    "skin": "burlap",
+    "colors": {
+      "primary": "#d9b77e",
+      "secondary": "#6b4a2b",
+      "accent": "#c0392b",
+      "metal": "#8f6538"
+    }
+  },
+  "stats": {
+    "vitality": 40,
+    "power": 0,
+    "armor": 0,
+    "speed": 0,
+    "energy": 0,
+    "regen": 0
+  },
+  "traits": [],
+  "abilities": []
+}

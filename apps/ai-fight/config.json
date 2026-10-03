@@ -1,0 +1,7 @@
+{
+  "port": 3000,
+  "fighters": [
+    { "id": "claude", "label": "Claude", "color": "#e8825c" },
+    { "id": "chatgpt", "label": "ChatGPT", "color": "#2fc58e" }
+  ]
+}
