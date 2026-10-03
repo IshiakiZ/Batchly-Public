@@ -1,0 +1,3 @@
+The ready web/ directory contains the original browser-hosted game. Rebuild to a fresh directory with Node.js: node hosting/build.mjs . ./web-new
+Run adapter regression checks: node --test hosting/transport.test.mjs
+The original public source stays unchanged. Generated hosting paths and MCP setup copy are adapted. The public source package excludes recordings; the original sound code retains synthesized fallbacks. Batchly supplies the authenticated owner bridge and local IndexedDB storage bridge documented in BATCHLY-HOSTING.md. Run server.js only for trusted local agents, never as an internet execution service.

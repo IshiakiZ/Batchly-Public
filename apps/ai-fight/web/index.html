@@ -2,30 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AI Fight | Batchly</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Fight</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/live.css">
+  <link rel="stylesheet" href="./css/arena.css">
+  <link rel="stylesheet" href="./css/pages.css">
 </head>
 <body>
-  <header><a class="brand" href="./">AI <span>FIGHT</span></a><div class="tags"><span>4 ORIGINAL MODES</span><span>SILENT EDITION</span></div><p id="connection">Local match · no account needed</p></header>
-  <main>
-    <section class="toolbar" aria-label="Match controls">
-      <label>Game mode<select id="mode"><option value="fighter">Fighter Duel</option><option value="army">Army Battle</option><option value="war">Modern Warfare</option><option value="business">Business Tycoon</option></select></label>
-      <div><span class="eyebrow">EVOLVE YOUR STRATEGY</span><h1>Round <b id="round">1</b> <span>/ 12</span></h1></div>
-      <div class="actions"><button id="check">Check builds</button><button id="fight" class="primary">Fight!</button><button id="next" disabled>Next round</button><button id="reset">New match</button></div>
+  <header class="topbar">
+    <div class="tb-left">
+      <button class="brand" id="brand" type="button" title="AI Fight — back to Live (L)">
+        <svg class="brand-mark" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+          <path fill="#e8825c" d="M1 1h2v1h1v1h1v1h1v1h1v1h1v1H7v1H6V7H5V6H4V5H3V4H2V3H1z"/>
+          <path fill="#2fc58e" d="M15 1h-2v1h-1v1h-1v1h-1v1H9v1H8v1h1v1h1V7h1V6h1V5h1V4h1V3h1z"/>
+          <path fill="#ffd166" d="M4 11h1v-1h1V9h1v1H6v1H5v1H4zM12 11h-1v-1h-1V9H9v1h1v1h1v1h1z"/>
+          <path fill="#c9d3e0" d="M2 13h2v2H2zM12 13h2v2h-2z"/>
+        </svg>
+        <span class="brand-name">AI&nbsp;FIGHT</span>
+      </button>
+      <nav id="main-tabs" aria-label="Main"></nav>
+    </div>
+    <div class="scoreboard" id="scoreboard"></div>
+    <div class="tb-right">
+      <div class="menu-wrap">
+        <button class="btn ghost small" id="btn-menu" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" title="Exhibition, setup & prompts, arena log, settings, help">☰ <span class="menu-lbl">Menu</span></button>
+        <div class="menu" id="menu" role="menu" aria-label="Menu" hidden></div>
+      </div>
+      <button class="icon-btn" id="btn-sound" type="button" title="Sound (M)">🔊</button>
+      <span class="conn" id="conn" role="status" title="Connection to the arena server"><i></i><b>connecting…</b></span>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- LIVE while building: both AIs designing their fighters -->
+    <section class="screen" id="screen-build" aria-label="Live: the AIs are building">
+      <div class="live-grid">
+        <article class="fcard" id="fcard-0"></article>
+        <aside class="mc" id="match-control" aria-label="Match control"></aside>
+        <article class="fcard" id="fcard-1"></article>
+      </div>
     </section>
-    <p id="status" role="status">Loading original engines...</p>
-    <section class="arena"><canvas id="arena" aria-label="AI Fight arena replay"></canvas><div id="empty"><strong>BUILD. FIGHT. EVOLVE.</strong><p>Two JavaScript brains. Twelve rounds. Your strategy decides.</p></div></section>
-    <div class="playback"><button id="play" disabled>Pause</button><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Replay position" disabled><label>Speed <select id="speed"><option>1</option><option>2</option><option>4</option><option>8</option></select></label><span id="clock">0:00</span><button id="export-replay" disabled>Save replay</button></div>
-    <section class="builds">
-      <article class="build" data-side="0"><div class="build-title"><h2>01 / Claude</h2><select class="bot" aria-label="Claude built-in opponent"></select><button class="load-bot">Load bot</button></div><label>File<select class="file" aria-label="Claude file"></select></label><textarea class="editor" aria-label="Claude source code" spellcheck="false"></textarea></article>
-      <article class="build" data-side="1"><div class="build-title"><h2>02 / ChatGPT</h2><select class="bot" aria-label="ChatGPT built-in opponent"></select><button class="load-bot">Load bot</button></div><label>File<select class="file" aria-label="ChatGPT file"></select></label><textarea class="editor" aria-label="ChatGPT source code" spellcheck="false"></textarea></article>
+
+    <!-- LIVE fight / replays: countdown, the fight, round result -->
+    <section class="screen" id="screen-modearena" aria-label="Arena (game modes)"></section>
+    <section class="screen" id="screen-arena" aria-label="Arena">
+      <div class="hud" id="hud"></div>
+      <div class="arena-grid" id="arena-grid">
+        <aside class="hud-side" id="hud-side-0" aria-label="Left fighter details"></aside>
+        <div class="arena-stage" id="arena-stage">
+          <canvas id="arena-canvas"></canvas>
+          <div class="fx-layer" id="fx-layer"></div>
+          <div class="overlay" id="overlay"></div>
+          <div class="replay-bar" id="replay-bar" hidden></div>
+        </div>
+        <aside class="hud-side" id="hud-side-1" aria-label="Right fighter details"></aside>
+      </div>
+      <div class="arena-foot">
+        <div class="ticker" id="ticker"></div>
+        <div class="arena-toggles" id="arena-toggles"></div>
+      </div>
     </section>
-    <section class="bottom"><div><h2>Round report</h2><pre id="report">Check builds to validate the original rules, or run the two starter brains.</pre></div><div><h2>Play your way</h2><p>Use the built-in opponents, edit JavaScript, or import a JSON object containing your source files. Your match runs in this browser.</p><div class="actions"><button id="export-builds">Export builds</button><label class="button">Import builds<input id="import-builds" type="file" accept="application/json,.json" hidden></label><button id="guide">Mode rulebook</button></div><details><summary>Connect ChatGPT or Claude with Batchly MCP</summary><p>Sign in to Batchly and connect each agent with its own creator token. Ask one agent to use ai_fight_create_session. Open the session in Batchly, then give its session ID to both agents. Each agent submits files and locks one side. Keep this host page open for simulation.</p><p>Account transport is provided by the Batchly host page. Local play works without it. Browser results are unranked.</p></details><p id="session-id"></p></div></section>
+
+    <!-- FIGHTERS: deep dive per fighter -->
+    <section class="screen page" id="screen-fighters" aria-label="Fighters"><div class="page-wrap" id="fighters"></div></section>
+
+    <!-- STATS: match summary, rounds, charts, evolution, all-time -->
+    <section class="screen page" id="screen-stats" aria-label="Statistics"><div class="page-wrap" id="stats"></div></section>
+
+    <!-- REPLAYS: rounds, earlier matches, exhibitions -->
+    <section class="screen page" id="screen-replays" aria-label="Replays"><div class="page-wrap" id="replays"></div></section>
   </main>
-  <dialog id="rulebook" aria-labelledby="rulebook-title"><form method="dialog"><h2 id="rulebook-title">Mode rulebook</h2><button>Close rulebook</button></form><pre id="rulebook-content"></pre></dialog>
-  <footer>Original AI Fight engines and procedural artwork. No recordings, bundled fonts or model API keys.</footer>
-  <script type="module" src="./client.js"></script>
+
+  <aside class="drawer" id="drawer" aria-label="Arena log" hidden></aside>
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="tooltip" class="viz-tooltip" hidden></div>
+  <script type="module" src="./adapter-entry.js"></script>
 </body>
 </html>

@@ -243,8 +243,7 @@ function setConn(kind, text) {
 function syncSoundButton() {
   const b = $('#btn-sound');
   b.textContent = isMuted() ? '🔇' : '🔊';
-  b.title = 'Silent edition: audio is not included';
-  b.disabled = true;
+  b.title = isMuted() ? 'Sound is off (M)' : 'Sound is on (M)';
   b.setAttribute('aria-pressed', isMuted() ? 'false' : 'true');
 }
 
@@ -448,9 +447,6 @@ function openSettings() {
   const vol = h('input', { type: 'range', min: '0', max: '1', step: '0.05', value: String(getVolume()), 'aria-label': 'Volume' });
   vol.addEventListener('input', () => setVolume(vol.value));
   vol.addEventListener('change', () => sfx.hit(40));
-  sound.disabled = true;
-  music.disabled = true;
-  vol.disabled = true;
   const save = async () => {
     const r = await api.host('settings', null, { firstRoundLimitSec: first.val(), roundLimitSec: later.val() });
     if (r && r.ok) { toast('Time limits saved', 'ok'); closeModal(); }
@@ -481,7 +477,7 @@ function openSettings() {
         h('label', { class: 'set-row check' }, details, h('span', null, 'Detail panels beside the arena (D)')),
         h('label', { class: 'set-row check' }, freeze, h('span', null, 'Impact freezes: a short hit-stop on huge hits and the K.O.')),
         h('label', { class: 'set-row check' }, crt, h('span', null, 'CRT scanlines (C)')),
-        h('p', { class: 'hint' }, 'Silent edition. Music, sound effects and bundled fonts are not included.'))),
+        h('p', { class: 'hint' }, 'Music and most sound effects are from Epidemic Sound (public/audio/CREDITS.md).'))),
     h('div', { class: 'row-actions' }, h('button', { class: 'btn ghost', onclick: closeModal }, 'Close')),
   ], { label: 'Settings' });
 }
@@ -685,7 +681,7 @@ document.addEventListener('keydown', (e) => {
   }
   else if (k === 'x') openExhibition();
   else if (k === '?' || (k === '/' && e.shiftKey)) openHelp();
-  else if (k === 'm') { setMuted(!isMuted()); syncSoundButton(); toast('Silent edition: audio is not included'); }
+  else if (k === 'm') { setMuted(!isMuted()); syncSoundButton(); toast(isMuted() ? 'Sound off' : 'Sound on'); }
   else if (k === 'c') applyCrt(!document.body.classList.contains('crt'));
   else if (k === 'b') { arena.toggleDebug(); toast(`AI thoughts ${arena.debug ? 'on' : 'off'}${screenFor() === 'arena' ? '' : ' (shown in the arena)'}`); }
   else if (k === 'd') { arena.toggleDetails(); toast(`Detail panels ${arena.details ? 'on' : 'off'}${screenFor() === 'arena' ? '' : ' (shown in the arena)'}`); }

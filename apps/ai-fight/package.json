@@ -1,8 +1,8 @@
 {
-  "name": "ai-fight-silent-source",
+  "name": "ai-fight",
   "version": "1.0.0",
   "private": true,
-  "description": "Trusted local AI arena. Silent source edition; no hosted MCP gameplay.",
+  "description": "Two AIs design fighters, battle live on localhost, and improve them between rounds.",
   "scripts": {
     "start": "node server.js --open",
     "serve": "node server.js",
@@ -10,6 +10,5 @@
   },
   "engines": {
     "node": ">=18"
-  },
-  "license": "UNLICENSED"
+  }
 }
