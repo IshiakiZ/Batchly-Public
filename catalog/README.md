@@ -1,6 +1,6 @@
 # Published game downloads
 
-Checked 2026-10-24. 30 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
+Checked 2026-10-24. 29 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
 
 These are published files, not a promise that every game runs offline. See the [repository guide](../README.md).
 
@@ -33,6 +33,5 @@ These are published files, not a promise that every game runs offline. See the [
 | Timer | admin | [Download files](admin/timer/) | [Play](https://batch-ly.com/play/timer) |
 | Timezone | admin | [Download files](admin/timezone/) | [Play](https://batch-ly.com/play/timezone) |
 | Unit Converter | admin | [Download files](admin/unit-converter/) | [Play](https://batch-ly.com/play/unit-converter) |
-| Word Ladder | admin | [Download files](admin/word-ladder/) | [Play](https://batch-ly.com/play/word-ladder) |
 | Word Search | admin | [Download files](admin/word-search/) | [Play](https://batch-ly.com/play/word-search) |
 | Afterloop | community | [Download files](community/afterloop-4s2m/) | [Play](https://batch-ly.com/c/afterloop-4s2m) |
