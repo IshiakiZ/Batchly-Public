@@ -1,6 +1,6 @@
 # Published game downloads
 
-Checked 2026-10-30. 29 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
+Checked 2026-10-31. 29 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
 
 These are published files, not a promise that every game runs offline. See the [repository guide](../README.md).
 
