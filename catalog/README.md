@@ -1,12 +1,11 @@
 # Published game downloads
 
-Checked 2026-11-09. 29 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
+Checked 2026-11-09. 28 published games and apps. Download the repository ZIP from **Code > Download ZIP**, or open a file and choose **Download raw file**.
 
 These are published files, not a promise that every game runs offline. See the [repository guide](../README.md).
 
 | Game | Collection | Files | Play |
 | --- | --- | --- | --- |
-| Stillroom Backgrounds | admin | [Download files](admin/backgrounds/) | [Play](https://batch-ly.com/play/backgrounds) |
 | Checkers | admin | [Download files](admin/checkers/) | [Play](https://batch-ly.com/play/checkers) |
 | Checksum | admin | [Download files](admin/checksum/) | [Play](https://batch-ly.com/play/checksum) |
 | Connect Four | admin | [Download files](admin/connect-four/) | [Play](https://batch-ly.com/play/connect-four) |
