@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:07:35.849Z, sources sha256 490ecb8754091392.
+Single-file build of 111 modules, 2026-11-15T10:16:05.004Z, sources sha256 5763ac36130b17e1.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -412,6 +412,7 @@ transition: background var(--t-fast) var(--ease);
 .cand-main { min-width: 0; display: grid; gap: 1px; }
 .cand-kind { font-size: 13px; }
 .cand-pos { font-family: var(--font-num); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand-why { font-size: 11.5px; color: var(--muted); line-height: 1.35; white-space: normal; }
 .cand-score { font-family: var(--font-num); font-size: 12px; color: var(--paper); }
 .about h3 { font-family: var(--font-head); font-weight: 900; font-size: 16px; letter-spacing: 0.01em; margin-bottom: 8px; }
 .about p { color: var(--paper); font-size: 13px; line-height: 1.6; max-width: 62ch; }
@@ -2867,6 +2868,7 @@ if (kept.length >= max) break;
 }
 return kept;
 }
+const COMPASS_8 = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const KIND_LABEL = { 0: 'changed', 1: 'varies', 2: 'moved', varies: 'varies', moved: 'moved', variable: 'varies', mover: 'moved' };
 function findChangeCandidates(lib, model, layers, grid, { max = 12 } = {}) {
 let raw = null;
@@ -2900,8 +2902,21 @@ if ((!Number.isFinite(x) || !Number.isFinite(y)) && lib.gridSkyToPix && Number.i
 if (!Number.isFinite(ra) || !Number.isFinite(dec)) continue;
 const score = Math.abs(Number.isFinite(c.score) ? c.score : Number.isFinite(c.snr) ? c.snr : Number.isFinite(c.significance) ? c.significance : NaN);
 const kind = KIND_LABEL[c.kind] || 'changed';
+let towards = '';
+if (c.saturated && c.shift && lib.gridPixToSky && Number.isFinite(c.shift.dx) && Number.isFinite(c.shift.dy)) {
+try {
+const [ra2, dec2] = lib.gridPixToSky(grid, x + 4 * c.shift.dx, y + 4 * c.shift.dy);
+const east = (((ra2 - ra + 540) % 360) - 180) * Math.cos((dec * Math.PI) / 180);
+const north = dec2 - dec;
+const pa = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+towards = COMPASS_8[Math.round(pa / 45) % 8];
+} catch {
+towards = '';
+}
+}
 out.push({
 ...c,
+towards,
 ra,
 dec,
 x,
@@ -2923,13 +2938,13 @@ for (const c of sorted) {
 const home = groups.find((g) => g.members.some((m) => Math.hypot(m.x - c.x, m.y - c.y) <= radiusPix));
 if (home) {
 home.members.push(c);
-if (c.kind === 'moved') home.kind = 'moved';
+if (c.kind === 'moved' && !home.lead.saturated) home.kind = 'moved';
 } else groups.push({ lead: c, kind: c.kind, members: [c] });
 }
 return groups.slice(0, max).map((g) => ({
 ...g.lead,
 kind: g.kind,
-peaks: g.members.length,
+peaks: g.members.length + (g.lead.saturated && g.lead.peaks > 1 ? g.lead.peaks - 1 : 0),
 label: `${g.kind} · ${Number.isFinite(g.lead.score) ? g.lead.score.toFixed(1) : '?'}σ`,
 }));
 }
@@ -5165,7 +5180,7 @@ role: 'listitem',
 onclick: () => onPickCandidate(c, i),
 },
 h('span', { class: 'cand-n' }, String(i + 1)),
-h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec))),
+h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec)), saturatedNote(c) ? h('span', { class: 'cand-why' }, saturatedNote(c)) : null),
 h('span', { class: 'cand-score' }, Number.isFinite(c.score) ? `${c.score.toFixed(1)}σ` : ''),
 );
 list.append(btn);
@@ -5181,6 +5196,14 @@ const explainHost = h('div', { class: 'panel-actions' });
 const factsHead = h('p', { class: 'subhead' }, 'This field');
 const facts = h('dl', { class: 'facts' });
 clear(els.aboutBody).append(aboutText, aboutNotes, explainHost, factsHead, facts);
+function saturatedNote(c) {
+if (!c || !c.saturated) return '';
+const lumps = c.peaks > 1 ? `; ${c.peaks} residual patches belong to it` : '';
+if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} between the passes${lumps}.`;
+if (c.brighter === true) return `Saturated star: its halo brightened between the passes${lumps}.`;
+if (c.brighter === false) return `Saturated star: its halo faded between the passes${lumps}.`;
+return `Saturated star: its halo changed between the passes${lumps}.`;
+}
 function setSourceHeader(target, source) {
 if (!source) {
 target.head.hidden = true;
@@ -8501,7 +8524,7 @@ if (variance) variance[i] = va[i] + vb[i];
 return variance ? { image, mask, variance } : { image, mask };
 }
 });
-__tb_define("src/core/skymodel.js", function (__tb_self) { __tb_export(__tb_self, { CHANGE_KINDS: () => CHANGE_KINDS, changeMap: () => changeMap, evalModelAt: () => evalModelAt, findCandidates: () => findCandidates, fitSkyModel: () => fitSkyModel, predictLayer: () => predictLayer, residualLayer: () => residualLayer, residualPassStacks: () => residualPassStacks }); const { DETECTORS, splitPasses, passLabel, medianMjd } = __tb_require("src/core/frames.js"); const { stackLayers, medianInPlace } = __tb_require("src/core/stack.js");
+__tb_define("src/core/skymodel.js", function (__tb_self) { __tb_export(__tb_self, { CHANGE_KINDS: () => CHANGE_KINDS, changeMap: () => changeMap, evalModelAt: () => evalModelAt, findCandidates: () => findCandidates, fitSkyModel: () => fitSkyModel, haloChange: () => haloChange, predictLayer: () => predictLayer, residualLayer: () => residualLayer, residualPassStacks: () => residualPassStacks, saturatedCores: () => saturatedCores }); const { DETECTORS, splitPasses, passLabel, medianMjd } = __tb_require("src/core/frames.js"); const { stackLayers, medianInPlace } = __tb_require("src/core/stack.js");
 ;
 ;
 const HUBER_K = 1.345;
@@ -9051,6 +9074,94 @@ if (d >= minSep && d <= radius) { a.kind = 2; b.kind = 2; }
 }
 return blobs;
 }
+function saturatedCores(layers, n, { minPix = 9, frac = 0.5 } = {}) {
+const npix = n * n;
+if (!Array.isArray(layers) || !layers.length || !(n > 2)) return [];
+const count = new Uint16Array(npix);
+let used = 0;
+for (const layer of layers) {
+if (!layer || !layer.image || layer.image.length !== npix) continue;
+used++;
+const img = layer.image;
+const mk = layer.mask || null;
+for (let i = 0; i < npix; i++) if ((mk !== null && mk[i] !== 0) || img[i] - img[i] !== 0) count[i]++;
+}
+if (!used) return [];
+const need = frac * used;
+const seen = new Uint8Array(npix);
+const queue = new Int32Array(npix);
+const cores = [];
+for (let start = 0; start < npix; start++) {
+if (seen[start] !== 0 || !(count[start] > need)) continue;
+let head = 0;
+let tail = 0;
+queue[tail++] = start;
+seen[start] = 1;
+let sx = 0, sy = 0, x0 = n, x1 = -1, y0 = n, y1 = -1;
+let edge = false;
+while (head < tail) {
+const i = queue[head++];
+const x = i % n;
+const y = (i - x) / n;
+sx += x; sy += y;
+if (x < x0) x0 = x;
+if (x > x1) x1 = x;
+if (y < y0) y0 = y;
+if (y > y1) y1 = y;
+if (x === 0 || y === 0 || x === n - 1 || y === n - 1) edge = true;
+if (x > 0 && seen[i - 1] === 0 && count[i - 1] > need) { seen[i - 1] = 1; queue[tail++] = i - 1; }
+if (x < n - 1 && seen[i + 1] === 0 && count[i + 1] > need) { seen[i + 1] = 1; queue[tail++] = i + 1; }
+if (y > 0 && seen[i - n] === 0 && count[i - n] > need) { seen[i - n] = 1; queue[tail++] = i - n; }
+if (y < n - 1 && seen[i + n] === 0 && count[i + n] > need) { seen[i + n] = 1; queue[tail++] = i + n; }
+}
+if (edge || tail < minPix) continue;
+const w = x1 - x0 + 1;
+const h = y1 - y0 + 1;
+if (Math.max(w, h) > 2.5 * Math.min(w, h) || tail < 0.45 * w * h) continue;
+cores.push({ x: sx / tail, y: sy / tail, r: Math.sqrt(tail / Math.PI), npix: tail });
+}
+cores.sort((a, b) => b.npix - a.npix);
+return cores;
+}
+function haloRadius(core, n) {
+return Math.min(Math.max(8, 10 * core.r), 0.6 * n);
+}
+function haloChange(stacks, n, core, rHalo) {
+const moments = (st) => {
+let m = 0, a = 0, dx = 0, dy = 0, ar = 0, np = 0;
+const x0 = Math.max(0, Math.floor(core.x - rHalo));
+const x1 = Math.min(n - 1, Math.ceil(core.x + rHalo));
+const y0 = Math.max(0, Math.floor(core.y - rHalo));
+const y1 = Math.min(n - 1, Math.ceil(core.y + rHalo));
+for (let y = y0; y <= y1; y++) {
+for (let x = x0; x <= x1; x++) {
+const i = y * n + x;
+const v = st.image[i];
+if (st.mask[i] !== 0 || v - v !== 0) continue;
+const ex = x - core.x;
+const ey = y - core.y;
+const r = Math.hypot(ex, ey);
+if (r <= core.r || r > rHalo) continue;
+m += v; a += Math.abs(v); dx += v * ex; dy += v * ey; ar += Math.abs(v) * r; np++;
+}
+}
+return { m, a, dx, dy, ar, np };
+};
+const usable = stacks.map(moments).filter((q) => q.np >= 12 && q.a > 0);
+const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0 };
+if (usable.length < 2) return none;
+const f = usable[0];
+const l = usable[usable.length - 1];
+const ddx = l.dx - f.dx;
+const ddy = l.dy - f.dy;
+const dipole = Math.hypot(ddx, ddy) / (f.ar + l.ar);
+const monopole = Math.abs(l.m - f.m) / (f.a + l.a);
+if (dipole >= 0.3 && dipole >= monopole) {
+const norm = Math.hypot(ddx, ddy);
+return { kind: 2, dx: ddx / norm, dy: ddy / norm, brighter: null, dipole, monopole };
+}
+return { ...none, brighter: monopole >= 0.3 ? l.m > f.m : null, dipole, monopole };
+}
 function chi2ToSigma(chi2, k) {
 const c = 2 / (9 * k);
 return (Math.cbrt(chi2 / k) - (1 - c)) / Math.sqrt(c);
@@ -9085,8 +9196,36 @@ return { score, kind, stacks, blobs };
 function findCandidates(model, layers, opts = {}) {
 const { minSnr = 5, max = 20, radius = 4, minSep = 1.5 } = opts;
 const stacks = opts.stacks || residualPassStacks(model, layers, opts);
-const blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
+let blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
 const out = [];
+const cores = opts.cores || saturatedCores(layers, model.n);
+for (const core of cores) {
+const rHalo = haloRadius(core, model.n);
+const members = blobs.filter((b) => Math.hypot(b.x - core.x, b.y - core.y) <= rHalo);
+if (!members.length) continue;
+blobs = blobs.filter((b) => !members.includes(b));
+const lead = members[0];
+const change = haloChange(stacks, model.n, core, rHalo);
+out.push({
+x: core.x,
+y: core.y,
+snr: lead.snr,
+kind: change.kind,
+passIndex: lead.passIndex,
+label: stacks[lead.passIndex].label,
+mjd: stacks[lead.passIndex].mjd,
+px: Math.round(core.x),
+py: Math.round(core.y),
+npix: members.reduce((sum, b) => sum + b.npix, 0),
+saturated: true,
+rCore: core.r,
+rHalo,
+peaks: members.length,
+shift: change.kind === 2 ? { dx: change.dx, dy: change.dy } : null,
+brighter: change.kind === 1 ? change.brighter : null,
+});
+}
+out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
 for (const b of blobs) {
 if (out.length >= max) break;
 if (out.some((c) => Math.hypot(c.x - b.x, c.y - b.y) < minSep)) continue;
