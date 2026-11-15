@@ -119,7 +119,9 @@ independent check during development. Aladin is not used.
 - The tool contains no image files. All graphics, including the previews on the landing page, are
   drawn by code at run time. Science images on screen are renderings of SPHEREx data (N1).
 - The screenshots in [real/](real/) are captures of the tool showing real SPHEREx data.
-- The demonstration video is a screen recording of the live tool. `[DEMO-URL]`
+- The demonstration video and slides are built from screen captures of the live tool showing
+  real SPHEREx data ([demo/](demo/)); the captions and layout are drawn by code
+  (`tools/demo/`).
 - No NASA logos, insignia or branding are used anywhere.
 - All documentation text was drafted with AI assistance and reviewed by the team owner (see
   [AI-USE.md](AI-USE.md)).

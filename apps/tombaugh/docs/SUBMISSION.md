@@ -1,8 +1,8 @@
 # Submission text
 
 Ready-to-paste text for each field of the NASA Space Apps 2026 project form, followed by a
-checklist. The text blocks are finished. One thing is still open: `[DEMO-URL]`, the public link to
-the demo video or slides, which the team lead fills in after recording.
+checklist. The text blocks are finished and no placeholder is left. The demo link below works
+now; a second one, for the video, works once the page is live on batch-ly.com.
 
 Every number in the blocks is quoted from [docs/RESULTS.md](RESULTS.md), the record of the run on real
 SPHEREx data of 15 November 2026.
@@ -38,13 +38,20 @@ A survey that revisits the whole sky every six months is a search for anything n
 ## Link to Project Demo
 
 ```
-[DEMO-URL]
+https://github.com/IshiakiZ/Batchly-Public/blob/claude/tombaugh/apps/tombaugh/docs/demo/tombaugh-slides.pdf
 ```
 
-A video of 30 seconds or less, or seven slides, in English, at a public link. Both are ready in
-[demo/](demo/): `tombaugh-demo.mp4` (29.6 s; upload it somewhere public and paste that link) and
-`tombaugh-slides.pdf` (seven slides; its GitHub page opens in a browser without sign-in and can be
-pasted as it is). Shot list and notes: [DEMO-SCRIPT.md](DEMO-SCRIPT.md).
+The form asks for a video of 30 seconds or less, or seven slides, in English, at a public link.
+Both are ready in [demo/](demo/), made from captures of the live tool on real data.
+
+- **The seven slides** (the link above): the PDF's GitHub page opens in a browser without
+  sign-in. It works now.
+- **The 30-second video**: `https://batch-ly.com/tombaugh/demo.mp4`. The file sits beside the
+  page in the site's `public/tombaugh/` folder, so this link works as soon as the page is live
+  on batch-ly.com. Prefer it once it opens. The same file can also be uploaded to any video
+  host.
+
+Shot list and notes: [DEMO-SCRIPT.md](DEMO-SCRIPT.md).
 
 ---
 
@@ -248,10 +255,10 @@ live services on 15 November 2026.
 
 ### For the team lead: only they can do these
 
-- [ ] **Record the demo.** A video of 30 seconds or less, or a deck of at most seven slides,
-      following [DEMO-SCRIPT.md](DEMO-SCRIPT.md). Host it at a public link.
-- [ ] **Fill `[DEMO-URL]`.** It is the only placeholder left. Replace it in the form and in the
-      repository (`grep -rn "\[DEMO-URL\]" .` lists the places).
+- [x] **Demo made.** `docs/demo/tombaugh-demo.mp4` (29.6 s) and `docs/demo/tombaugh-slides.pdf`
+      (seven slides), from captures of the live tool.
+- [ ] **Paste the demo link.** The slides link in the block above works now. Once
+      `https://batch-ly.com/tombaugh/demo.mp4` opens, use that for the video.
 - [ ] **Confirm the live URL opens signed out.** Open
       `https://batch-ly.com/tombaugh/index.html` in a private browser window, on a phone and on a
       laptop.

@@ -6,7 +6,7 @@ SPHEREx data of 15 November 2026 recorded in [docs/RESULTS.md](RESULTS.md).
 
 Live tool: <https://batch-ly.com/tombaugh/index.html> ·
 Source: <https://github.com/IshiakiZ/Batchly-Public/tree/claude/tombaugh/apps/tombaugh> ·
-Demo: `[DEMO-URL]`
+Demo: [30-second video](demo/tombaugh-demo.mp4) · [seven slides](demo/tombaugh-slides.pdf)
 
 ![Pluto followed across 225 real SPHEREx exposures, with methane-ice marks on its spectrum](real/pluto-spectrum.jpg)
 
@@ -32,7 +32,7 @@ Demo: `[DEMO-URL]`
 | | Uses the pipeline's own flags, variance and zodiacal model; follows FITS WCS, SIP and HEALPix as published | [SOURCES.md](SOURCES.md#4-standards-and-methods) |
 | **Relevance** | Meets the objective as written: public web tool, RA and Dec in, a movie of SPHEREx images out, moving objects made easy to spot, tested on the five named targets | Table below |
 | | Addresses every optional consideration, and says which one is only partly met (WISE overlay) | Table below |
-| **Presentation** | 30-second demo in three beats: Pluto, Barnard's Star, the validation result | `[DEMO-URL]`; [DEMO-SCRIPT.md](DEMO-SCRIPT.md) |
+| **Presentation** | 30-second demo in three beats: Pluto, Barnard's Star, the validation result | [demo/tombaugh-demo.mp4](demo/tombaugh-demo.mp4), [demo/tombaugh-slides.pdf](demo/tombaugh-slides.pdf); [DEMO-SCRIPT.md](DEMO-SCRIPT.md) |
 | | The tool explains itself: a first screen with one sentence and five targets, short explainer cards for each idea, captions with date and wavelength on every frame, a guided tour, keyboard help | [Live tool](https://batch-ly.com/tombaugh/index.html); [`?story=tour`](https://batch-ly.com/tombaugh/index.html?story=tour); `?` key |
 | | Complete written submission, full source list, plain AI disclosure | [SUBMISSION.md](SUBMISSION.md); [SOURCES.md](SOURCES.md); [AI-USE.md](AI-USE.md) |
 
