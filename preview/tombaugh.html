@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 117 modules, 2026-11-15T19:31:58.893Z, sources sha256 4cb976097659fb7d.
+Single-file build of 117 modules, 2026-11-15T19:38:37.633Z, sources sha256 3a67238766c80ffa.
 -->
 <html lang="en" data-screen="boot" data-glass-preset="thick">
 <head>
@@ -566,7 +566,7 @@ html[data-embed="1"] .embed-credit { display: block; }
 .embed-credit { display: none; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .embed-credit a { color: var(--muted); }
 .simplebar, .simple { display: none; }
-html[data-mode="simple"] { --rail-w: 0px; --chrome-v: 288px; --font-num: var(--font-text); }
+html[data-mode="simple"] { --rail-w: 0px; --chrome-v: 290px; --font-num: var(--font-text); }
 html[data-mode="simple"] .btn,
 html[data-mode="simple"] .search-input,
 html[data-mode="simple"] .seg,
@@ -706,6 +706,10 @@ background: rgba(23, 23, 21, 0.82); border: 1px solid var(--rule); border-radius
 .blinded span { font-size: 14px; line-height: 1.45; }
 .blinded-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 .blinded[hidden] { display: none; }
+.blinded-patch { position: absolute; left: 50%; top: 12px; z-index: 4; transform: translateX(-50%); padding: 7px 14px; border-radius: 16px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.blinded-patch[hidden] { display: none; }
+.player-row > .simple-tool-seg { margin-left: auto; }
+html[data-mode="advanced"] .player-row > .simple-tool-seg, html[data-embed="1"] .player-row > .simple-tool-seg { display: none; }
 .btn-mode[aria-pressed="true"] { border-color: var(--paper); }
 @media (max-width: 1099px) {
 :root {
@@ -858,7 +862,7 @@ background: transparent; border: 0; border-radius: 22px; outline: none;
 .skyhome-input::placeholder { color: rgba(247, 242, 231, 0.7); }
 .skyhome-inputwrap:focus-within { box-shadow: 0 0 0 1.5px rgba(247, 242, 231, 0.75); }
 .skyhome-field .btn { height: 44px; padding: 0 20px; border-radius: 22px; font-size: 14px; }
-.skyhome-status { min-height: 16px; padding-left: 16px; font-size: 12px; color: var(--muted); }
+.skyhome-status { min-height: 18px; padding-left: 18px; font-size: 13.5px; color: var(--paper); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
 .skyhome-status.is-error { color: #ff8a78; }
 .skyhome-actions { display: flex; justify-content: flex-end; padding-top: 6px; }
 .skyhome-mode { height: 36px; padding: 0 16px; border: 0; border-radius: 18px; font: inherit; font-size: 13px; color: var(--paper); cursor: pointer; }
@@ -888,6 +892,13 @@ padding: 44px 20px 30px; background: linear-gradient(to top, rgba(5, 6, 10, 0.55
 .skyhome-starts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .skyhome-starts-label { margin-right: 4px; font-size: 13px; color: var(--muted); }
 .skyhome-chip { height: 36px; padding: 0 16px; font: inherit; font-size: 13px; color: var(--paper); border: 0; border-radius: 18px; cursor: pointer; }
+.skyhome-orbit { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1.5px solid var(--paper); border-radius: 50%; vertical-align: -1px; box-shadow: inset 0 0 0 2.5px transparent; background: radial-gradient(circle at 50% 50%, var(--paper) 0 1.6px, transparent 2px); }
+.skyhome-menu { position: absolute; left: 20px; bottom: 84px; z-index: 7; width: min(320px, calc(100vw - 40px)); border-radius: 22px; color: var(--paper); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45); }
+.skyhome-menu[hidden] { display: none; }
+.skyhome-menu-list { position: relative; display: grid; max-height: min(56vh, 460px); overflow-y: auto; overscroll-behavior: contain; padding: 8px; border-radius: inherit; }
+.skyhome-menu-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 9px 12px; background: transparent; border: 0; border-radius: 12px; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.skyhome-menu-row:hover, .skyhome-menu-row:focus-visible { background: rgba(247, 242, 231, 0.14); }
+.skyhome-menu-row span { font-size: 12px; color: rgba(247, 242, 231, 0.72); white-space: nowrap; }
 .skyhome-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border: 1.5px solid var(--signal); border-radius: 50%; }
 .skyhome-zoom { display: flex; gap: 6px; }
 .skyhome-zoom-btn { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 20px; font: inherit; font-size: 20px; line-height: 1; color: var(--paper); cursor: pointer; }
@@ -6101,7 +6112,7 @@ const btnCloser = h('button', { type: 'button', class: 'btn simple-tool', title:
 const btnSmooth = h('button', { type: 'button', class: 'btn simple-tool', 'aria-pressed': 'false', title: 'Blend the camera’s square pixels together', onclick: () => onSmooth() }, 'Smooth');
 const btnKnown = h('button', { type: 'button', class: 'btn simple-tool', 'aria-pressed': 'false', title: 'Ring the stars that are already on the star charts', onclick: () => onKnown() }, 'Known stars');
 const btnSave = typeof onSave === 'function' ? h('button', { type: 'button', class: 'btn simple-tool', title: 'Save this photo as a picture file', onclick: () => onSave() }, 'Save') : null;
-if (tools) clear(tools).append(speedSeg, h('div', { class: 'simple-tool-group' }, btnWider, btnCloser), btnSmooth, btnKnown, btnSave);
+if (tools) clear(tools).append(h('div', { class: 'simple-tool-group' }, btnWider, btnCloser), btnSmooth, btnKnown, btnSave);
 function setTools({ speed, wider, closer, smooth, known } = {}) {
 if (speed !== undefined) for (const [value, btn] of speedButtons) btn.setAttribute('aria-checked', String(value === String(speed)));
 if (wider !== undefined) btnWider.disabled = !wider;
@@ -6315,6 +6326,7 @@ spectrum = Array.isArray(points) && points.length ? { points, binned: Array.isAr
 renderPlots();
 },
 setTools,
+speedEl: speedSeg,
 };
 }
 });
@@ -6993,6 +7005,7 @@ const OPTIONAL_MODULES = [
 ['home', () => __tb_import("src/ui/home.js")],
 ['stardata', () => __tb_import("src/sky/stardata.js")],
 ['picklist', () => __tb_import("src/ui/picklist.js")],
+['bodies', () => __tb_import("src/plugins/moving/bodies.js")],
 ['explain', () => __tb_import("src/ui/explain.js")],
 ['fx', () => __tb_import("src/ui/fx.js")],
 ['shortcuts', () => __tb_import("src/ui/shortcuts.js")],
@@ -7210,6 +7223,12 @@ onSave: () => downloadPng(),
 if (!lib.rgbComposite) simple.setViewDisabled('lens', 'The colour picture is not available in this build');
 if (!lib.fitSkyModel || !lib.residualLayer) simple.setViewDisabled('residual', 'The comparison is not available in this build');
 simple.setView(store.get().view);
+try {
+const row = els.player && els.player.querySelector('.player-row');
+if (row && simple.speedEl) row.append(simple.speedEl);
+} catch (err) {
+console.warn('[tombaugh] simple speed switch', err);
+}
 syncSimpleTools();
 applyModeToViewer();
 for (const name of ['setCandidates', 'setSpectrum']) {
@@ -8051,10 +8070,41 @@ blindedCache.set(frame, frac);
 }
 return frac;
 }
+const patchCache = new WeakMap();
+function flaggedMiddle(frame) {
+if (!frame || !frame.mask || !frame.mask.length) return 0;
+let frac = patchCache.get(frame);
+if (frac === undefined) {
+const m = frame.mask;
+const n = Math.round(Math.sqrt(m.length));
+const c = (n - 1) / 2;
+const r2 = (0.35 * n) ** 2;
+let bad = 0;
+let all = 0;
+for (let y = 0; y < n; y++) {
+for (let x = 0; x < n; x++) {
+if ((x - c) ** 2 + (y - c) ** 2 > r2) continue;
+all++;
+if (m[y * n + x]) bad++;
+}
+}
+frac = all ? bad / all : 0;
+patchCache.set(frame, frac);
+}
+return frac;
+}
 let blindedEl = null;
+let patchEl = null;
 function updateBlinded(frame) {
 const s = store.get();
-const show = s.mode === 'simple' && !!frame && flaggedFraction(frame) > 0.45;
+const plain = s.mode === 'simple' && !!frame;
+const show = plain && flaggedFraction(frame) > 0.45;
+const patch = plain && !show && flaggedMiddle(frame) > 0.08;
+if (patch && !patchEl) {
+patchEl = h('div', { class: 'blinded-patch glass', role: 'note' }, 'Blank patch: too bright for the camera');
+els.viewerFrame.append(patchEl);
+}
+if (patchEl) patchEl.hidden = !patch;
 if (!show) {
 if (blindedEl) blindedEl.hidden = true;
 return;
@@ -8124,7 +8174,8 @@ frame.caption = extra ? { ...base, note: [extra, base.note].filter(Boolean).join
 function shownCaption(frame) {
 const c = frame && frame.caption ? frame.caption : null;
 if (!c || store.get().mode !== 'simple') return c;
-return { title: c.title };
+const title = String(c.title || '').replace(/^Three-detector colour/i, 'In colour').replace(/\bpass (\d+ of \d+)/i, 'visit $1');
+return { title };
 }
 function refreshCaptions() {
 if (!session.movie) return;
@@ -8552,8 +8603,23 @@ let landing = null;
 let landingPlain = true;
 let homeView = null;
 const skyStars = () => (opt.stardata && typeof opt.stardata.starList === 'function' ? opt.stardata.starList() : []);
+const skyBodies = () => (opt.bodies && Array.isArray(opt.bodies.BODIES) ? opt.bodies.BODIES.map((b) => ({ id: b.id, name: b.name, kind: b.kind })) : []);
+function openBody(id) {
+try {
+const url = new URL(window.location.href);
+url.search = `?body=${encodeURIComponent(id)}`;
+url.hash = '';
+window.location.assign(url.toString());
+} catch (err) {
+console.warn('[tombaugh] could not open the body', err);
+}
+}
 function openFromSky(sel) {
 if (!sel) return;
+if (sel.body) {
+openBody(sel.body);
+return;
+}
 if (sel.target) {
 pickTarget(sel.target);
 return;
@@ -8800,6 +8866,8 @@ starts: tourTargets,
 modeLabel: plain ? 'Advanced' : 'Simple',
 modeTitle: plain ? 'Show every view, plot and tool' : 'Back to the short version',
 stars: skyStars(),
+bodies: skyBodies(),
+onBody: (id) => openBody(id),
 figures: opt.stardata ? opt.stardata.SKY_FIGURES : [],
 starCredit: opt.stardata ? opt.stardata.STAR_DATA_CREDIT : '',
 view: homeView,
@@ -9000,7 +9068,7 @@ const btnSky = document.getElementById('btn-sky');
 if (btnSky) btnSky.addEventListener('click', () => goHome());
 if (opt.picklist && opt.home && typeof opt.picklist.attachPickList === 'function') {
 try {
-const names = opt.home.pickItems(targets.map(plainTarget), skyStars());
+const names = opt.home.pickItems(targets.map(plainTarget), skyStars(), skyBodies());
 opt.picklist.attachPickList(els.searchInput, {
 items: names,
 host: els.searchInput.parentNode,
@@ -9339,6 +9407,64 @@ if (viewer.missing) {
 toasts.show('The image viewer module is missing from this build, so frames cannot be drawn.', { kind: 'alert', timeout: 8000 });
 }
 await loadPlugins();
+watchBodyStart();
+function watchBodyStart() {
+let wanted = '';
+try {
+wanted = String(new URLSearchParams(window.location.search).get('body') || '').trim().toLowerCase();
+} catch {
+wanted = '';
+}
+const entry = (app.plugins || []).find((p) => p.name === 'moving');
+const handle = entry && entry.handle && typeof entry.handle.state === 'function' ? entry.handle : null;
+if (!wanted || !handle) return;
+const known = skyBodies().find((b) => b.id === wanted || b.name.toLowerCase() === wanted);
+const name = known ? known.name : wanted;
+const words = {
+idle: `Finding ${name}…`,
+ephemeris: `Finding where ${name} has been…`,
+track: `Finding the photos ${name} is in…`,
+plan: 'Getting the photos…',
+loading: 'Getting the photos…',
+stacking: 'Lining the photos up…',
+};
+const say = (text, error) => {
+if (!landing) return;
+try {
+if (error) {
+if (landing.setBusy) landing.setBusy(false);
+if (landing.setError) landing.setError(text);
+} else if (landing.setBusy) landing.setBusy(true, text);
+} catch {
+}
+};
+const started = Date.now();
+const tick = () => {
+if (hasTarget() || document.documentElement.dataset.screen === 'console') return;
+let st = null;
+try {
+st = handle.state();
+} catch {
+st = null;
+}
+const phase = st && st.phase ? st.phase : 'idle';
+if (phase === 'error') {
+say(`${name} could not be followed just now. Try again in a minute.`, true);
+return;
+}
+if (phase === 'empty') {
+say(`The telescope has no photos of ${name} yet.`, true);
+return;
+}
+if (phase === 'done' && Date.now() - started > 4000 && !(st.items && st.items.length)) {
+say(`The telescope has no photos of ${name} yet.`, true);
+return;
+}
+say(words[phase] || words.idle, false);
+if (Date.now() - started < 10 * 60 * 1000) setTimeout(tick, 500);
+};
+tick();
+}
 }
 boot().catch((err) => {
 console.error('[tombaugh] failed to start', err);
@@ -21291,17 +21417,33 @@ pop.remove();
 };
 }
 });
-__tb_define("src/ui/home.js", function (__tb_self) { __tb_export(__tb_self, { createHome: () => createHome, pickItems: () => pickItems, selectionTitle: () => selectionTitle }); const { h } = __tb_require("src/ui/layout.js"); const { createSkyGlobe, SKY_SURVEYS } = __tb_require("src/sky/globe.js"); const { attachPickList } = __tb_require("src/ui/picklist.js");
+__tb_define("src/ui/home.js", function (__tb_self) { __tb_export(__tb_self, { createHome: () => createHome, pickItems: () => pickItems, plainKind: () => plainKind, selectionTitle: () => selectionTitle }); const { h } = __tb_require("src/ui/layout.js"); const { createSkyGlobe, SKY_SURVEYS } = __tb_require("src/sky/globe.js"); const { attachPickList } = __tb_require("src/ui/picklist.js");
 ;
 ;
 ;
-function pickItems(targets, stars) {
+function plainKind(kind) {
+return (
+{
+'dwarf planet': 'Dwarf planet',
+asteroid: 'Asteroid',
+comet: 'Comet',
+'interstellar comet': 'Comet from another star',
+centaur: 'Icy body between the planets',
+}[kind] || ''
+);
+}
+function pickItems(targets, stars, bodies) {
 const out = [];
 const seen = new Set();
 for (const t of targets || []) {
 if (!t || !t.name || seen.has(t.name.toLowerCase())) continue;
 seen.add(t.name.toLowerCase());
 out.push({ name: t.name, group: 'Start here', ra: t.ra, dec: t.dec, target: t });
+}
+for (const b of bodies || []) {
+if (!b || !b.id || !b.name || seen.has(b.name.toLowerCase())) continue;
+seen.add(b.name.toLowerCase());
+out.push({ name: b.name, group: 'Solar system', body: b.id });
 }
 const named = (stars || []).filter((s) => s && s.name && !seen.has(s.name.toLowerCase()));
 named.sort((a, b) => a.name.localeCompare(b.name));
@@ -21317,7 +21459,8 @@ function createHome(container, opts = {}) {
 const targets = Array.isArray(opts.targets) ? opts.targets : [];
 const starts = Array.isArray(opts.starts) ? opts.starts : targets.slice(0, 5);
 const stars = Array.isArray(opts.stars) ? opts.stars : [];
-const items = pickItems(targets, stars);
+const bodies = Array.isArray(opts.bodies) ? opts.bodies.filter((b) => b && b.id && b.name) : [];
+const items = pickItems(targets, stars, bodies);
 const skyHost = h('div', { class: 'skyhome-sky' });
 const input = h('input', {
 class: 'skyhome-input',
@@ -21432,7 +21575,52 @@ setError('');
 for (const t of starts) {
 chips.append(h('button', { class: 'skyhome-chip glass', 'data-glass-interactive': '', type: 'button', onclick: () => choose({ name: t.name, ra: t.ra, dec: t.dec, target: t }) }, h('span', { class: 'skyhome-dot', 'aria-hidden': 'true' }), t.name));
 }
-const picker = attachPickList(input, { items, host: field, onPick: (item) => choose(item) });
+let menu = null;
+if (bodies.length && typeof opts.onBody === 'function') {
+const list = h('div', { class: 'skyhome-menu-list', role: 'menu', 'aria-label': 'Solar system' });
+for (const b of bodies) {
+list.append(
+h(
+'button',
+{ class: 'skyhome-menu-row', type: 'button', role: 'menuitem', onclick: () => opts.onBody(b.id) },
+h('strong', null, b.name),
+h('span', null, plainKind(b.kind)),
+),
+);
+}
+menu = h('div', { class: 'skyhome-menu glass', 'data-testid': 'home-bodies' }, list);
+menu.hidden = true;
+const btn = h(
+'button',
+{ class: 'skyhome-chip skyhome-solar glass', 'data-glass-interactive': '', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-testid': 'home-solar' },
+h('span', { class: 'skyhome-orbit', 'aria-hidden': 'true' }),
+'Solar system',
+);
+const setOpen = (on) => {
+menu.hidden = !on;
+btn.setAttribute('aria-expanded', String(on));
+};
+btn.addEventListener('click', () => setOpen(menu.hidden));
+root.addEventListener('pointerdown', (ev) => {
+if (!menu.hidden && !menu.contains(ev.target) && !btn.contains(ev.target)) setOpen(false);
+});
+root.addEventListener('keydown', (ev) => {
+if (ev.key === 'Escape' && !menu.hidden) {
+setOpen(false);
+btn.focus();
+}
+});
+chips.append(btn);
+root.append(menu);
+}
+const picker = attachPickList(input, {
+items,
+host: field,
+onPick: (item) => {
+if (item.body && typeof opts.onBody === 'function') opts.onBody(item.body);
+else choose(item);
+},
+});
 function setError(message) {
 status.textContent = message || '';
 status.classList.toggle('is-error', !!message);
@@ -21530,6 +21718,307 @@ return starList()
 .filter((s) => s.name)
 .map((s) => ({ name: s.name, ra: s.ra, dec: s.dec, mag: s.mag }))
 .sort((a, b) => a.name.localeCompare(b.name));
+}
+});
+__tb_define("src/plugins/moving/bodies.js", function (__tb_self) { __tb_export(__tb_self, { BODIES: () => BODIES, CATALOGUE: () => CATALOGUE, HYPOTHETICAL: () => HYPOTHETICAL, SURVEY_START_MJD: () => SURVEY_START_MJD, bodyQuery: () => bodyQuery, eclipticPrograde: () => eclipticPrograde, findBody: () => findBody, hypotheticalEphemeris: () => hypotheticalEphemeris, kindLabel: () => kindLabel }); const { heliocentricFromApparent, keplerRate, predictedTrack } = __tb_require("src/core/distance.js"); const { OBLIQUITY_J2000_DEG } = __tb_require("src/core/ephemeris.js");
+;
+;
+const DEG = Math.PI / 180;
+const SURVEY_START_MJD = 60770;
+const CH4_ICE = [
+{ wave: 0.89, label: 'CH4 ice', what: 'Methane ice, 0.89 um' },
+{ wave: 1.16, label: 'CH4 ice', what: 'Methane ice, 1.16 um' },
+{ wave: 1.38, label: 'CH4 ice', what: 'Methane ice, the bands at 1.33 and 1.40 um' },
+{ wave: 1.72, label: 'CH4 ice', what: 'Methane ice, a group of bands near 1.7 um' },
+{ wave: 2.3, label: 'CH4 ice', what: 'Methane ice, the strong bands at 2.2 to 2.4 um' },
+{ wave: 3.3, label: 'CH4 ice', what: 'Methane ice, the deep band at 3.3 um' },
+];
+const H2O_ICE = [
+{ wave: 1.5, label: 'H2O ice', what: 'Water ice, 1.5 um' },
+{ wave: 2.0, label: 'H2O ice', what: 'Water ice, 2.0 um' },
+{ wave: 3.05, label: 'H2O ice', what: 'Water ice, the broad band at 3 um' },
+];
+const HYDRATION = [
+{ wave: 2.72, label: 'OH', what: 'Water bound in clay minerals, 2.7 um' },
+{ wave: 3.06, label: 'NH4', what: 'Ammonium-bearing clays, 3.06 um' },
+];
+const BODIES = [
+{
+id: 'pluto',
+name: 'Pluto',
+kind: 'dwarf planet',
+command: '999',
+stepHours: 12,
+blurb: 'About 34 AU away at magnitude 14.4: visible in single exposures, in a crowded star field.',
+lookFor: 'Methane ice bands, the deepest near 1.7, 2.3 and 3.3 um. They are deep enough to show in single exposures; following the body across all of them draws the whole spectrum.',
+bands: CH4_ICE,
+},
+{
+id: 'ceres',
+name: 'Ceres',
+kind: 'dwarf planet',
+command: 'Ceres;',
+stepHours: 6,
+bright: true,
+blurb: 'The largest body in the asteroid belt, magnitude 7 to 9. Bright enough that some exposures may saturate.',
+lookFor: 'A 3 um hydration band from clay minerals, and beyond 4 um the glow of its own heat on top of reflected sunlight.',
+bands: [...HYDRATION, { wave: 3.95, label: 'CO3', what: 'Carbonates, 3.95 um' }],
+},
+{
+id: 'atlas3i',
+name: '3I/ATLAS',
+aliases: ['3I', 'C/2025 N1', 'ATLAS 3I', 'C/2025 N1 (ATLAS)'],
+kind: 'interstellar comet',
+command: 'DES=C/2025 N1;',
+stepHours: 6,
+coma: true,
+blurb: 'The third known object from another star system, found in July 2025. SPHEREx saw it that August, 2.7 AU from Earth at magnitude 17.8.',
+lookFor: 'Carbon dioxide gas at 4.27 um in a coma wider than a star. Compare the width of the stack in detector 5 with the other detectors.',
+bands: [
+{ wave: 4.27, label: 'CO2', what: 'Carbon dioxide gas, 4.27 um' },
+{ wave: 4.67, label: 'CO', what: 'Carbon monoxide gas, 4.67 um' },
+{ wave: 3.05, label: 'H2O ice', what: 'Water ice grains in the coma, 3 um' },
+],
+},
+{
+id: 'eris',
+name: 'Eris',
+kind: 'dwarf planet',
+command: '136199;',
+stepHours: 12,
+faint: true,
+blurb: 'About 95 AU away at magnitude 18.7: a little more massive than Pluto and almost three times as far.',
+lookFor: 'Methane ice, as on Pluto. Too faint for single exposures: it needs the stack.',
+bands: CH4_ICE,
+},
+{
+id: 'makemake',
+name: 'Makemake',
+kind: 'dwarf planet',
+command: '136472;',
+stepHours: 12,
+faint: true,
+blurb: 'About 53 AU away at magnitude 17.2, covered in methane frost.',
+lookFor: 'Methane ice bands, stronger than Pluto\'s. Faint: it needs the stack.',
+bands: CH4_ICE,
+},
+{
+id: 'haumea',
+name: 'Haumea',
+kind: 'dwarf planet',
+command: '136108;',
+stepHours: 12,
+faint: true,
+blurb: 'About 50 AU away at magnitude 17.4, elongated and turning once every 3.9 hours.',
+lookFor: 'Water ice at 1.5 and 2.0 um. Its brightness changes by a quarter as it turns, which adds scatter to the spectrum.',
+bands: H2O_ICE,
+},
+{
+id: 'quaoar',
+name: 'Quaoar',
+kind: 'dwarf planet',
+command: '50000;',
+stepHours: 12,
+faint: true,
+blurb: 'About 42 AU away at magnitude 18.8, a ringed body half the size of Pluto.',
+lookFor: 'Water ice at 1.5 and 2.0 um, if the stack reaches it.',
+bands: H2O_ICE,
+},
+{
+id: 'orcus',
+name: 'Orcus',
+kind: 'dwarf planet',
+command: '90482;',
+stepHours: 12,
+faint: true,
+blurb: 'About 48 AU away at magnitude 19.1, on an orbit like Pluto\'s but on the opposite side of the Sun.',
+lookFor: 'Water ice at 1.5 and 2.0 um, if the stack reaches it.',
+bands: H2O_ICE,
+},
+{
+id: 'gonggong',
+name: 'Gonggong',
+kind: 'dwarf planet',
+command: '225088;',
+stepHours: 12,
+faint: true,
+blurb: 'About 89 AU away at magnitude 21.4, one of the reddest large bodies known.',
+lookFor: 'Probably nothing: it is expected to stay below the stack. An honest upper limit is the result.',
+bands: CH4_ICE.slice(4),
+},
+{
+id: 'sedna',
+name: 'Sedna',
+kind: 'dwarf planet',
+command: 'Sedna;',
+stepHours: 12,
+faint: true,
+blurb: 'About 83 AU away at magnitude 20.8, on an 11,000-year orbit that never comes near Neptune.',
+lookFor: 'Probably too faint. A fair test of the limit: the stack either reaches it or says how close it came.',
+bands: CH4_ICE.slice(4),
+},
+{
+id: 'chiron',
+name: 'Chiron',
+kind: 'centaur',
+command: '2060;',
+stepHours: 12,
+faint: true,
+coma: true,
+blurb: 'A centaur between Saturn and Uranus, about 18 AU away at magnitude 18 to 19, with rings or a dust shell and occasional outbursts.',
+lookFor: 'Whether the stack is wider than a star, and carbon dioxide at 4.27 um.',
+bands: [
+{ wave: 4.27, label: 'CO2', what: 'Carbon dioxide, 4.27 um' },
+{ wave: 2.0, label: 'H2O ice', what: 'Water ice, 2.0 um' },
+],
+},
+{
+id: 'vesta',
+name: 'Vesta',
+kind: 'asteroid',
+command: '4;',
+stepHours: 6,
+bright: true,
+blurb: 'The brightest asteroid, magnitude 6 to 8, with a basalt crust. Some exposures may saturate.',
+lookFor: 'Pyroxene bands near 0.9 and 1.9 um, the fingerprint of volcanic rock.',
+bands: [
+{ wave: 0.92, label: 'pyroxene', what: 'Pyroxene, 0.9 um' },
+{ wave: 1.95, label: 'pyroxene', what: 'Pyroxene, 1.9 um' },
+],
+},
+{
+id: 'pallas',
+name: 'Pallas',
+kind: 'asteroid',
+command: '2;',
+stepHours: 6,
+bright: true,
+blurb: 'The third-largest asteroid, magnitude 8 to 10, on a steeply tilted orbit.',
+lookFor: 'A sharp 3 um hydration band.',
+bands: HYDRATION.slice(0, 1),
+},
+{
+id: 'hygiea',
+name: 'Hygiea',
+kind: 'asteroid',
+command: '10;',
+stepHours: 6,
+blurb: 'The fourth-largest asteroid, magnitude 10 to 12, dark and carbon-rich.',
+lookFor: 'A 3 um hydration band like the one on Ceres.',
+bands: HYDRATION,
+},
+];
+const HYPOTHETICAL = {
+id: 'hypothetical',
+name: 'Hypothetical body',
+kind: 'hypothetical',
+command: null,
+local: true,
+stepHours: 24,
+faint: true,
+blurb: 'Something not known to exist. You give a sky position, a distance and optionally an orbital drift; the tool follows where such a body would have been.',
+lookFor: 'A search, not a detection: the result is the signal-to-noise at the predicted position and an upper limit in microjansky.',
+bands: [],
+};
+const CATALOGUE = [...BODIES, HYPOTHETICAL];
+function kindLabel(kind) {
+return {
+'dwarf planet': 'Dwarf planet',
+asteroid: 'Asteroid',
+comet: 'Comet',
+'interstellar comet': 'Interstellar comet',
+centaur: 'Centaur',
+hypothetical: 'Not known to exist',
+}[kind] || 'Solar-system body';
+}
+function norm(text) {
+return String(text || '').toLowerCase().replace(/[\s/()-]+/g, '');
+}
+function findBody(text) {
+const key = norm(text).replace(/;+$/, '');
+if (!key) return null;
+for (const b of CATALOGUE) {
+if (norm(b.name) === key || b.id === key) return b;
+if (b.command && b.command === String(text).trim()) return b;
+if (b.command && norm(b.command).replace(/;+$/, '') === key && (/\D/.test(key) || Number(key) >= 1000)) return b;
+if (Array.isArray(b.aliases) && b.aliases.some((a) => norm(a) === key)) return b;
+}
+return null;
+}
+function bodyQuery(text) {
+const entry = findBody(text);
+if (entry && entry.command) return { body: entry.command, entry };
+return { body: String(text || '').trim().replace(/\s+/g, ' '), entry: entry || null };
+}
+function eclipticPrograde(ra, dec) {
+const eps = OBLIQUITY_J2000_DEG * DEG;
+const a = ra * DEG;
+const d = dec * DEG;
+const u = [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)];
+const p = [0, -Math.sin(eps), Math.cos(eps)];
+const v = [p[1] * u[2] - p[2] * u[1], p[2] * u[0] - p[0] * u[2], p[0] * u[1] - p[1] * u[0]];
+const e = [-Math.sin(a), Math.cos(a), 0];
+const n = [-Math.sin(d) * Math.cos(a), -Math.sin(d) * Math.sin(a), Math.cos(d)];
+let east = v[0] * e[0] + v[1] * e[1] + v[2] * e[2];
+let north = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
+const len = Math.hypot(east, north);
+if (!(len > 1e-9)) return { east: 1, north: 0, paDeg: 90 };
+east /= len;
+north /= len;
+let pa = Math.atan2(east, north) / DEG;
+if (pa < 0) pa += 360;
+return { east, north, paDeg: pa };
+}
+function hypotheticalEphemeris({
+ra, dec, distAU, refMjd, drift = 'none', driftPaDeg,
+startMjd = SURVEY_START_MJD, endMjd, stepHours = 24, now = Date.now(),
+} = {}) {
+if (!Number.isFinite(ra) || !Number.isFinite(dec) || dec < -90 || dec > 90) {
+throw new RangeError('Give a sky position: RA 0 to 360 and Dec -90 to 90 degrees.');
+}
+if (!Number.isFinite(distAU) || distAU < 2) {
+throw new RangeError('Give a distance of at least 2 AU.');
+}
+const end = Number.isFinite(endMjd) ? endMjd : now / 86400000 + 40587;
+if (!Number.isFinite(startMjd) || !(end > startMjd)) throw new RangeError('The time range is empty.');
+const step = Math.max(1 / 60, Number.isFinite(stepHours) && stepHours > 0 ? stepHours : 24) / 24;
+const count = Math.min(6000, Math.floor((end - startMjd) / step + 1e-9) + 1);
+const mjds = [];
+for (let i = 0; i < count; i++) mjds.push(startMjd + i * ((end - startMjd) / Math.max(1, count - 1)));
+const ref = Number.isFinite(refMjd) ? refMjd : 0.5 * (startMjd + end);
+let motion = null;
+if (drift === 'circular') {
+const rate = keplerRate(distAU);
+let dir;
+if (Number.isFinite(driftPaDeg)) dir = { east: Math.sin(driftPaDeg * DEG), north: Math.cos(driftPaDeg * DEG) };
+else dir = eclipticPrograde(ra, dec);
+motion = { raRate_arcsecPerYr: rate * dir.east, decRate_arcsecPerYr: rate * dir.north };
+} else if (drift && typeof drift === 'object') {
+motion = {
+raRate_arcsecPerYr: Number.isFinite(drift.raRate_arcsecPerYr) ? drift.raRate_arcsecPerYr : 0,
+decRate_arcsecPerYr: Number.isFinite(drift.decRate_arcsecPerYr) ? drift.decRate_arcsecPerYr : 0,
+};
+}
+const helio = heliocentricFromApparent(ra, dec, distAU, ref);
+if (!Number.isFinite(helio.ra) || !Number.isFinite(helio.dec)) {
+throw new RangeError('That position and distance have no solution; try a larger distance.');
+}
+const track = predictedTrack(helio.ra, helio.dec, distAU, mjds, motion ? { motion: { ...motion, refMjd: ref } } : {});
+const samples = [];
+for (const p of track) {
+if (!Number.isFinite(p.ra) || !Number.isFinite(p.dec)) continue;
+samples.push([p.mjd, p.ra, p.dec, Number.isFinite(p.distGeoAU) ? p.distGeoAU : null, null]);
+}
+const driftRate = motion ? Math.hypot(motion.raRate_arcsecPerYr, motion.decRate_arcsecPerYr) : 0;
+return {
+body: 'hypothetical',
+name: `Hypothetical body at ${distAU >= 100 ? Math.round(distAU) : Math.round(distAU * 10) / 10} AU`,
+source: 'parallax model (not an observed orbit)',
+center: 'geocentric',
+hypothetical: true,
+samples,
+params: { ra, dec, distAU, refMjd: ref, drift: motion, driftArcsecPerYr: driftRate, helio: { ra: helio.ra, dec: helio.dec } },
+};
 }
 });
 __tb_define("src/ui/explain.js", function (__tb_self) { __tb_export(__tb_self, { TOPICS: () => TOPICS, TOPIC_IDS: () => TOPIC_IDS, createExplainer: () => createExplainer, explainButton: () => explainButton, getTopic: () => getTopic }); const { BRAND, clamp, mulberry32, gaussian, stampPsf, onEscape, SKY_LUT, skyStretch, RESIDUAL_LUT, residualIndex, rgbCss } = __tb_require("src/ui/fx.js"); const { injectStyles } = __tb_require("src/ui/experience.css.js");
@@ -38140,307 +38629,6 @@ if (viewHandle) { try { viewHandle.remove(); } catch { } }
 if (tool && tool.remove) { try { tool.remove(); } catch { } }
 if (panel && panel.remove) { try { panel.remove(); } catch { } }
 },
-};
-}
-});
-__tb_define("src/plugins/moving/bodies.js", function (__tb_self) { __tb_export(__tb_self, { BODIES: () => BODIES, CATALOGUE: () => CATALOGUE, HYPOTHETICAL: () => HYPOTHETICAL, SURVEY_START_MJD: () => SURVEY_START_MJD, bodyQuery: () => bodyQuery, eclipticPrograde: () => eclipticPrograde, findBody: () => findBody, hypotheticalEphemeris: () => hypotheticalEphemeris, kindLabel: () => kindLabel }); const { heliocentricFromApparent, keplerRate, predictedTrack } = __tb_require("src/core/distance.js"); const { OBLIQUITY_J2000_DEG } = __tb_require("src/core/ephemeris.js");
-;
-;
-const DEG = Math.PI / 180;
-const SURVEY_START_MJD = 60770;
-const CH4_ICE = [
-{ wave: 0.89, label: 'CH4 ice', what: 'Methane ice, 0.89 um' },
-{ wave: 1.16, label: 'CH4 ice', what: 'Methane ice, 1.16 um' },
-{ wave: 1.38, label: 'CH4 ice', what: 'Methane ice, the bands at 1.33 and 1.40 um' },
-{ wave: 1.72, label: 'CH4 ice', what: 'Methane ice, a group of bands near 1.7 um' },
-{ wave: 2.3, label: 'CH4 ice', what: 'Methane ice, the strong bands at 2.2 to 2.4 um' },
-{ wave: 3.3, label: 'CH4 ice', what: 'Methane ice, the deep band at 3.3 um' },
-];
-const H2O_ICE = [
-{ wave: 1.5, label: 'H2O ice', what: 'Water ice, 1.5 um' },
-{ wave: 2.0, label: 'H2O ice', what: 'Water ice, 2.0 um' },
-{ wave: 3.05, label: 'H2O ice', what: 'Water ice, the broad band at 3 um' },
-];
-const HYDRATION = [
-{ wave: 2.72, label: 'OH', what: 'Water bound in clay minerals, 2.7 um' },
-{ wave: 3.06, label: 'NH4', what: 'Ammonium-bearing clays, 3.06 um' },
-];
-const BODIES = [
-{
-id: 'pluto',
-name: 'Pluto',
-kind: 'dwarf planet',
-command: '999',
-stepHours: 12,
-blurb: 'About 34 AU away at magnitude 14.4: visible in single exposures, in a crowded star field.',
-lookFor: 'Methane ice bands, the deepest near 1.7, 2.3 and 3.3 um. They are deep enough to show in single exposures; following the body across all of them draws the whole spectrum.',
-bands: CH4_ICE,
-},
-{
-id: 'ceres',
-name: 'Ceres',
-kind: 'dwarf planet',
-command: 'Ceres;',
-stepHours: 6,
-bright: true,
-blurb: 'The largest body in the asteroid belt, magnitude 7 to 9. Bright enough that some exposures may saturate.',
-lookFor: 'A 3 um hydration band from clay minerals, and beyond 4 um the glow of its own heat on top of reflected sunlight.',
-bands: [...HYDRATION, { wave: 3.95, label: 'CO3', what: 'Carbonates, 3.95 um' }],
-},
-{
-id: 'atlas3i',
-name: '3I/ATLAS',
-aliases: ['3I', 'C/2025 N1', 'ATLAS 3I', 'C/2025 N1 (ATLAS)'],
-kind: 'interstellar comet',
-command: 'DES=C/2025 N1;',
-stepHours: 6,
-coma: true,
-blurb: 'The third known object from another star system, found in July 2025. SPHEREx saw it that August, 2.7 AU from Earth at magnitude 17.8.',
-lookFor: 'Carbon dioxide gas at 4.27 um in a coma wider than a star. Compare the width of the stack in detector 5 with the other detectors.',
-bands: [
-{ wave: 4.27, label: 'CO2', what: 'Carbon dioxide gas, 4.27 um' },
-{ wave: 4.67, label: 'CO', what: 'Carbon monoxide gas, 4.67 um' },
-{ wave: 3.05, label: 'H2O ice', what: 'Water ice grains in the coma, 3 um' },
-],
-},
-{
-id: 'eris',
-name: 'Eris',
-kind: 'dwarf planet',
-command: '136199;',
-stepHours: 12,
-faint: true,
-blurb: 'About 95 AU away at magnitude 18.7: a little more massive than Pluto and almost three times as far.',
-lookFor: 'Methane ice, as on Pluto. Too faint for single exposures: it needs the stack.',
-bands: CH4_ICE,
-},
-{
-id: 'makemake',
-name: 'Makemake',
-kind: 'dwarf planet',
-command: '136472;',
-stepHours: 12,
-faint: true,
-blurb: 'About 53 AU away at magnitude 17.2, covered in methane frost.',
-lookFor: 'Methane ice bands, stronger than Pluto\'s. Faint: it needs the stack.',
-bands: CH4_ICE,
-},
-{
-id: 'haumea',
-name: 'Haumea',
-kind: 'dwarf planet',
-command: '136108;',
-stepHours: 12,
-faint: true,
-blurb: 'About 50 AU away at magnitude 17.4, elongated and turning once every 3.9 hours.',
-lookFor: 'Water ice at 1.5 and 2.0 um. Its brightness changes by a quarter as it turns, which adds scatter to the spectrum.',
-bands: H2O_ICE,
-},
-{
-id: 'quaoar',
-name: 'Quaoar',
-kind: 'dwarf planet',
-command: '50000;',
-stepHours: 12,
-faint: true,
-blurb: 'About 42 AU away at magnitude 18.8, a ringed body half the size of Pluto.',
-lookFor: 'Water ice at 1.5 and 2.0 um, if the stack reaches it.',
-bands: H2O_ICE,
-},
-{
-id: 'orcus',
-name: 'Orcus',
-kind: 'dwarf planet',
-command: '90482;',
-stepHours: 12,
-faint: true,
-blurb: 'About 48 AU away at magnitude 19.1, on an orbit like Pluto\'s but on the opposite side of the Sun.',
-lookFor: 'Water ice at 1.5 and 2.0 um, if the stack reaches it.',
-bands: H2O_ICE,
-},
-{
-id: 'gonggong',
-name: 'Gonggong',
-kind: 'dwarf planet',
-command: '225088;',
-stepHours: 12,
-faint: true,
-blurb: 'About 89 AU away at magnitude 21.4, one of the reddest large bodies known.',
-lookFor: 'Probably nothing: it is expected to stay below the stack. An honest upper limit is the result.',
-bands: CH4_ICE.slice(4),
-},
-{
-id: 'sedna',
-name: 'Sedna',
-kind: 'dwarf planet',
-command: 'Sedna;',
-stepHours: 12,
-faint: true,
-blurb: 'About 83 AU away at magnitude 20.8, on an 11,000-year orbit that never comes near Neptune.',
-lookFor: 'Probably too faint. A fair test of the limit: the stack either reaches it or says how close it came.',
-bands: CH4_ICE.slice(4),
-},
-{
-id: 'chiron',
-name: 'Chiron',
-kind: 'centaur',
-command: '2060;',
-stepHours: 12,
-faint: true,
-coma: true,
-blurb: 'A centaur between Saturn and Uranus, about 18 AU away at magnitude 18 to 19, with rings or a dust shell and occasional outbursts.',
-lookFor: 'Whether the stack is wider than a star, and carbon dioxide at 4.27 um.',
-bands: [
-{ wave: 4.27, label: 'CO2', what: 'Carbon dioxide, 4.27 um' },
-{ wave: 2.0, label: 'H2O ice', what: 'Water ice, 2.0 um' },
-],
-},
-{
-id: 'vesta',
-name: 'Vesta',
-kind: 'asteroid',
-command: '4;',
-stepHours: 6,
-bright: true,
-blurb: 'The brightest asteroid, magnitude 6 to 8, with a basalt crust. Some exposures may saturate.',
-lookFor: 'Pyroxene bands near 0.9 and 1.9 um, the fingerprint of volcanic rock.',
-bands: [
-{ wave: 0.92, label: 'pyroxene', what: 'Pyroxene, 0.9 um' },
-{ wave: 1.95, label: 'pyroxene', what: 'Pyroxene, 1.9 um' },
-],
-},
-{
-id: 'pallas',
-name: 'Pallas',
-kind: 'asteroid',
-command: '2;',
-stepHours: 6,
-bright: true,
-blurb: 'The third-largest asteroid, magnitude 8 to 10, on a steeply tilted orbit.',
-lookFor: 'A sharp 3 um hydration band.',
-bands: HYDRATION.slice(0, 1),
-},
-{
-id: 'hygiea',
-name: 'Hygiea',
-kind: 'asteroid',
-command: '10;',
-stepHours: 6,
-blurb: 'The fourth-largest asteroid, magnitude 10 to 12, dark and carbon-rich.',
-lookFor: 'A 3 um hydration band like the one on Ceres.',
-bands: HYDRATION,
-},
-];
-const HYPOTHETICAL = {
-id: 'hypothetical',
-name: 'Hypothetical body',
-kind: 'hypothetical',
-command: null,
-local: true,
-stepHours: 24,
-faint: true,
-blurb: 'Something not known to exist. You give a sky position, a distance and optionally an orbital drift; the tool follows where such a body would have been.',
-lookFor: 'A search, not a detection: the result is the signal-to-noise at the predicted position and an upper limit in microjansky.',
-bands: [],
-};
-const CATALOGUE = [...BODIES, HYPOTHETICAL];
-function kindLabel(kind) {
-return {
-'dwarf planet': 'Dwarf planet',
-asteroid: 'Asteroid',
-comet: 'Comet',
-'interstellar comet': 'Interstellar comet',
-centaur: 'Centaur',
-hypothetical: 'Not known to exist',
-}[kind] || 'Solar-system body';
-}
-function norm(text) {
-return String(text || '').toLowerCase().replace(/[\s/()-]+/g, '');
-}
-function findBody(text) {
-const key = norm(text).replace(/;+$/, '');
-if (!key) return null;
-for (const b of CATALOGUE) {
-if (norm(b.name) === key || b.id === key) return b;
-if (b.command && b.command === String(text).trim()) return b;
-if (b.command && norm(b.command).replace(/;+$/, '') === key && (/\D/.test(key) || Number(key) >= 1000)) return b;
-if (Array.isArray(b.aliases) && b.aliases.some((a) => norm(a) === key)) return b;
-}
-return null;
-}
-function bodyQuery(text) {
-const entry = findBody(text);
-if (entry && entry.command) return { body: entry.command, entry };
-return { body: String(text || '').trim().replace(/\s+/g, ' '), entry: entry || null };
-}
-function eclipticPrograde(ra, dec) {
-const eps = OBLIQUITY_J2000_DEG * DEG;
-const a = ra * DEG;
-const d = dec * DEG;
-const u = [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)];
-const p = [0, -Math.sin(eps), Math.cos(eps)];
-const v = [p[1] * u[2] - p[2] * u[1], p[2] * u[0] - p[0] * u[2], p[0] * u[1] - p[1] * u[0]];
-const e = [-Math.sin(a), Math.cos(a), 0];
-const n = [-Math.sin(d) * Math.cos(a), -Math.sin(d) * Math.sin(a), Math.cos(d)];
-let east = v[0] * e[0] + v[1] * e[1] + v[2] * e[2];
-let north = v[0] * n[0] + v[1] * n[1] + v[2] * n[2];
-const len = Math.hypot(east, north);
-if (!(len > 1e-9)) return { east: 1, north: 0, paDeg: 90 };
-east /= len;
-north /= len;
-let pa = Math.atan2(east, north) / DEG;
-if (pa < 0) pa += 360;
-return { east, north, paDeg: pa };
-}
-function hypotheticalEphemeris({
-ra, dec, distAU, refMjd, drift = 'none', driftPaDeg,
-startMjd = SURVEY_START_MJD, endMjd, stepHours = 24, now = Date.now(),
-} = {}) {
-if (!Number.isFinite(ra) || !Number.isFinite(dec) || dec < -90 || dec > 90) {
-throw new RangeError('Give a sky position: RA 0 to 360 and Dec -90 to 90 degrees.');
-}
-if (!Number.isFinite(distAU) || distAU < 2) {
-throw new RangeError('Give a distance of at least 2 AU.');
-}
-const end = Number.isFinite(endMjd) ? endMjd : now / 86400000 + 40587;
-if (!Number.isFinite(startMjd) || !(end > startMjd)) throw new RangeError('The time range is empty.');
-const step = Math.max(1 / 60, Number.isFinite(stepHours) && stepHours > 0 ? stepHours : 24) / 24;
-const count = Math.min(6000, Math.floor((end - startMjd) / step + 1e-9) + 1);
-const mjds = [];
-for (let i = 0; i < count; i++) mjds.push(startMjd + i * ((end - startMjd) / Math.max(1, count - 1)));
-const ref = Number.isFinite(refMjd) ? refMjd : 0.5 * (startMjd + end);
-let motion = null;
-if (drift === 'circular') {
-const rate = keplerRate(distAU);
-let dir;
-if (Number.isFinite(driftPaDeg)) dir = { east: Math.sin(driftPaDeg * DEG), north: Math.cos(driftPaDeg * DEG) };
-else dir = eclipticPrograde(ra, dec);
-motion = { raRate_arcsecPerYr: rate * dir.east, decRate_arcsecPerYr: rate * dir.north };
-} else if (drift && typeof drift === 'object') {
-motion = {
-raRate_arcsecPerYr: Number.isFinite(drift.raRate_arcsecPerYr) ? drift.raRate_arcsecPerYr : 0,
-decRate_arcsecPerYr: Number.isFinite(drift.decRate_arcsecPerYr) ? drift.decRate_arcsecPerYr : 0,
-};
-}
-const helio = heliocentricFromApparent(ra, dec, distAU, ref);
-if (!Number.isFinite(helio.ra) || !Number.isFinite(helio.dec)) {
-throw new RangeError('That position and distance have no solution; try a larger distance.');
-}
-const track = predictedTrack(helio.ra, helio.dec, distAU, mjds, motion ? { motion: { ...motion, refMjd: ref } } : {});
-const samples = [];
-for (const p of track) {
-if (!Number.isFinite(p.ra) || !Number.isFinite(p.dec)) continue;
-samples.push([p.mjd, p.ra, p.dec, Number.isFinite(p.distGeoAU) ? p.distGeoAU : null, null]);
-}
-const driftRate = motion ? Math.hypot(motion.raRate_arcsecPerYr, motion.decRate_arcsecPerYr) : 0;
-return {
-body: 'hypothetical',
-name: `Hypothetical body at ${distAU >= 100 ? Math.round(distAU) : Math.round(distAU * 10) / 10} AU`,
-source: 'parallax model (not an observed orbit)',
-center: 'geocentric',
-hypothetical: true,
-samples,
-params: { ra, dec, distAU, refMjd: ref, drift: motion, driftArcsecPerYr: driftRate, helio: { ra: helio.ra, dec: helio.dec } },
 };
 }
 });
