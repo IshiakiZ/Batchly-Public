@@ -248,7 +248,7 @@ for case in CASES:
     hdul.close()
 
 text = tombaugh.citation(["qr3", "dr1"], retrieved="2026-11-15")
-want = "SPHEREx Level 2 spectral images, DR1, QR3 (IRSA, DOI 10.26131/IRSA629 for the mission archive; QR3 10.26131/IRSA662), retrieved 2026-11-15. Gaia DR3."
+want = "SPHEREx Level 2 spectral images, DR1, QR3 (NASA/IPAC Infrared Science Archive; DR1 DOI 10.26131/IRSA678; QR3 DOI 10.26131/IRSA662), retrieved 2026-11-15. Gaia DR3."
 R.add("citation() gives the contract's citation line", 1, 0 if text == want else 1, "mismatch", tol=0, note="" if text == want else text)
 mask = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 15, 17, 19, 25, 26, 27))
 R.add("tombaugh.DEFAULT_BAD_MASK equals the contract's bit list", 13, 0 if tombaugh.DEFAULT_BAD_MASK == mask else 1, "mismatch", tol=0)

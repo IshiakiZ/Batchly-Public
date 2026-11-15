@@ -408,8 +408,10 @@ createMotionMeter(container) -> { setData({ measured: { pmra, pmdec, total, errT
 // step, blink A/B), target tour, citation line, loading and error states, and wire everything.
 ```
 
-Citation line for every view: "SPHEREx Level 2 spectral images, <release list> (IRSA, DOI
-10.26131/IRSA629 for the mission archive; QR3 10.26131/IRSA662), retrieved <date>. Gaia DR3."
+Citation line for every view: "SPHEREx Level 2 spectral images, <release list> (NASA/IPAC Infrared
+Science Archive; <release> DOI <doi>; ...), retrieved <date>. Gaia DR3." IRSA gives one DOI per
+release: QR1 10.26131/IRSA629, QR2 10.26131/IRSA652, QR3 10.26131/IRSA662, DR1 spectral images
+10.26131/IRSA678 (read from IRSA's release pages on 2026-11-15).
 Keep DOIs in one constant so they are easy to correct.
 
 ## Dev server and tests

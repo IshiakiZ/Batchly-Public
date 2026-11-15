@@ -140,7 +140,7 @@ test('the built-in table knows the five challenge targets and their aliases', ()
     // 08h55m10.831s -07d14m42.53s
     assert.ok(Math.abs(t.ra - 133.7951292) < 1e-6);
     assert.ok(Math.abs(t.dec - -7.2451472) < 1e-6);
-    assert.equal(t.epoch, 2014.3);
+    assert.equal(t.epoch, 2010.35);
     assert.equal(t.pmra, -8118);
     assert.equal(t.pmdec, 680);
     assert.equal(t.parallax, 439);
@@ -225,7 +225,7 @@ test('resolveName falls back to the built-in table when Sesame is down or slow',
   const slow = fetchByHost({ 'cds.unistra.fr': hang });
   const b = await resolveName('WISE 0855-0714', { fetchImpl: slow.fetchImpl, timeoutMs: 20 });
   assert.equal(b.source, 'builtin (approximate)');
-  assert.equal(b.epoch, 2014.3);
+  assert.equal(b.epoch, 2010.35);
 });
 
 test('resolveName merges Sesame with the built-in entry: missing values and the known epoch', async () => {
@@ -234,7 +234,7 @@ test('resolveName merges Sesame with the built-in entry: missing values and the 
   assert.equal(r.source, 'sesame');
   assert.equal(r.pmra, -8123.7);
   assert.equal(r.parallax, 439); // Sesame gave none
-  assert.equal(r.epoch, 2014.3); // same position as the built-in entry, whose epoch is known
+  assert.equal(r.epoch, 2010.35); // same position as the built-in entry, whose epoch is known
 });
 
 test('resolveName uses SIMBAD TAP when Sesame fails for a name that is not built in', async () => {

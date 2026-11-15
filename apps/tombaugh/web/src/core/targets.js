@@ -39,6 +39,8 @@ export const TARGETS = [
     aliases: ['Barnards Star', 'GJ 699', 'Gliese 699', 'HIP 87937', 'V2500 Oph'],
     blurb: 'A red dwarf six light-years away with the largest proper motion of any star: 10.4 arcsec a year, about 1.7 SPHEREx pixels.',
     why: 'Blink the passes and one star steps north while the rest hold still; the motion meter should land near the 10.4 arcsec a year that Gaia measures.',
+    // Measured by the Validation tab on real SPHEREx data, 2026-11-15 (docs/RESULTS.md).
+    found: '11.9 ± 2.4 arcsec a year heading 355°. Gaia says 10.4 at 356°.',
   },
   {
     id: 'eps-indi-b',
@@ -52,6 +54,8 @@ export const TARGETS = [
     aliases: ['Eps Indi B', 'Epsilon Indi B', 'eps Ind B', 'Epsilon Indi Bab'],
     blurb: 'Two methane-rich T dwarfs circling each other 12 light-years away, about 400 arcsec from the star Epsilon Indi A.',
     why: 'The two are under an arcsecond apart, so they share one pixel, but their blended spectrum should dip at 3.3 um where methane absorbs, and the pair drifts 4.7 arcsec a year in step with Epsilon Indi A.',
+    // Measured by the Validation tab on real SPHEREx data, 2026-11-15 (docs/RESULTS.md).
+    found: '4.51 ± 0.65 arcsec a year at 126° (catalogue: 4.64 at 124°). Methane removes 60 % of the light at 3.3 um.',
   },
   {
     id: 'wise0855',
@@ -69,6 +73,8 @@ export const TARGETS = [
     aliases: ['WISE 0855', 'WISE J0855-0714', 'WISE J085510.83-071442.5', 'W0855', 'WISEA J085510.74-071442.5'],
     blurb: 'The coldest brown dwarf known, about 250 K (below freezing), 7.4 light-years away.',
     why: 'It sits near the limit of a single SPHEREx exposure and shows, if at all, only between 4.5 and 5 um; stacking along its 8.1 arcsec a year track is the fair test of whether it is there.',
+    // Measured by the Validation tab on real SPHEREx data, 2026-11-15 (docs/RESULTS.md).
+    found: 'It is there: 8.0 ± 1.2 arcsec a year at 278° from three visits (published: 8.17 at 275°).',
   },
   {
     id: 'rw-aur',
@@ -80,6 +86,8 @@ export const TARGETS = [
     aliases: ['RW Aur', 'RW Aur A', 'HD 240764'],
     blurb: 'A young star about 530 light-years away, still pulling in gas from its disc, that brightens and fades with no fixed period.',
     why: 'Nothing moves here: the residual view and the light curve should show one star changing between passes while its neighbours stay flat.',
+    // Measured by the Validation tab on real SPHEREx data, 2026-11-15 (docs/RESULTS.md).
+    found: 'Brightened by 40 % between Sep 2025 and Mar 2026 (11 sigma). No motion.',
   },
   {
     id: 'r-dra',
@@ -93,6 +101,8 @@ export const TARGETS = [
     aliases: ['R Dra', 'HD 149880', 'HIP 81014'],
     blurb: 'A Mira-type red giant that swells and fades over about 245 days.',
     why: 'Passes six months apart catch it at different points of its 245-day cycle, so its brightness should differ from pass to pass and the water band near 1.9 um should change depth with it.',
+    // Measured by the Validation tab on real SPHEREx data, 2026-11-15 (docs/RESULTS.md).
+    found: 'Faded by 28 % between Mar and Apr 2026 (4.3 sigma). No motion.',
   },
   {
     id: 'proxima',

@@ -71,7 +71,7 @@ test('toMarkdown: header, how to read it, tables, field stars, honest wording', 
   const md = toMarkdown([good, missing], meta);
   assert.match(md, /^# Tombaugh validation report/);
   assert.match(md, /Generated 2026-11-15 08:00 UTC by Tombaugh 1\.2\.3/);
-  assert.match(md, /dr1 \(16 exposures\), qr3 \(8 exposures\)/);
+  assert.match(md, /DR1 \(16 exposures\), QR3 \(8 exposures\)/);
   assert.match(md, /## How to read this/);
   assert.match(md, /synthetic test data/);
   assert.match(md, /\| Quantity \| Measured \| Catalogue or expected \| Difference \| Sigma \|/);

@@ -126,6 +126,11 @@ const ICON_UNSEEN =
   '<rect x="1" y="6" width="4" height="4" opacity="0.6"/><rect x="6" y="6" width="4" height="4"/><rect x="11" y="6" width="4" height="4" opacity="0.6"/>' +
   '<rect x="1" y="11" width="4" height="4" opacity="0.35"/><rect x="6" y="11" width="4" height="4" opacity="0.6"/><rect x="11" y="11" width="4" height="4" opacity="0.35"/></svg>';
 
+const ICON_ORBIT =
+  '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2">' +
+  '<ellipse cx="8" cy="8" rx="7" ry="3.2" transform="rotate(-24 8 8)" opacity="0.6"/><circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none"/>' +
+  '<circle cx="13.6" cy="5.1" r="1.1" fill="currentColor" stroke="none"/></svg>';
+
 /**
  * @param {Element} container
  * @param {Object} opts
@@ -235,7 +240,15 @@ export function createLanding(container, opts = {}) {
   surprise.type = 'button';
   surprise.innerHTML = ICON_UNSEEN;
   surprise.append(el(doc, 'span', '', 'Somewhere nobody has looked'));
-  body.append(lede, form, surprise);
+  // A plain link, so it can be opened in a new tab or shared: the page reads ?body= on load.
+  const pluto = stagger(el(doc, 'a', 'tbx-surprise tbx-follow'));
+  pluto.href = '?body=pluto';
+  pluto.title = 'Follows Pluto through every SPHEREx exposure that caught it and reads its spectrum';
+  pluto.innerHTML = ICON_ORBIT;
+  pluto.append(el(doc, 'span', '', 'Follow Pluto, the world Tombaugh found'));
+  const starts = el(doc, 'div', 'tbx-starts');
+  starts.append(surprise, pluto);
+  body.append(lede, form, starts);
 
   top.append(head, figure, body);
 
@@ -289,6 +302,11 @@ export function createLanding(container, opts = {}) {
         why.append(el(doc, 'span', 'tbx-label', 'Look for'), pretty(target.why));
         text.appendChild(why);
       }
+      if (target.found) {
+        const found = el(doc, 'span', 'tbx-card__why tbx-card__found');
+        found.append(el(doc, 'span', 'tbx-label', 'Measured here, on real data'), pretty(target.found));
+        text.appendChild(found);
+      }
       const goMark = el(doc, 'span', 'tbx-card__go', 'open →');
       goMark.setAttribute('aria-hidden', 'true');
       btn.append(plate, text, goMark);
@@ -328,6 +346,7 @@ export function createLanding(container, opts = {}) {
   // footer
   const foot = stagger(el(doc, 'ul', 'tbx-foot'), 9);
   for (const line of [
+    'Checked on real data, 15 Nov 2026: all five test targets measured, 34 comparisons with the catalogues within 3 sigma (Validation tab)',
     'Data: NASA SPHEREx via IRSA',
     'Open source, Apache 2.0',
     'Built by Missing Mass for NASA Space Apps 2026. Not affiliated with or endorsed by NASA.',
@@ -335,6 +354,7 @@ export function createLanding(container, opts = {}) {
   ]) {
     foot.appendChild(el(doc, 'li', '', line));
   }
+  foot.firstChild.className = 'tbx-foot__result';
   inner.appendChild(foot);
 
   container.appendChild(root);

@@ -78,9 +78,9 @@ never against the deployed proxy or IRSA.
 
 ## Citation
 
-If you use data obtained this way, cite the mission archive and the release, as the tool does:
+If you use data obtained this way, cite each release used, as the tool does:
 
-> SPHEREx Level 2 spectral images, QR3 (IRSA, DOI 10.26131/IRSA629 for the mission archive; QR3 10.26131/IRSA662), retrieved YYYY-MM-DD. Gaia DR3.
+> SPHEREx Level 2 spectral images, DR1, QR3 (NASA/IPAC Infrared Science Archive; DR1 DOI 10.26131/IRSA678; QR3 DOI 10.26131/IRSA662), retrieved YYYY-MM-DD. Gaia DR3.
 
 `tombaugh.citation(frames)` writes this line with today's date and the releases of the frames you
 pass. The Gaia DR3 part applies when you use the tool's star positions.

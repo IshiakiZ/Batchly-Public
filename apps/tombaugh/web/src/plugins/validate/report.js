@@ -249,7 +249,7 @@ function qualityRows(m) {
     }));
   }
   const rel = Object.entries(q.releases || {});
-  if (rel.length) rows.push(row(g, 'Data releases', rel.map(([name, n]) => `${name} (${n})`).join(', '), { note: q.synthetic ? 'Synthetic test frames, not observations.' : '' }));
+  if (rel.length) rows.push(row(g, 'Data releases', rel.map(([name, n]) => `${String(name).toUpperCase()} (${n})`).join(', '), { note: q.synthetic ? 'Synthetic test frames, not observations.' : '' }));
   return rows;
 }
 
@@ -399,7 +399,7 @@ export function toMarkdown(measurements, meta = {}) {
   const stamp = Number.isFinite(when.getTime()) ? `${when.toISOString().slice(0, 16).replace('T', ' ')} UTC` : '';
   const releases = releasesOf(list);
   const relText = Object.keys(releases).length
-    ? Object.entries(releases).map(([name, n]) => `${name} (${n} exposures)`).join(', ')
+    ? Object.entries(releases).map(([name, n]) => `${String(name).toUpperCase()} (${n} exposures)`).join(', ')
     : 'none found in the loaded frames';
   const synthetic = list.some((m) => m && m.quality && m.quality.synthetic);
   const out = [];

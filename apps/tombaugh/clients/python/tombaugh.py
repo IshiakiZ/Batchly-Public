@@ -56,8 +56,13 @@ __all__ = [
 DEFAULT_BASE_URL = "https://api.batch-ly.com/functions/v1/spherex"
 
 # DOIs in one place so they are easy to correct (same values as web/src/ui/citation.js).
-DOI_MISSION = "10.26131/IRSA629"
-DOI_RELEASES = {"qr3": "10.26131/IRSA662"}
+# Read from IRSA's release pages on 2026-11-15 (overview_qr.html and overview_dr1.html).
+DOI_RELEASES = {
+    "qr1": "10.26131/IRSA629",
+    "qr2": "10.26131/IRSA652",
+    "qr3": "10.26131/IRSA662",
+    "dr1": "10.26131/IRSA678",
+}
 
 # FLAGS bits of SPHEREx Level-2 images: bit index -> name (CONTRACT.md).
 FLAG_BITS = {
@@ -348,11 +353,10 @@ def citation(frames=(), retrieved=None):
     names = {"qr1": "QR1", "qr2": "QR2", "qr3": "QR3", "dr1": "DR1", "dr2": "DR2"}
     releases = sorted({str(f.get("release") if isinstance(f, dict) else f).lower() for f in frames if (f.get("release") if isinstance(f, dict) else f)})
     listed = ", ".join(names.get(r, r.upper()) for r in releases) if releases else "quick release"
-    extra = [f"{names.get(r, r.upper())} {DOI_RELEASES[r]}" for r in releases if r in DOI_RELEASES]
-    if not extra:
-        extra = [f"QR3 {DOI_RELEASES['qr3']}"]
+    cited = [r for r in releases if r in DOI_RELEASES] or ["dr1", "qr3"]
+    extra = [f"{names.get(r, r.upper())} DOI {DOI_RELEASES[r]}" for r in cited]
     day = retrieved or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     return (
-        f"SPHEREx Level 2 spectral images, {listed} (IRSA, DOI {DOI_MISSION} for the mission archive; "
+        f"SPHEREx Level 2 spectral images, {listed} (NASA/IPAC Infrared Science Archive; "
         f"{'; '.join(extra)}), retrieved {day}. Gaia DR3."
     )

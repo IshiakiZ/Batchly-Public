@@ -1588,7 +1588,7 @@ async function boot() {
     }
   }
 
-  function pickTarget(target) {
+  function pickTarget(target, keep = {}) {
     let pos = { ra: target.ra, dec: target.dec };
     let note = '';
     const now = mjdNow();
@@ -1602,12 +1602,16 @@ async function boot() {
       pos = { ra: target.ra, dec: target.dec };
     }
     if (!Number.isFinite(pos.ra) || !Number.isFinite(pos.dec)) pos = { ra: target.ra, dec: target.dec };
-    const patch = { view: 'passes' };
+    const patch = { view: keep.view || 'passes' };
     store.set(patch);
-    goTo({ ra: pos.ra, dec: pos.dec, name: target.name, det: target.det, fov: target.fov, note });
+    goTo({ ra: pos.ra, dec: pos.dec, name: target.name, det: keep.det || target.det, fov: keep.fov || target.fov, note });
   }
 
-  async function handleSearch(text) {
+  /**
+   * handleSearch(text, keep): coordinates, a built-in target or a name for the name service.
+   * keep = { det, fov, view } are choices to hold on to (a link that gives a name and a view).
+   */
+  async function handleSearch(text, keep = {}) {
     const query = String(text || '').trim();
     if (!query) return;
     const coord = parseCoord(query);
@@ -1623,7 +1627,7 @@ async function boot() {
     }
     if (!known) known = findTarget(targets, query);
     if (known) {
-      pickTarget(known);
+      pickTarget(known, keep);
       return;
     }
     const token = ++resolveToken;
@@ -1658,7 +1662,8 @@ async function boot() {
           // keep the catalogue position
         }
       }
-      goTo({ ra: pos.ra, dec: pos.dec, name: res.name || query, note });
+      if (keep.view) store.set({ view: keep.view });
+      goTo({ ra: pos.ra, dec: pos.dec, name: res.name || query, det: keep.det || null, fov: keep.fov || null, note });
     } catch (err) {
       if (token !== resolveToken) return;
       if (err && err.status === 404) reportSearchProblem(`No object called “${query}” was found. Check the spelling, or type coordinates such as 269.45 4.69.`);
@@ -2301,6 +2306,13 @@ async function boot() {
     startTarget();
   } else {
     showLanding();
+    // A link that gives only a name (?name=Barnard's Star&view=residual): look the name up and
+    // keep the detector, field and view the link asked for.
+    if (urlState.name) {
+      handleSearch(urlState.name, { det: urlState.det, fov: urlState.fov, view: urlState.view }).catch((err) => {
+        console.warn('[tombaugh] the name in the link could not be opened', err);
+      });
+    }
   }
   if (viewer.missing) {
     toasts.show('The image viewer module is missing from this build, so frames cannot be drawn.', { kind: 'alert', timeout: 8000 });

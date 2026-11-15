@@ -203,9 +203,11 @@ export const CSS = `
 .tbx-search__hint b { font-family: var(--tbx-mono); font-weight: 400; color: var(--tbx-paper); }
 .tbx-search.is-invalid .tbx-search__hint { color: #FF8672; }
 
+.tbx-starts { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .tbx-surprise {
   display: inline-flex; align-items: center; gap: 10px;
   margin: clamp(10px, 1.6vh, 14px) 0 0;
+  text-decoration: none;
   padding: 9px 14px 9px 11px;
   border: 1px dashed var(--tbx-line-strong);
   background: transparent;
@@ -341,6 +343,7 @@ export const CSS = `
 .tbx-card__blurb { margin-top: 5px; font-size: 13px; line-height: 1.42; color: rgba(247, 242, 231, 0.78); }
 .tbx-card__why { margin-top: 10px; font-size: 13px; line-height: 1.42; color: var(--tbx-paper); }
 .tbx-card__why .tbx-label { display: block; margin-bottom: 3px; font-size: 10px; }
+.tbx-card__found .tbx-label { color: var(--tbx-signal); }
 .tbx-card__go {
   position: absolute; right: 10px; bottom: 9px;
   font-family: var(--tbx-mono); font-size: 12px; color: var(--tbx-signal);
@@ -361,6 +364,7 @@ export const CSS = `
   list-style: none;
 }
 .tbx-foot li:last-child { margin-left: auto; }
+.tbx-foot .tbx-foot__result { flex: 1 1 100%; color: var(--tbx-paper); }
 
 @media (max-width: 900px) {
   .tbx-top {

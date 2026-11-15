@@ -50,10 +50,10 @@ export const BUILTIN_TARGETS = [
   },
   {
     name: 'WISE 0855-0714',
-    // The challenge gives 08h55m10.831s -07d14m42.53s; that position is for about 2014.3.
+    // The challenge gives 08h55m10.831s -07d14m42.53s; these are the coordinates in its WISE designation, where WISE saw it in May 2010 (epoch 2010.35). See web/src/core/targets.js.
     ra: sexagesimal(8, 55, 10.831) * 15,
     dec: -sexagesimal(7, 14, 42.53),
-    epoch: 2014.3,
+    epoch: 2010.35,
     pmra: -8118,
     pmdec: 680,
     parallax: 439,

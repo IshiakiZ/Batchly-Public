@@ -6,26 +6,29 @@ intro slides. Public link, in English.
 
 **Rule for this recording.** Show only what the live tool shows on real SPHEREx data. If a shot
 does not show what its caption says, change the caption or drop the shot. Do not adjust the
-footage to fit the script. Anything recorded on the synthetic development sky must say "synthetic
-data" on screen.
+footage to fit the script. Anything recorded on the practice sky must say "simulated" on screen.
 
-The story has three beats and a close: **see it, measure it, know it**, then the link and the map.
+The story has three beats and a close: **Pluto, Barnard's Star, the validation result**, then the
+link. Pluto comes first because it is the object Clyde Tombaugh found with a blink comparator, and
+the tool is named after him.
 
 ## Before recording
 
-1. Open each view below once, an hour before, so the frames are in the proxy cache and load fast.
-2. Choose the detector for Barnard's Star by looking: use the one where the star's core has the
-   fewest flagged frames (turn on `f` to check). The script assumes detector 3.
-3. Write down what the motion meter shows. That number goes into the caption of shot 4.
+1. Open each starting URL below once, an hour before, so the frames are in the proxy cache and
+   load fast. The Pluto link loads 225 exposures; let it finish.
+2. In the Validation tab press "Run the five challenge targets" and wait for it to finish. It
+   visits each target in turn. Record the finished report and cut the wait.
+3. The numbers in the captions are from the run of 15 November 2026 recorded in
+   [docs/RESULTS.md](RESULTS.md). If the screen shows different numbers on the day, the caption uses
+   the numbers on the screen.
 4. Check each caption against the screen. Captions are the script; the voice-over is optional.
 
 Starting URLs:
 
 ```
-Shot 1   [LIVE-URL]?name=Barnard%27s%20Star&fov=4&det=3&view=exposures&gaia=0
-Shot 2   [LIVE-URL]?name=Barnard%27s%20Star&fov=4&det=3&view=passes&gaia=1
-Shot 3   [LIVE-URL]?name=Barnard%27s%20Star&fov=4&det=3&view=residual&gaia=1
-Shot 6   [LIVE-URL]?name=Epsilon%20Indi%20B&fov=4&view=lens&lens=methane
+Shots 1-3   https://batch-ly.com/tombaugh/index.html?body=pluto
+Shot 4      https://batch-ly.com/tombaugh/index.html?name=Barnard%27s%20Star&fov=4&det=3&view=residual&gaia=1
+Shots 5-6   the same page as shot 4, Validation tab
 ```
 
 Keys while recording: space play/pause, arrows step, `b` blink, `r` residual, `g` Gaia.
@@ -34,32 +37,35 @@ Keys while recording: space play/pause, arrows step, `b` blink, `r` residual, `g
 
 | # | Time | On screen | Caption (exact text) | Voice-over (optional) |
 |---|---|---|---|---|
-| 1 | 0:00 - 0:05 | Barnard's Star, **Exposures** view, playing fast. The whole field flickers; the caption strip under the image shows the wavelength changing with every frame. Tombaugh wordmark visible in the corner | `SPHEREx never images a patch in the same colour twice. A plain blink flickers.` | SPHEREx never photographs a patch in the same colour twice, so a plain blink movie flickers. |
-| 2 | 0:05 - 0:10 | Switch to **Passes**. Gaia rings on. Blink first pass against last pass, three or four flips. Field stars sit in their rings; Barnard's Star is well outside its ring and steps north between flips. Cursor circles the star once | `Stack each six-month pass. Barnard's Star has left its Gaia ring.` | Stack each pass, and Barnard's Star steps out of its Gaia ring. |
-| 3 | 0:10 - 0:15 | Press `r`: **Residual** view. Field stars fade out. At Barnard's Star a bright and dark pair remains and flips sign between the first and last pass. The candidate list shows one entry | `Subtract the sky its spectrum predicts. What moved is what is left.` | Subtract the sky its spectrum predicts. The motion is what remains, |
-| 4 | 0:15 - 0:19 | Zoom or crop to the **motion meter**: two arrows, Tombaugh's and Gaia's, with the numbers beside them | `Tombaugh: [RESULT: measured value] arcsec/yr. Gaia: 10.39 arcsec/yr.` | measured here against Gaia. |
-| 5 | 0:19 - 0:22 | Click a star. The **spectrum** panel fills with points across the detector bands | `Click any point for its spectrum.` | Click for a spectrum. |
-| 6 | 0:22 - 0:26 | Cut to Epsilon Indi B with the **methane lens**. One source is coloured as a deep methane absorber; field stars are neutral. Cursor points at it | `The methane lens picks out a brown dwarf.` | Colour by methane to find a brown dwarf. |
-| 7 | 0:26 - 0:30 | The address bar, highlighted for one second, showing coordinates and view in the URL. Then the **fog-of-war** map: mostly dark sky, a few lit cells, the count of patches opened. Hold the last frame for one second | `Every view is a link. Most of the sky is still dark.` then `Tombaugh  ·  [LIVE-URL]  ·  team Missing Mass` | Every view is a link. Most of the sky is still dark. |
+| 1 | 0:00 - 0:04 | `?body=pluto`. The **Follow body** view, playing. Pluto sits at the centre of the image. Tombaugh wordmark visible in the corner | `Clyde Tombaugh found Pluto with a blink comparator.` | Clyde Tombaugh found Pluto with a blink comparator. |
+| 2 | 0:04 - 0:08 | The same movie, a few more frames. Pluto holds still; the stars change place from visit to visit. Cursor circles Pluto once | `Pluto in real SPHEREx images. It holds still. The stars streak.` | This is Pluto in real SPHEREx images: it holds still while the stars streak. |
+| 3 | 0:08 - 0:12 | The **Spectrum** panel: Pluto's spectrum across all six detectors with the "CH4 ice" marks. Cursor moves along the dips near 1.7 and 2.3 um | `225 exposures give its spectrum: methane ice.` | Two hundred twenty-five exposures give its spectrum, with methane ice. |
+| 4 | 0:12 - 0:17 | Cut to Barnard's Star, **Residual** view, blinking first pass against last. The blue and red halves swap. The **Candidates** tab shows one entry, "Moved" | `Barnard's Star. Subtract the predicted sky. What moved is left.` | On Barnard's Star, subtract the predicted sky and what moved is left, |
+| 5 | 0:17 - 0:22 | **Validation** tab, zoomed on the Barnard's Star row: measured motion beside the catalogue value | `Tombaugh: 11903 ± 2426 mas/yr at 355°. Gaia: 10380 mas/yr at 356°.` | measured here against Gaia. |
+| 6 | 0:22 - 0:27 | **Validation** tab, the summary line under the buttons and the table of five targets | `Measured 5 of 5 targets. All 34 comparisons agree within 3 sigma.` | All five challenge targets agree with the catalogues within three sigma. |
+| 7 | 0:27 - 0:30 | The address bar for one second, then the first screen. Hold the last frame for one second | `Tombaugh  ·  https://batch-ly.com/tombaugh/index.html  ·  team Missing Mass` | Try it. |
 
-Voice-over total: 67 words. Read at an even pace it fits in 28 seconds. The recording works
+Voice-over total: 61 words. Read at an even pace it fits in 28 seconds. The recording works
 without it.
 
 Notes on individual shots:
 
-- **Shot 2.** The Gaia value 10.39 arcsec/yr and the statement that the star has left its ring
-  depend only on Gaia and on the date, so they are safe. What must be checked on screen is that
-  the ring is drawn at the catalogue position and the star is visibly elsewhere.
-- **Shot 3.** If the residual at Barnard's Star is dominated by a masked or saturated core and
-  does not show a clean pair, change detector, or use the caption
-  `Subtract the sky its spectrum predicts. Steady stars cancel.` and let the picture speak.
-- **Shot 4.** Replace the placeholder with the number on screen, to the precision the meter
-  shows, including its error if there is room: for example `10.x ± y.y`. If the measurement is
-  far from Gaia's, show it anyway and use the caption `Measured against Gaia, in the open.`
-- **Shot 6.** If the methane lens is not convincing on Epsilon Indi B, show its click-spectrum
-  with the dip at 3.3 um and use the caption `A brown dwarf, dark where methane absorbs.` If
-  neither works on real data, cut the shot and lengthen shots 2 and 3.
-- **Shot 7.** The fog map must show real counts.
+- **Shots 1 and 2.** The frame follows Pluto, so Pluto stays at the centre and the background
+  changes. The caption under the image says "frame follows the body; stars streak". If the stars
+  are hard to see, press the "Fixed on stars" comparison in the Solar system tab for one second.
+- **Shot 3.** The marks are drawn at 0.89, 1.16, 1.38, 1.72, 2.3 and 3.3 um. The panel title
+  reads "Pluto, followed across 225 exposures"; the caption number must match it.
+- **Shot 4.** Barnard's Star saturates the detector, so its core is masked and the residual is a
+  large halo, blue on one side and red on the other. That is the picture; do not change detector
+  to hide it. The candidate text reads "Saturated star: its halo shifted north between the
+  passes".
+- **Shot 5.** The caption quotes the Validation tab. If the Motion tab is recorded instead, use
+  what the meter shows there: `Tombaugh: 11 ± 3 arcsec/yr at 357°. Gaia: 10.39 arcsec/yr at 356°.`
+- **Shot 6.** The caption is the tool's own summary line, word for word.
+
+The tool can also play a film by itself (`?story=demo&record=1`). That is an older cut: Barnard's
+Star, the methane lens and the sky map, without Pluto or the Validation tab. Record the shot list
+above by hand.
 
 ## Recording tips
 
@@ -94,17 +100,18 @@ Notes on individual shots:
 ## Seven-slide alternative
 
 Seven slides including the title and intro slides. One idea per slide, real screenshots, numbers
-only where they were measured.
+only where they were measured. The screenshots in [real/](real/) are from the run on real
+data and can be used as they are.
 
 | # | Title | Content in one line |
 |---|---|---|
-| 1 | Tombaugh: a blink comparator for the 102-color sky | Team Missing Mass; challenge "Planet X and SPHEREx"; `[LIVE-URL]`; one screenshot of the tool on Barnard's Star |
+| 1 | Tombaugh: a blink comparator for the 102-color sky | Team Missing Mass; challenge "Planet X and SPHEREx"; `https://batch-ly.com/tombaugh/index.html`; screenshot `real/pluto-spectrum.jpg` |
 | 2 | SPHEREx never photographs a patch in the same colour twice | Intro: the linear variable filter makes wavelength depend on pixel position, so a plain blink flickers; pixels are 6.15 arcsec and Barnard's Star moves 10.4 arcsec a year |
 | 3 | Predict the sky, subtract it, see what is left | The method in one diagram: per-pixel smooth spectrum, predicted frame, residual; movers leave a pair, variables leave a pulse |
-| 4 | See it: Barnard's Star leaves its Gaia ring | Screenshots: passes blink with Gaia rings, and the residual pair |
-| 5 | Measure it: checked against Gaia | Motion meter screenshot and the validation table for the five targets, with measured values `[RESULT: from docs/SCIENCE.md]` |
-| 6 | Know it: spectra, molecules, distance | Click-spectrum, methane lens on a brown dwarf, distance dial (2 AU at 500 AU is 13.75 arcmin), fog-of-war map |
-| 7 | How it is built, and what it cannot do | Browser app plus small proxy, live IRSA queries so new releases appear; limits (pixel size, three passes, WISE 0855 marginal, Planet X probably too faint, WISE movie not built); data credits; AI-generated code under human direction; Apache 2.0; not affiliated with or endorsed by NASA |
+| 4 | Pluto, the object Clyde Tombaugh found | `?body=pluto`: followed across 225 real exposures in 4 visits; Pluto holds still while the stars streak; spectrum from 0.76 to 4.97 um with methane-ice bands. Screenshots `real/pluto-followed.jpg`, `real/pluto-spectrum.jpg` |
+| 5 | Barnard's Star, measured against Gaia | Residual view, one candidate, "Moved" (`real/barnard-residual-one-mover.jpg`); 11903 ± 2426 mas/yr at 355 deg against 10380 mas/yr at 356 deg |
+| 6 | Five of five targets, 34 comparisons within 3 sigma | The table of the five targets from [docs/RESULTS.md](RESULTS.md) section 2; RW Aurigae ×1.397 ± 0.041; R Draconis ×0.717 ± 0.056 (`real/r-draconis-faded.jpg`); field stars within 0.3 arcsec of Gaia; control field: 0 candidates |
+| 7 | How it is built, and what it cannot do | Browser app plus small proxy reading NASA's public SPHEREx bucket through an index of 272,963 exposures; limits (pixel size, three or four passes, saturated stars, no new object claimed, Planet X probably too faint, WISE movie not built); data credits; AI-generated code under human direction; Apache 2.0; not affiliated with or endorsed by NASA |
 
 Slide rules: English; no NASA logos; screenshots of the tool need no watermark; any AI-generated
 image must carry a visible one; every source on slide 7 or in the form; export to PDF and host at

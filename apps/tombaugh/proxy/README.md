@@ -1,5 +1,22 @@
 # Tombaugh proxy
 
+> **Current state (15 November 2026).** This README describes the first proxy, which asked IRSA for
+> everything. The proxy now has a third backend, `s3`, and it is the one the deployed function
+> uses: `/search` is answered from this project's own index of every public SPHEREx exposure
+> (272,963 exposures, built from NASA's public bucket `nasa-irsa-spherex` on AWS Open Data), and
+> `/cutout` reads only the needed bytes of each file from that bucket with HTTP Range requests.
+> IRSA is the fallback. Run it locally with `TOMBAUGH_BACKEND=s3`. New routes: `/identify`
+> (SIMBAD), `/ephemeris` (JPL Horizons), `POST /track` (exposures along a moving body's path) and
+> `/index` (status and build of the exposure index). The file layout, the RICE-compressed flag
+> tiles and the focal-plane geometry are described in `CONTRACT-S3.md`; the code is in
+> `src/s3.js`, `src/s3cutout.js`, `src/expindex.js`, `src/rice.js`, `src/focalplane.js`,
+> `src/wavetab.js`, `src/horizons.js` and `src/identify.js`. Everything below about caching,
+> error shapes and safety still holds. The function deployed at
+> `https://api.batch-ly.com/functions/v1/spherex` was built from an earlier commit of this folder;
+> the one later change is the epoch of the built-in WISE 0855-0714 position in `src/resolve.js`
+> (2010.35, matching `web/src/core/targets.js`), which the web page already applies on its own.
+
+
 The browser cannot talk to IRSA (no CORS headers), and a SPHEREx cutout is a 4 MB FITS file of
 which the page needs about 70 KB. This proxy sits in between: it searches the archive, downloads
 only the first ~130 KB of each cutout, attaches the wavelength of every pixel, and answers in a

@@ -9,7 +9,7 @@ disclosure behind the short statement in the submission form.
   written in their design note "Tombaugh: a blink comparator for the 102-color sky" (13 November
   2026). AI was not the source of the idea.
 - **The code is AI-generated.** All source code and tests in this repository were written by
-  Claude, an AI model made by Anthropic (model "Claude Fable 5.2"), used through Claude Code, under
+  Claude, an AI model made by Anthropic, used through Claude Code, under
   Pearce Harshbarger's direction.
 - **The text is AI-drafted.** AI helped research public documentation and drafted the
   documentation and the submission text, which the team owner reviewed and edited.
@@ -36,10 +36,10 @@ disclosure behind the short statement in the submission form.
 
 | Activity | Detail | Where the result is |
 |---|---|---|
-| Research of documentation | Read public IRSA and SPHEREx documentation and tutorial notebooks, the FITS WCS, SIP and HEALPix papers, and the archive interfaces of IRSA, Gaia and CDS. Examined real SPHEREx Level 2 files to establish the file layout (verify who ran these measurements and when) | "Verified facts about the data" in `CONTRACT.md` |
+| Research of documentation | Read public IRSA and SPHEREx documentation and tutorial notebooks, the FITS WCS, SIP and HEALPix papers, and the interfaces of IRSA, the public SPHEREx bucket, Gaia, CDS and JPL Horizons. Examined real SPHEREx Level 2 files on 14 and 15 November 2026 to establish the file layout | "Verified facts about the data" in `CONTRACT.md`; `CONTRACT-S3.md` |
 | Architecture proposal | Proposed the split into an edge-function proxy and a dependency-free browser app, the TBF1 frame format, and the module interfaces. The team owner approved it | `CONTRACT.md`, `docs/ARCHITECTURE.md` |
-| All code | Every file under `proxy/`, `web/`, `tools/` and `test/`: FITS reader, archive clients, cache, science library, viewer, plots, page, bundler. Written in several parallel Claude Code sessions, each owning a set of files and working to the shared interface contract | The repository |
-| Tests | Unit tests beside each module, synthetic SPHEREx-style test files and a synthetic sky, and the end-to-end browser test | `*.test.js`, `proxy/fixtures/`, `test/` |
+| All code | Every file under `proxy/`, `web/`, `tools/`, `test/` and `clients/`: FITS reader, archive and bucket clients, exposure index, cache, science library, viewer, plots, page, plugins, bundler. Written in several parallel Claude Code sessions, each owning a set of files and working to the shared interface contract | The repository |
+| Tests | Unit tests beside each module (993 pass), synthetic SPHEREx-style test files and a synthetic sky, the end-to-end browser test (12 checks pass on the bundled page), and a number-by-number comparison of the code with Astropy (232 comparisons pass) | `*.test.js`, `proxy/fixtures/`, `test/`, `tools/crosscheck/`, `docs/CROSSCHECK.md` |
 | Draft texts | README, the documents in `docs/`, the explainer cards and interface copy in the tool, and the draft of the submission text | `README.md`, `docs/`, `web/src/ui/` |
 
 ## What the AI did not do
@@ -47,8 +47,9 @@ disclosure behind the short statement in the submission form.
 - It did not choose the challenge or originate the concept or any of the five ideas.
 - It did not generate images, video, audio or logos. Graphics in the tool are drawn by code from
   data or from simple procedures; the demonstration is a screen recording.
-- It did not produce any of the measurements that will be reported. Results come from running the
-  tool on real SPHEREx data, and the documents hold placeholders until that has been done.
+- It did not make up any number. Every measured value in [docs/RESULTS.md](RESULTS.md) is an output of
+  the tool's own code, run in a browser on real SPHEREx data on 15 November 2026, and can be
+  reproduced from the link or the button named beside it.
 - It is not used at run time. Tombaugh contains no AI model and makes no calls to one. Everything
   the tool shows is computed deterministically from archive data by code that can be read.
 
@@ -61,11 +62,13 @@ disclosure behind the short statement in the submission form.
   // AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
   ```
 
-- **Repository metadata.** `NOTICE` carries the AI-generation statement. Commits made by the AI
-  carry a `Co-Authored-By: Claude` trailer (verify in the commit history).
+- **Repository metadata.** `NOTICE` carries the AI-generation statement. `tools/check-headers.mjs`
+  checks the header: 196 source files carry it, none is missing it. Nearly all commits carry a
+  `Co-Authored-By: Claude` trailer (19 of 20 when this was written).
 - **Descriptive text.** The README, this file and the submission's SI field state it.
-- **Images and video.** None are AI-generated, so no watermark is needed. If any AI-generated
-  image or video is added later, it must carry a visible watermark saying so.
+- **Images and video.** None are AI-generated, so no watermark is needed. The screenshots in
+  `docs/real/` are captures of the tool showing real SPHEREx data. If any AI-generated image or
+  video is added later, it must carry a visible watermark saying so.
 - **No NASA branding.** No NASA logos, insignia or wording that implies endorsement appear in the
   tool, the documents or the demonstration.
 
@@ -78,15 +81,17 @@ Generated code can be wrong in ways that look right. The safeguards here are ord
 2. Each module has unit tests, including a coordinate test against a real file header.
 3. A synthetic sky with a known mover, a known variable and a known absorber exercises the whole
    chain.
-4. The tool checks itself against an independent catalogue: the proper motion it measures is shown
-   beside the one Gaia measured. That comparison on real data is the test that matters, and its
-   result is recorded in [SCIENCE.md](SCIENCE.md) once it has been run.
+4. The same inputs were given to this code and to Astropy, and the answers were compared number
+   by number: 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)).
+5. The tool checks itself against an independent catalogue: the proper motion it measures is shown
+   beside the one Gaia measured. That comparison on real data is the test that matters. It was
+   run on 15 November 2026: five of five challenge targets measured, and all 34 comparisons with
+   the catalogues agree within 3 sigma. Barnard's Star came out at 11903 ± 2426 mas/yr against
+   10380 mas/yr ([docs/RESULTS.md](RESULTS.md)).
 
 ## Tools
 
 | Tool | Version | Use |
 |---|---|---|
-| Claude (Anthropic) | Claude Fable 5.2 | Research, architecture proposal, code, tests, draft text |
-| Claude Code | (verify version) | The interface through which the model read and wrote files and ran tests |
-
-No other AI tools were used (verify with the team owner before submission).
+| Claude (Anthropic) | used through Claude Code | Research, architecture proposal, code, tests, draft text |
+| Claude Code | not recorded | The interface through which the model read and wrote files and ran tests |

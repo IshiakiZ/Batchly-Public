@@ -7,7 +7,10 @@ https://<project-ref>.supabase.co/functions/v1/spherex/<endpoint>
 https://api.batch-ly.com/functions/v1/spherex/<endpoint>      (custom domain)
 ```
 
-with `<endpoint>` one of `search`, `cutout`, `gaia`, `resolve`, `health`, `fog`. The API is
+with `<endpoint>` one of `search`, `cutout`, `gaia`, `resolve`, `health`, `fog`, `identify`,
+`ephemeris`, `track` (POST) and `index`. The deployed function runs the `s3` backend (NASA's public
+SPHEREx bucket plus this project's exposure index, IRSA as fallback); see the note at the top of
+`proxy/README.md`. The API is
 described in `CONTRACT.md` and `proxy/README.md`.
 
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.

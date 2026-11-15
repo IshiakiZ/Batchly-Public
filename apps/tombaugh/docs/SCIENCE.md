@@ -4,11 +4,12 @@ Written for a reader who knows astronomy and wants to know what the tool compute
 and where it fails.
 
 **How to read this document.** It describes what the code does, as specified in
-[CONTRACT.md](../CONTRACT.md), and how the result will be checked. The tool has not yet been run
-end to end on real SPHEREx data, so no measured result appears here. Numbers that must come from a
-real run are placeholders of the form `[RESULT: ...]`. Catalogue values and mission facts that were
-written from memory without network access are marked `(verify)`. Facts about the file format were
-measured on real files on 2026-11-14 and are recorded in the contract.
+[CONTRACT.md](../CONTRACT.md), and how the result was checked. Every measured value quoted here
+comes from the run on real SPHEREx data of 15 November 2026 that is recorded in
+[docs/RESULTS.md](RESULTS.md); that file is the source of truth for the numbers. Catalogue values are
+read by the tool at run time (Gaia DR3 for stars, published values for the two brown dwarfs).
+Facts about the file format were measured on real files on 14 and 15 November 2026 and are
+recorded in [CONTRACT.md](../CONTRACT.md) and [CONTRACT-S3.md](../CONTRACT-S3.md).
 
 Contents:
 [1 Data](#1-the-data) ·
@@ -45,8 +46,9 @@ Six detectors of 17 channels give the 102 bands. A channel is a range of wavelen
 set of pixels, and within a detector the channels are evenly spaced in ln(wavelength) to a good
 approximation (constant resolving power per detector).
 
-**Files.** Tombaugh uses Level 2 spectral images from IRSA: one calibrated exposure of one
-detector, in MJy/sr, with these layers.
+**Files.** Tombaugh uses Level 2 spectral images: one calibrated exposure of one detector, in
+MJy/sr. It reads them from NASA's public SPHEREx bucket on AWS Open Data, which holds the same
+files IRSA serves; IRSA's own services are the fallback. Each file has these layers.
 
 | Layer | Use in Tombaugh |
 |---|---|
@@ -69,9 +71,11 @@ wavelength runs from about 1.667 um at row 1 to 1.095 um at row 2040, with a sli
 along a row. The table was found to be identical, byte for byte, in a 2025 and a 2026 file of the
 same detector. The proxy evaluates it once and sends each frame with a wavelength for every pixel.
 
-**Passes.** The all-sky survey returns to a position about every six months. Data begin in May
-2025, so most of the sky has about three passes. At one measured position there were roughly 84
-exposures per detector in total. Each exposure is about 113.6 s (`XPOSURE` in the measured file).
+**Passes.** The all-sky survey returns to a position about every six months. The exposures used
+here run from April 2025 to October 2026, and the five challenge targets were measured with three
+or four passes each. At one measured position there were roughly 84 exposures per detector in
+total. Each exposure is about 113.6 s (`XPOSURE` in the measured file). The project's index of the
+bucket lists 272,963 exposures.
 
 **Units.** Surface brightness in MJy/sr. One MJy/sr over one 6.15 arcsecond pixel is 889 microJy.
 Times are MJD (UTC), from `MJD-AVG`. Coordinates are ICRS.
@@ -239,7 +243,8 @@ undersampled bright stars, and PSF variation with wavelength.
 ## 5. What change looks like
 
 **A mover that shifts by less than the PSF between passes** (Barnard's Star: about 5.2 arcsec per
-pass against a PSF of about 7.5 arcsec FWHM (verify units of `PSF_FWHM`) and 6.15 arcsec pixels).
+pass against a PSF of about 7.5 arcsec FWHM (`PSF_FWHM` is 7.46 in the measured file, which the
+code reads as arcseconds) and 6.15 arcsec pixels).
 The model describes a source at an intermediate position, close to where the star was in the
 middle pass. In an early pass the star is behind that position and in a late pass it is ahead.
 The residual is therefore a **dipole**: positive on the side the star is on, negative on the
@@ -273,6 +278,22 @@ variable, a transient, or a mover too fast to pair up within that radius. The in
 to 20 candidates, strongest first, each with a position that can be clicked. A candidate is a
 place to look, not a detection: see the failure modes.
 
+**Saturated stars are one candidate.** A star that saturates the detector has a flagged core, and
+its halo leaves many residual patches. The finder first looks for round patches of at least 9 grid
+pixels that are flagged in more than half of the exposures (`saturatedCores` in
+`web/src/core/skymodel.js`). Every residual patch within the halo of such a core is grouped into
+one candidate. The halo as a whole then says what happened (`haloChange`): a residual that flips
+sign across the star between the first and last pass means the star moved, and the direction is
+reported; a residual of one sign all round means it brightened or faded. On real data this turned
+12 false "changed brightness" entries on Barnard's field into one entry, "Moved. Saturated star:
+its halo shifted north", at 10.2 sigma. R Draconis gives one entry, "its halo faded", at
+13.1 sigma. A control field gives none ([docs/RESULTS.md](RESULTS.md), section 5).
+
+![Residual view of Barnard's Star: one candidate, labelled Moved](real/barnard-residual-one-mover.jpg)
+
+*Real SPHEREx data, detector 3. The blue and red halves are the residual of a star that moved
+north between passes; the hatched core is saturated.*
+
 **Gaia rings.** With `gaia=1` the viewer draws a ring for each Gaia DR3 source in the field. A
 star with a large proper motion is no longer where the catalogue epoch (2016.0) put it and sits
 outside its ring. Barnard's Star has moved about 100 arcseconds, 16 pixels, since 2016.0. The
@@ -298,10 +319,25 @@ time. The light curve divides each flux by a smooth spectrum fitted to all point
 and plots the ratio against time. For a constant source with a smooth spectrum the ratio is 1
 within errors at all times.
 
-**Caveats.** No aperture correction is applied (verify), and the PSF grows with wavelength, so
-absolute fluxes are low by a wavelength-dependent factor. The annulus is contaminated in crowded
-fields. For a source whose spectrum changes shape as it varies, as a Mira variable's does, the
-ratio mixes brightness change with spectral change.
+**Aperture correction.** The 1.6 pixel aperture misses about 5 percent of a star's light, and the
+amount changes with where in a pixel the star sits. Each flux is divided by the fraction of a
+Gaussian PSF of the frame's own width that the aperture would catch at that sub-pixel position.
+The real PSF has faint wings, so absolute fluxes can still be low by a few percent; ratios within
+one source are much less affected.
+
+**Saturated stars.** When every aperture pixel is flagged, as for Barnard's Star and R Draconis,
+brightness ratios are taken from the unsaturated wings of the star. They are less certain than
+their formal errors.
+
+**Blends.** A moving target can drift past a background star. For each date the Validation tab
+works out where the target was and looks for a Gaia star within 9 arcsec, inside the aperture
+(`blendAt` in `web/src/plugins/validate/measure.js`). A brightness change between a blended date
+and a clean one is not counted. On WISE 0855-0714 this rejected a ×2.19 jump in detector 4: a
+G = 16.3 Gaia star sits 3.3 arcsec away on those dates.
+
+**Caveats.** The annulus is contaminated in crowded fields. For a source whose spectrum changes
+shape as it varies, as a Mira variable's does, the ratio mixes brightness change with spectral
+change.
 
 ## 7. Proper motion and the comparison with Gaia
 
@@ -322,23 +358,32 @@ clicks.
    10 arcsec/yr star over a decade, plus the parallax for Earth's position on that date. That is
    the expected track. The motion meter shows the measured vector beside Gaia's.
 
-**What to expect, before measuring.** With centroids good to a fraction of a 6.15 arcsec pixel
-and a time span of about one year, the error on a proper motion is of order an arcsecond per
-year. Barnard's Star at 10.4 arcsec/yr should be recovered clearly, with a large fractional error;
-stars moving less than about an arcsecond per year should be consistent with zero. The measured
-errors replace this estimate in the table below.
+**Saturated stars.** A star with a masked core cannot be centroided at its peak. Its position is
+taken from the unsaturated light around the flagged core (`centroidWings` in
+`web/src/core/astrometry.js`). This is why Barnard's Star has the largest error of the three
+movers.
 
-**Parallax and few epochs.** SPHEREx observes near 90 degrees from the Sun (verify), which is where
-the parallactic displacement is greatest, and consecutive passes see it with opposite sign.
-Barnard's Star has a parallax of 0.547 arcsec, so its position swings by about 1.1 arcsec between
-passes on top of 5.2 arcsec of proper motion. With two passes, a straight-line fit absorbs that
-swing into the proper motion, an error of up to about 2 arcsec/yr for this star. With three evenly
-spaced passes the alternating pattern largely cancels in the slope. The comparison against the
-Gaia track that includes parallax is the fairer test, and both numbers are reported.
+**What was expected, and what was measured.** With centroids good to a fraction of a 6.15 arcsec
+pixel and a time span of about one year, the error on a proper motion should be of order an
+arcsecond per year. The measured errors on the five targets are 0.6 to 2.4 arcsec/yr. Barnard's
+Star came out at 11903 ± 2426 mas/yr at 355 ± 12 deg against 10380 mas/yr at 356 deg. Motions
+under about 1 arcsec/yr cannot be seen with this pixel size and this time span. The full table is
+in [section 10](#10-validation).
+
+**Parallax and few epochs.** Passes are about six months apart, so the Earth is on opposite sides
+of its orbit and consecutive passes see the parallactic displacement with opposite sign.
+Barnard's Star has a parallax of 0.547 arcsec, so its position swings by up to about 1.1 arcsec
+between passes on top of 5.2 arcsec of proper motion. With two passes, a straight-line fit absorbs
+that swing into the proper motion, an error of up to about 2 arcsec/yr for this star. With three
+evenly spaced passes the alternating pattern largely cancels in the slope. The catalogue value the
+tool compares with is therefore "what a perfect measurement on these dates would give", parallax
+included. The parallaxes fitted on real data (1537 ± 551, 329 ± 402 and 187 ± 513 mas for the
+three movers) are consistent with the catalogue but are not detections on their own.
 
 **The null test.** Field stars with Gaia proper motions below 50 mas/yr should show no motion.
 The scatter of their measured motions is the empirical error of the method in that field, and it
-is a more honest error bar than the formal one.
+is a more honest error bar than the formal one. On real data the mean measured motion of such
+stars is zero within its error in every field tested ([section 10](#10-validation)).
 
 ## 8. The distance dial
 
@@ -384,11 +429,32 @@ beyond about 700 AU at 10 arcmin. For nearer bodies the frames have to be taken 
 predicted track, not at a fixed position.
 
 **How it is demonstrated.** A real Planet X would probably be far too faint for SPHEREx (see
-limits). The dial is shown working on a known solar-system body, or on a synthetic source injected
-into real frames along the track for a chosen distance, which is then recovered by turning the
-dial to that distance and lost on either side. `[RESULT: body or injected source used, its
-distance, the dial setting at which the stack peaks, and the peak signal-to-noise against the
-unshifted stack]`
+limits). The Injection test tab plants a simulated body in copies of the real frames along the
+track for a chosen distance and brightness, then runs the tool's own pipeline on them: the
+per-pass residual at the body's position, and the shift-and-stack along its track that the dial
+performs at the right distance. The body counts as recovered at 5 sigma in either. Every frame
+with a planted body is labelled SIMULATED. No injection or dial result was recorded in the run of
+15 November 2026, so none is quoted here.
+
+**A known body instead of a hypothetical one** (`?body=pluto`, "Solar system" tab, "Follow body"
+view). The same shift-and-stack works for a body whose track is known. The tool asks JPL Horizons
+where the body was (geocentric positions; the difference from SPHEREx's low Earth orbit is under
+one pixel beyond about 2 AU), asks the exposure index which exposures caught it, loads a cutout
+centred on the body for each, and stacks them in the body's frame. The body stays sharp at the
+centre while the stars streak past and average away. Aperture photometry on the native frames
+gives its spectrum.
+
+On Pluto, on real data ([docs/RESULTS.md](RESULTS.md), section 6):
+
+- 225 exposures in 4 visits: April 2025, October 2025, April to May 2026, September to October 2026.
+- 98 exposures gave a clean measurement; 19 stacks in the frame that follows Pluto.
+- Spectrum from 0.76 to 4.97 um, peaking near 10 mJy at 0.93 um.
+- Methane-ice absorption at 0.89 um, 1.14–1.17 um, 1.31–1.41 um, 1.64–1.80 um (about 48 % deep at
+  1.65 um), 2.15–2.39 um (about 53 % deep at 2.31 um), 3.3–3.5 um and 3.8 um.
+
+![Pluto held at the centre of the frame, with its spectrum and methane-ice marks](real/pluto-spectrum.jpg)
+
+*Real SPHEREx data. Pluto is the object Clyde Tombaugh found with a blink comparator in 1930.*
 
 ## 9. Molecule lenses
 
@@ -403,7 +469,8 @@ windows.
 
 | Lens | Band (um) | Detector | What it traces |
 |---|---|---|---|
-| `methane` | 3.3, against continuum near 4.5 | D4, D6 | CH4 fundamental. Deep in T and Y dwarfs, which are faint at 3.3 um and bright near 4.5 um. The same contrast as the WISE W1 - W2 colour used to find cold brown dwarfs |
+| `methane` | 3.15 - 3.45, against continuum at 2.9 - 3.05 and 3.6 - 3.8 | D4 | CH4 fundamental. Deep in T and Y dwarfs and on methane-ice bodies; absent in ordinary stars |
+| `cold` | 4.5 - 4.8 divided by 3.2 - 3.5 (a ratio, not a depth) | D4, D6 | Cold-object contrast: methane removes the light at 3.3 um while 4.6 um stays clear. The same contrast as the WISE W1 - W2 colour used to find cold brown dwarfs. Offered in the lens menu |
 | `water` | 3.05 | D4 | H2O ice (O-H stretch) toward stars behind dense clouds; water vapour in cool atmospheres |
 | `co2` | 4.27 | D5 | CO2 ice |
 | `co` | 4.67 | D6 | CO, ice and gas |
@@ -412,48 +479,76 @@ windows.
 The exact band and continuum windows are in `web/src/core/lenses.js`.
 
 A depth is meaningful only where there is a source: on empty sky it is a ratio of two noise
-values. For the methane lens the band and the continuum are on different detectors, so the two
-stacks have different PSFs, and compact sources show ring-shaped artefacts at their edges.
+values. For the cold-object lens the two windows are on different detectors, so the two stacks
+have different PSFs, and compact sources show ring-shaped artefacts at their edges.
+
+The same methane band is measured as a number in the Validation tab. On real data its depth is
+0.600 ± 0.002 for Epsilon Indi Ba,Bb (T dwarfs: methane removes 60 % of their light in this band)
+and 0.175 ± 0.071 for WISE 0855-0714, where the band is seen at 2.5 sigma.
 
 ## 10. Validation
 
-### Completed checks
+### Checks that need no sky
 
-These were done on real files or are enforced by unit tests that run without network access
-(`node --test`).
+These were done on real files or are enforced by tests that run without network access.
 
 | Check | Status |
 |---|---|
-| File layout of a Level 2 cutout (HDU order, types, offsets, header keys) | Measured on real IRSA files, 2026-11-14 (see CONTRACT.md) |
+| File layout of a Level 2 cutout and of a full Level 2 file (HDU order, types, offsets, header keys) | Measured on real files, 2026-11-14 and 2026-11-15 (see CONTRACT.md and CONTRACT-S3.md) |
 | WCS-WAVE table identical across files of one detector | Verified byte for byte on a 2025 and a 2026 file |
-| TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight test is the Gaia ring alignment below |
+| TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight tests are the Astropy comparison and the offsets from Gaia below |
 | Pixel solid angle: 1 MJy/sr over a 6.15 arcsec pixel = 889 microJy | Arithmetic, checked |
 | Parallax worked number: 2 AU at 500 AU = 13.75 arcmin | Arithmetic, checked |
-| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | Unit and end-to-end tests on the synthetic sky. `[RESULT: number of tests and pass/fail at the submitted commit]` |
+| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 993 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
+| The same inputs given to this code and to Astropy (FITS reading, world coordinates, wavelength lookup, frame format, RICE decompression, ephemeris and motion, reprojection) | 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)) |
 
-### Planned checks on real data
+### Checks on real data
 
-None of these has been run. Each row says what will be measured and what it will be compared with.
-Reference values marked (verify) were written from memory and must be checked against the
-catalogue before they are quoted anywhere.
+All of these were run on 15 November 2026 with the Validation tab ("Run the five challenge
+targets") on Data Release 1 (450 exposures) and Quick Release 3 (76 exposures). **Five of five
+targets were measured, and all 34 comparisons with the catalogues agree within 3 sigma.** The
+numbers below are quoted from [docs/RESULTS.md](RESULTS.md), sections 2 and 3. Proper motions are in
+mas/yr. "Sigma" is the difference from the catalogue divided by the measurement's own 1-sigma
+error. The catalogue motion is what a perfect measurement on the same dates would give, parallax
+included.
 
-| Target | Kind | Reference | What Tombaugh measures | Result |
-|---|---|---|---|---|
-| Barnard's Star | Fast mover | Gaia DR3 4472832130942575872: pmra -801.551, pmdec +10362.394 mas/yr, total 10 393 mas/yr at PA 355.6 deg; parallax 546.98 mas (verify against the live `/gaia` response) | Proper motion from pass centroids; dipole in the residual; offset from the 2016.0 Gaia ring | `[RESULT: measured proper motion of Barnard's Star, mas/yr, with error and position angle]` `[RESULT: difference from Gaia in mas/yr and in sigma]` `[RESULT: number of passes and exposures used; fraction of frames flagged OVERFLOW or NONLINEAR at the star]` |
-| Epsilon Indi B (Ba, Bb) | Mover; methane | Common proper motion with Epsilon Indi A, about 4.7 arcsec/yr (verify); T1 and T6 dwarfs (verify); pair separation under 1 arcsec, unresolved by SPHEREx (verify); distance 3.64 pc (verify) | Proper motion of the blended pair; methane-lens depth; spectrum at 3.3 and 4.5 um | `[RESULT: measured proper motion of Epsilon Indi B]` `[RESULT: methane lens depth at Epsilon Indi B and its error]` `[RESULT: detectors in which the pair is detected]` |
-| WISE 0855-0714 | Fast, very faint, cold | Proper motion about 8.1 arcsec/yr (verify); parallax about 0.44 arcsec (verify); about 2.3 pc (verify); not in Gaia | Whether it is detected at all: single frames, per-pass stacks in D5 and D6; position against the literature track | `[RESULT: WISE 0855 detected or not, in which detector and stack, at what signal-to-noise]` `[RESULT: measured displacement between passes, if detected]` |
-| RW Aurigae | Irregular variable (T Tauri) | Known irregular variable with deep dimming episodes (verify); no fixed period | Light-curve ratio per pass; residual pulse; proper motion consistent with Gaia | `[RESULT: ratio of RW Aur brightness between passes, per detector, with error]` |
-| R Draconis | Long-period variable (Mira) | Period about 245 days (verify); large visual amplitude (verify) | Light-curve ratio per pass against the phase expected from the period; residual pulse; flag fractions, since it is bright | `[RESULT: ratio of R Dra brightness between passes, per detector, with error]` `[RESULT: fraction of frames flagged OVERFLOW or NONLINEAR at R Dra]` |
+| Target | Kind | Reference | Result |
+|---|---|---|---|
+| Barnard's Star | Fast mover | Gaia DR3 4472832130942575872: proper motion −801.6 east, +10362.4 north mas/yr; parallax 547.0 mas. Expected on these dates: 10380 mas/yr at 356 deg | 11903 ± 2426 mas/yr at 355 ± 12 deg (+0.6 sigma). 3 passes (Aug 2025, Mar 2026, Aug 2026), D3. The star saturates the detector: positions come from the unsaturated light around the flagged core. No brightness change: largest ratio ×1.245 ± 0.098 (2.9 sigma) |
+| Epsilon Indi Ba,Bb | Mover; methane | T dwarfs, not in Gaia. Catalogue motion 4635 mas/yr at 123.9 deg; parallax 271 mas | 4511 ± 648 mas/yr at 125.9 ± 8.2 deg (−0.2 sigma). 4 passes (Apr 2025 to Sep 2026), D6. Spectrum: 109 of 135 exposures with clean photometry, 2.44–5.01 um, median signal-to-noise 63 per exposure; depth of the 3.15–3.45 um methane band 0.600 ± 0.002. Brightness steady to about 2 % over 17 months |
+| WISE 0855-0714 | Fast, very faint, cold | Not in Gaia. Catalogue motion 8169 mas/yr at 274.6 deg; parallax 439 mas | Detected. 8016 ± 1249 mas/yr at 277.9 ± 8.9 deg (−0.1 sigma). 3 passes (May 2025, Nov 2025, Apr 2026), D6. Spectrum: 68 of 79 exposures, 2.43–5.00 um, median signal-to-noise 4.7 per exposure; methane band depth 0.175 ± 0.071 (2.5 sigma). No brightness change counted: D6 ×0.991 ± 0.106; a ×2.19 jump in D4 is rejected as a blend with a G = 16.3 Gaia star 3.3 arcsec away |
+| RW Aurigae | Irregular variable | Known irregular variable. Catalogue motion 25 mas/yr | Brightness ×1.397 ± 0.041 (11.0 sigma), Sep 2025 → Mar 2026, D2; then steady, ×0.963 ± 0.029 to Sep 2026. Motion 1189 ± 666 mas/yr (+1.7 sigma): no motion detected, as expected. 3 passes |
+| R Draconis | Long-period variable (Mira) | Known Mira variable. Catalogue motion 21 mas/yr | Brightness ×0.717 ± 0.056 (4.3 sigma), Mar 2026 → Apr 2026, D3; steady before, ×1.029 ± 0.098, May 2025 → Mar 2026. Motion 2082 ± 1173 mas/yr (+1.8 sigma): no motion detected, as expected. 3 passes. Saturated: the ratio comes from the unsaturated wings |
 
-Checks on the method that do not depend on a famous target:
+Components for the three movers (mas/yr; parallax in mas):
+
+| Target | East, measured | East, catalogue | North, measured | North, catalogue | Parallax fitted | Parallax, catalogue |
+|---|---|---|---|---|---|---|
+| Barnard's Star | −1022 ± 2426 | −667 | 11859 ± 2426 | 10359 | 1537 ± 551 | 547 |
+| Epsilon Indi Ba,Bb | 3655 ± 648 | 3849 | −2644 ± 648 | −2583 | 329 ± 402 | 271 |
+| WISE 0855-0714 | −7939 ± 1249 | −8143 | 1104 ± 1249 | 656 | 187 ± 513 | 439 |
+
+The fraction of frames flagged at each saturated star was not measured separately.
+
+Checks on the method that do not depend on a famous target, measured on ordinary field stars in
+the same fields by the same code:
+
+| Field | Reference stars | Median offset from Gaia | Scatter per axis | Null test, east | Null test, north | Residual / sigma on blank sky |
+|---|---|---|---|---|---|---|
+| Barnard's Star | 6 | 0.13 arcsec | 0.69 arcsec | 7 ± 561 | 41 ± 561 | 1.14 |
+| Epsilon Indi Ba,Bb | 22 | 0.04 arcsec | 0.70 arcsec | −44 ± 188 | −135 ± 188 | 1.69 |
+| WISE 0855-0714 | 7 | 0.26 arcsec | 0.79 arcsec | −276 ± 1488 | −82 ± 1021 | 1.34 |
+| RW Aurigae | 12 | 0.22 arcsec | 0.36 arcsec | 26 ± 163 | 5 ± 163 | 0.94 |
+| R Draconis | too few clean stars | | | | | 1.15 |
 
 | Check | What it shows | Result |
 |---|---|---|
-| Gaia ring alignment: offset between Gaia-predicted and measured centroids of field stars | Frame astrometry and resampling are right | `[RESULT: median and scatter of centroid offsets, arcsec, for N field stars]` |
-| Null test: measured motion of field stars with Gaia proper motion below 50 mas/yr | Empirical error of the proper-motion measurement | `[RESULT: median and scatter of measured motion, mas/yr, for N stars]` |
-| Residual noise: distribution of `snr` on empty sky | Whether the noise model is right | `[RESULT: standard deviation of snr on blank sky; fraction beyond 5 sigma]` |
-| Candidate purity in a field with no known mover or variable | False-alarm rate of the change map | `[RESULT: number of candidates per square arcminute in a control field, and what they are]` |
-| Injection and recovery for the distance dial | The dial focuses at the right distance | See section 8 |
+| Offset between Gaia-predicted and measured centroids of field stars | Frame astrometry and resampling are right | Field stars land within 0.3 arcsec of where Gaia says they are, about one twentieth of a 6.15-arcsec pixel |
+| Null test: mean measured motion of field stars that Gaia says do not move | Empirical error of the proper-motion measurement | Zero within its error in every field (table above, mas/yr) |
+| Residual noise: standard deviation of residual / sigma on blank sky | Whether the noise model is right | Between 0.94 and 1.69, where 1 is ideal. The noise model is right to within tens of percent and slightly optimistic in the crowded Epsilon Indi field. The fraction of pixels beyond 5 sigma was not measured |
+| Blind candidate list in a field with no known mover or variable | False alarms of the change search | Control field at RA 56.25, Dec +34.22887 (373 exposures, 3 passes): 0 candidates. One field only |
+| Blind candidate list on the targets | Whether the change search finds them unaided | Barnard's Star: 1 candidate, "Moved", 10.2 sigma. R Draconis: 1, "its halo faded", 13.1 sigma. RW Aurigae: 3, the star itself at 18.6 sigma and two bright blended stars. WISE 0855-0714: 1, the brown dwarf |
+| Injection and recovery for the distance dial | The dial focuses at the right distance | Not measured in this run (see section 8) |
 
 ## Limits and failure modes
 
@@ -476,37 +571,46 @@ same sign whenever the same wavelength comes round. The tool does not yet separa
 automatically from true change. Checking a candidate in a second detector, and in the matched
 view, is the remedy.
 
-**Saturated and non-linear stars.** Bright targets trip the OVERFLOW and NONLINEAR flags and their
-cores are masked. Centroids of a star with a masked core are biased and its photometry is
-meaningless. Two of the five challenge targets, Barnard's Star and R Draconis, are bright in the
-infrared and may be affected in some detectors (verify on real frames). The flag overlay shows
-when this is happening.
+**Saturated stars.** Bright targets trip the pixel flags and their cores are masked. Two of the
+five challenge targets, Barnard's Star and R Draconis, saturate the detector: every aperture pixel
+is flagged. Their positions and brightness ratios are taken from the unsaturated wings, so they
+are less certain than the formal error says. The flag overlay shows when this is happening.
 
 **Crowded fields.** Near the Galactic plane, neighbouring stars overlap at 6.15 arcsec. Centroids
 are pulled toward neighbours, the photometry annulus is contaminated, and a moving star merging
 with or separating from a neighbour looks like variability in both.
 
-**Few passes.** About three exist. The per-pass safeguard in the fit needs at least three; with
-two, a mover or a variable pulls the model toward itself and its residual is diluted. Three points
-determine a straight line with one degree of freedom per axis. Proper motion and parallax cannot be separated without assuming one of them. A
-variable observed three times has a light curve of three points; a period cannot be measured, only
-compared with a known one.
+**Few passes, large pixels.** The challenge targets have three or four passes. The per-pass
+safeguard in the fit needs at least three; with two, a mover or a variable pulls the model toward
+itself and its residual is diluted. Three points determine a straight line with one degree of
+freedom per axis. The error on a single target's motion is 0.6 to 2.4 arcsec/yr, so motions under
+about 1 arcsec/yr cannot be seen with this pixel size and this time span. Passes six months apart
+are the worst cadence for parallax: the fitted parallaxes are consistent with the catalogue but
+are not detections on their own. A variable observed three times has a light curve of three
+points; a period cannot be measured, only compared with a known one.
+
+**The noise is underestimated in crowded fields.** In the Epsilon Indi field the residual divided
+by its predicted sigma has a standard deviation of 1.69, not 1. Significances quoted in that field
+are somewhat overstated.
 
 **Pass stacks are not identical in colour.** Each pass samples the detector's range at different
 wavelengths. For most sources the effect is small; for very red sources a pass-to-pass difference
 of a few percent in a stack is not evidence of variability. The residual view and the light-curve
 ratio are designed to remove this; the plain stack blink is not.
 
-**WISE 0855 is near the single-frame limit.** It is among the coldest known brown dwarfs and emits
-almost nothing short of 4 um. It may be visible only in stacks of the two longest-wavelength
-detectors, and its motion of about 4 arcsec per pass is under one pixel. A non-detection is a
-possible and honest outcome.
+**WISE 0855 is near the single-frame limit.** It is a very cold brown dwarf, and its median
+signal-to-noise is 4.7 per exposure. Its motion of about 4 arcsec per pass is under one pixel.
+It was measured from three passes in detector 6, and its methane band is seen at only 2.5 sigma.
 
-**Planet X.** A planet of a few Earth masses at several hundred AU is expected to be far fainter
-at 1 to 5 um than a single SPHEREx exposure reaches, and probably fainter than any stack the
-survey allows (verify against published brightness predictions). Tombaugh does not claim to be
-able to find it. It makes the search geometry concrete, it works on the nearby fast-moving objects
-SPHEREx does detect, and it would work unchanged on a deeper survey with the same data model.
+**No new object is claimed.** The blind search was checked on one control field. A real search
+for an unknown body needs many fields and a human to look at each candidate, which is what the
+tool is built for.
+
+**Planet X.** A planet of a few Earth masses at several hundred AU is expected to be very faint
+at 1 to 5 um, probably too faint for SPHEREx. This document does not put a number on that.
+Tombaugh does not claim to be able to find it. It makes the search geometry concrete, it works on
+the nearby fast-moving objects SPHEREx does detect, and it would work unchanged on a deeper survey
+with the same data model.
 
 **The fog-of-war map** records which 1.8 degree cells have been opened in Tombaugh. It is a count
 of views through this tool, it can be incremented by anyone, and it is not a record of what
