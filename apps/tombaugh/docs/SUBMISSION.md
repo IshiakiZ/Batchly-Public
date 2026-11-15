@@ -83,7 +83,9 @@ WHAT IT DOES
 
 Tombaugh is a web page. Type sky coordinates (RA and Dec) or an object name, choose a field of view from 2 to 10 arcminutes, and it shows the SPHEREx images of that patch as a movie. A five-target tour covers the challenge's test objects: Barnard's Star, Epsilon Indi B, WISE 0855, RW Aurigae and R Draconis.
 
-It offers several ways to look at the same patch:
+It opens in Simple mode: the picture with play and blink, a switch between "The sky" and "What changed", and plain-language answers (what the field is, what changed in it, and for any star you click, whether it is moving and whether its brightness changed). One button opens Advanced mode, the full console described below. Simple mode measures nothing of its own; each answer is Advanced mode's verdict reworded, with the exact sentence shown underneath.
+
+Advanced mode offers several ways to look at the same patch:
 - Exposures: every exposure in time order. This is the simple movie, and it flickers.
 - Passes: one stacked image per six-month survey pass, for each of the six detectors.
 - Matched: only exposures at nearly the same wavelength, one image per pass.
@@ -311,7 +313,7 @@ live services on 15 November 2026.
 - [ ] `LICENSE` (Apache 2.0) and `NOTICE` are present at the top level.
 - [ ] `NOTICE` lists the same DOIs as `docs/SOURCES.md` (Data Release 1 10.26131/IRSA678, Quick
       Release 3 10.26131/IRSA662).
-- [ ] `node --test` passes on the submitted commit (997 tests at the time of writing).
+- [ ] `node --test` passes on the submitted commit (1011 tests at the time of writing).
 - [ ] `node tools/build.mjs` produces `dist/tombaugh.html`, and the hosted page is that build.
 - [ ] No secrets in the repository (service keys, tokens).
 - [ ] The first commit is dated after the event start (14 November 2026, 9 a.m. local time).

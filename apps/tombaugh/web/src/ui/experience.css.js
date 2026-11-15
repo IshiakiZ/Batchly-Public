@@ -365,6 +365,7 @@ export const CSS = `
 }
 .tbx-foot li:last-child { margin-left: auto; }
 .tbx-foot .tbx-foot__result { flex: 1 1 100%; color: var(--tbx-paper); }
+.tbx-foot button { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: var(--tbx-paper); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 @media (max-width: 900px) {
   .tbx-top {

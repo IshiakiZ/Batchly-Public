@@ -192,6 +192,12 @@ export function createLanding(container, opts = {}) {
   // body: explanation, search, surprise
   const body = el(doc, 'div', 'tbx-body');
   const lede = stagger(el(doc, 'p', 'tbx-lede'), heroStep);
+  if (opts.plain) {
+    // Simple mode: one sentence, no method.
+    lede.append(
+      'Give Tombaugh any spot on the sky and it plays every picture the SPHEREx space telescope took of that spot as a movie, so whatever moves or changes brightness stands out. Pick one of the five places below to start.',
+    );
+  } else {
   lede.append(
     'Give Tombaugh any spot on the sky and it plays every SPHEREx image of that spot as a movie, so whatever moves or changes brightness stands out. ',
   );
@@ -206,6 +212,7 @@ export function createLanding(container, opts = {}) {
   lede.append(
     ', because SPHEREx sees each spot in a different infrared color on every exposure; Tombaugh learns each pixel’s spectrum, predicts the unchanging sky in that color and subtracts it, so only real change is left.',
   );
+  }
 
   const form = stagger(el(doc, 'form', 'tbx-search'));
   form.setAttribute('role', 'search');
@@ -353,6 +360,15 @@ export function createLanding(container, opts = {}) {
     'Code written with Claude (AI)',
   ]) {
     foot.appendChild(el(doc, 'li', '', line));
+  }
+  if (typeof opts.onMode === 'function') {
+    // Simple or Advanced: the start page is the only screen without the top bar's switch.
+    const item = el(doc, 'li', 'tbx-foot__mode');
+    const btn = el(doc, 'button', '', opts.plain ? 'Switch to Advanced mode' : 'Switch to Simple mode');
+    btn.type = 'button';
+    btn.addEventListener('click', () => opts.onMode());
+    item.appendChild(btn);
+    foot.insertBefore(item, foot.lastChild);
   }
   foot.firstChild.className = 'tbx-foot__result';
   inner.appendChild(foot);

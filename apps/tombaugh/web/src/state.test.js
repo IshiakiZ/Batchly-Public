@@ -12,6 +12,9 @@ import {
   shareUrl,
   DEFAULT_STATE,
   URL_DEFAULTS,
+  VIEWS,
+  SIMPLE_VIEWS,
+  initialMode,
 } from './state.js';
 
 test('store: get, set, subscribe, unsubscribe', () => {
@@ -113,6 +116,7 @@ test('stateToQuery omits defaults and round-trips', () => {
     gaia: false,
     flags: true,
     embed: true,
+    mode: 'advanced',
   };
   const query = stateToQuery(state);
   const back = parseQuery(`?${query}`);
@@ -168,4 +172,44 @@ test('readUrlState / writeUrlState survive a missing or hostile environment', as
     if (saved.history === undefined) delete globalThis.history;
     else globalThis.history = saved.history;
   }
+});
+
+test('mode: simple is the default and stays out of the address; advanced is written and read back', () => {
+  assert.equal(DEFAULT_STATE.mode, 'simple');
+  assert.equal(stateToQuery({ ...DEFAULT_STATE, mode: 'simple' }), '');
+  assert.equal(stateToQuery({ ...DEFAULT_STATE, mode: 'advanced' }), 'mode=advanced');
+  assert.equal(parseQuery('?mode=advanced').mode, 'advanced');
+  assert.equal(parseQuery('?mode=simple').mode, 'simple');
+  assert.equal(parseQuery('?mode=expert').mode, undefined);
+  assert.equal(parseQuery('?ra=1&dec=2').mode, undefined);
+});
+
+test('initialMode: the link wins, then what only Advanced shows, then the remembered choice', () => {
+  const at = (search, stored = null) => initialMode(parseQuery(search), search, stored);
+  // A first visit, and a plain link to a place, open Simple.
+  assert.equal(at(''), 'simple');
+  assert.equal(at('?ra=269.45&dec=4.69&det=6&fov=6&name=Barnard'), 'simple');
+  assert.equal(at('?ra=269.45&dec=4.69&view=residual&t=2'), 'simple');
+  // The address says which.
+  assert.equal(at('?mode=advanced'), 'advanced');
+  assert.equal(at('?mode=simple', 'advanced'), 'simple');
+  assert.equal(at('?mode=simple&view=lens'), 'simple');
+  // Links made for the full console keep working.
+  assert.equal(at('?ra=1&dec=2&view=lens'), 'advanced');
+  assert.equal(at('?ra=1&dec=2&view=distance&dist=500'), 'advanced');
+  assert.equal(at('?body=pluto'), 'advanced');
+  assert.equal(at('?ra=1&dec=2&embed=1'), 'advanced');
+  assert.equal(at('?ra=1&dec=2&lens=co2'), 'advanced');
+  assert.equal(at('?story=film'), 'advanced');
+  // The visitor's last choice, when the link does not say.
+  assert.equal(at('', 'advanced'), 'advanced');
+  assert.equal(at('?ra=1&dec=2', 'advanced'), 'advanced');
+  assert.equal(at('?ra=1&dec=2', 'simple'), 'simple');
+  assert.equal(at('?ra=1&dec=2', 'nonsense'), 'simple');
+  // No arguments at all.
+  assert.equal(initialMode(), 'simple');
+});
+
+test('SIMPLE_VIEWS are real views', () => {
+  for (const v of SIMPLE_VIEWS) assert.ok(VIEWS.includes(v), v);
 });

@@ -40,6 +40,7 @@ const STEPS = [
   ['url', 'URL carries ra/dec and survives a reload'],
   ['mobile', '390 x 844 viewport lays out without horizontal scroll'],
   ['embed', '?embed=1 hides the top bar'],
+  ['simple', 'Simple mode is the default: plain answers, one switch to Advanced, fits a phone'],
   ['sandbox', 'bundle runs inside a sandboxed iframe with an opaque origin (bundle mode only)'],
 ];
 
@@ -264,8 +265,11 @@ async function main() {
       extraQuery = `api=${encodeURIComponent(api)}`;
       setup.bundle = { file: 'dist/tombaugh.html', bytes: fs.statSync(bundleFile).size, servedAt: pageBase, api };
     }
-    const pageUrl = (params = {}) => {
-      const q = [extraQuery, new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()].filter(Boolean).join('&');
+    // The steps written for the full console ask for Advanced mode; the 'simple' step passes
+    // mode = null to get the page as a first-time visitor does.
+    const pageUrl = (params = {}, mode = 'advanced') => {
+      const all = mode && !('mode' in params) ? { ...params, mode } : params;
+      const q = [extraQuery, new URLSearchParams(Object.entries(all).map(([k, v]) => [k, String(v)])).toString()].filter(Boolean).join('&');
       return q ? `${pageBase}?${q}` : pageBase;
     };
     setup.page = pageUrl();
@@ -697,6 +701,72 @@ async function main() {
       } finally {
         await e.screenshot({ path: path.join(screens, `${prefix}embed.png`) }).catch(() => {});
         await e.close();
+      }
+    });
+
+    await step('simple', async (t) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      ownShot = true;
+      try {
+        const p = await ctx.newPage();
+        trackForeign(p);
+        const pw = watchPage(p);
+        pages.push({ name: 'simple', watch: pw });
+        await p.goto(pageUrl(FALLBACK, null), { waitUntil: 'load' });
+        await p.waitForFunction(() => document.documentElement.dataset.screen === 'console', null, { timeout: 15000 });
+        const mode = await p.evaluate(() => document.documentElement.dataset.mode);
+        t.data('modeOnFirstVisit', mode);
+        if (mode !== 'simple') throw new Error(`a first visit opened in "${mode}" mode, not simple`);
+        const shown = () => p.evaluate(() => {
+          const on = (id) => { const el = document.getElementById(id); return !!el && el.getClientRects().length > 0; };
+          return { modebar: on('modebar'), controls: on('controls'), tabs: on('tabs'), panels: on('panels'), toolstrip: on('toolstrip'), fieldsum: on('fieldsum'), simplebar: on('simplebar'), simple: on('simple'), player: on('player'), viewer: on('viewer') };
+        });
+        const first = await shown();
+        t.data('visibleInSimple', first);
+        const leaked = ['modebar', 'controls', 'tabs', 'panels', 'toolstrip', 'fieldsum'].filter((k) => first[k]);
+        if (leaked.length) throw new Error(`Advanced-only parts are visible in Simple mode: ${leaked.join(', ')}`);
+        const missing = ['simplebar', 'simple', 'player', 'viewer'].filter((k) => !first[k]);
+        if (missing.length) throw new Error(`Simple mode is missing: ${missing.join(', ')}`);
+        await waitForMovie(p, movieTimeout);
+        // The change search lists what it found in plain words; clicking one answers two questions.
+        await p.waitForSelector('.simple-change', { timeout: Math.min(movieTimeout, 60000) });
+        const changes = await p.locator('.simple-change .simple-change-title').allInnerTexts();
+        t.data('changes', changes);
+        await p.locator('.simple-change').first().click();
+        await p.waitForFunction(() => document.querySelectorAll('#simple .simple-qa .simple-answer').length >= 2, null, { timeout: 20000 });
+        const answers = await p.locator('#simple .simple-qa').allInnerTexts();
+        t.data('answers', answers.map((a) => a.replace(/\s+/g, ' ').slice(0, 160)));
+        await waitFor(() => new URL(p.url()).searchParams.get('view') === 'residual', { timeoutMs: 5000, what: 'view=residual in the URL after picking a change' });
+        const pressed = await p.evaluate(() => { const b = document.querySelector('#simplebar [data-view="residual"]'); return b ? b.getAttribute('aria-checked') : null; });
+        if (pressed !== 'true') throw new Error('the "What changed" switch is not marked as selected in the residual view');
+        await p.locator('#simplebar [data-view="passes"]').click();
+        await waitFor(() => new URL(p.url()).searchParams.get('view') !== 'residual', { timeoutMs: 5000, what: 'the view to return to "The sky"' });
+        // One switch to Advanced and back.
+        await p.locator('#btn-mode').click();
+        await p.waitForFunction(() => document.documentElement.dataset.mode === 'advanced', null, { timeout: 5000 });
+        const adv = await shown();
+        t.data('visibleInAdvanced', adv);
+        const lost = ['modebar', 'controls', 'panels', 'player', 'viewer'].filter((k) => !adv[k]);
+        if (lost.length) throw new Error(`Advanced mode is missing: ${lost.join(', ')}`);
+        if (adv.simple || adv.simplebar) throw new Error('the Simple-mode blocks are still visible in Advanced mode');
+        await waitFor(() => new URL(p.url()).searchParams.get('mode') === 'advanced', { timeoutMs: 5000, what: 'mode=advanced in the URL' });
+        await p.locator('#btn-mode').click();
+        await p.waitForFunction(() => document.documentElement.dataset.mode === 'simple', null, { timeout: 5000 });
+        await waitFor(() => !new URL(p.url()).searchParams.has('mode'), { timeoutMs: 5000, what: 'the mode to leave the URL in Simple mode' });
+        await p.screenshot({ path: path.join(screens, `${prefix}simple.png`) }).catch(() => {});
+        // A phone.
+        await p.setViewportSize({ width: 390, height: 844 });
+        await sleep(800);
+        const phone = await overflowReport(p, 390);
+        t.data('phone', phone);
+        if (phone.overflow) throw new Error(`Simple mode is ${Math.max(phone.scrollWidth, phone.innerWidth)}px wide on a 390px screen (sticking out: ${phone.offenders.map((o) => `${o.el} x ${o.left}..${o.right}`).slice(0, 4).join('; ') || 'unknown'})`);
+        await p.screenshot({ path: path.join(screens, `${prefix}simple-mobile.png`) }).catch(() => {});
+        const errs = pw.since(0);
+        if (errs.length) t.data('pageErrors', errs.slice(0, 6).map((e) => `${e.kind}: ${e.text.split('\n')[0]}`));
+        allEvents.push(...pw.events.map((e) => ({ page: 'simple', ...e })));
+        t.data('screenshots', [`docs/screens/${prefix}simple.png`, `docs/screens/${prefix}simple-mobile.png`]);
+      } finally {
+        await ctx.close();
       }
     });
 

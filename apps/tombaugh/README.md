@@ -71,6 +71,15 @@ Live tool: **<https://batch-ly.com/tombaugh/index.html>**
 Type a position (`269.45 4.69`, `17h57m48.5s +04d41m36s`, `17:57:48.5 +04:41:36`) or a name
 (`Barnard's Star`), or take the five-target tour from the first screen.
 
+The page has two modes. **Simple** is the default: the picture with play and blink, a two-way
+switch between "The sky" and "What changed", and a side column that says in plain words what the
+field is, what changed in it and, for any star you click, whether it is moving and whether its
+brightness changed. **Advanced** (the button at the top right) is the full console: eight views,
+six detectors, the spectrum, light-curve and motion plots, the candidate list with its reasons,
+the Validation tab and the measuring tools. Simple mode measures nothing of its own. Every answer
+in it is Advanced mode's verdict reworded, with the exact sentence kept underneath. The choice is
+remembered in the browser, and a link that asks for something only Advanced shows opens Advanced.
+
 Every view is a link. The state of the page lives in the URL, so a link reproduces what you see and
 can be embedded in another page.
 
@@ -90,6 +99,7 @@ can be embedded in another page.
 | `gaia` | `0`, `1` | `1` | Gaia DR3 rings on or off |
 | `flags` | `0`, `1` | `0` | Pixel-flag overlay on or off |
 | `embed` | `1` | off | Hide the page chrome, for iframes |
+| `mode` | `simple`, `advanced` | `simple` | Which face of the console to open (see above) |
 | `story` | `tour`, `demo`, `barnard`, `eps-indi-b`, `wise0855`, `rw-aur`, `r-dra` | none | Play a guided story |
 | `api` | URL | production proxy | Use a different proxy (development) |
 
@@ -114,8 +124,8 @@ Embedding:
         width="480" height="560" style="border:0" title="Tombaugh: Barnard's Star"></iframe>
 ```
 
-Keyboard: space play/pause, arrows step, `b` blink, `r` residual, `g` Gaia, `f` flags, `1`-`6`
-detector, `?` help.
+Keyboard: space play/pause, arrows step, `b` blink, `r` residual, `?` help; in Advanced mode also
+`g` Gaia, `f` flags and `1`-`6` detector.
 
 ## The idea
 
@@ -295,13 +305,13 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 997 unit tests; they do not touch the network
+# 1011 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file
 ```
 
-`test/e2e.mjs` drives the page in a real browser with Playwright (12 checks pass on the bundled
+`test/e2e.mjs` drives the page in a real browser with Playwright (13 checks pass on the bundled
 page). Playwright is a development tool and is not needed to run or build Tombaugh.
 
 ## Deploying

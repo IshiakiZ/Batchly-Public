@@ -5,14 +5,15 @@
 // guarded dynamic import, so a missing or broken module degrades one feature instead of blanking
 // the page), wires state -> loader -> pipeline -> viewer / player / panels, and hosts plugins.
 
-import { createStore, readUrlState, writeUrlState, shareUrl, DEFAULT_STATE, VIEWS } from './state.js';
+import { createStore, readUrlState, writeUrlState, shareUrl, initialMode, DEFAULT_STATE, VIEWS, SIMPLE_VIEWS } from './state.js';
 import { createApi, resolveApiBase } from './api.js';
 import { createLoader, isCancelled } from './loader.js';
 import * as pipeline from './pipeline.js';
-import { createLayout, h, clear } from './ui/layout.js';
+import { createLayout, h, clear, storage } from './ui/layout.js';
 import { createControls } from './ui/controls.js';
 import { createPlayer } from './ui/player.js';
 import { createPanels } from './ui/panels.js';
+import { createSimpleView, plainTarget } from './ui/simple.js';
 import { createCitation } from './ui/citation.js';
 import { createFieldSummary, frameWaveSpan, foundLine, summarizePasses } from './ui/fieldsummary.js';
 import { createTour, FALLBACK_TARGETS, findTarget } from './ui/tour.js';
@@ -23,6 +24,8 @@ const GAIA_RADIUS_DEG = 0.12; // covers the corners of the widest (10 arcmin) fi
 const PARTIAL_VIEWS = ['passes', 'exposures', 'matched'];
 const MICRON = 'µm';
 const SIMULATED_WORD = 'SIMULATED';
+/** Where the visitor's choice of Simple or Advanced mode is remembered. */
+const MODE_KEY = 'tombaugh.mode';
 
 /** `?debug=1` logs how long each pipeline step takes (once per step and view) to the console. */
 const DEBUG = (() => {
@@ -135,12 +138,18 @@ function nullViewer() {
 
 async function boot() {
   const urlState = readUrlState();
-  const store = createStore({ ...DEFAULT_STATE, ...urlState });
+  // Simple mode unless the link, or the visitor's last choice, asks for Advanced.
+  const startMode = initialMode(urlState, globalThis.location ? globalThis.location.search : '', storage.get(MODE_KEY));
+  const startState = { ...DEFAULT_STATE, ...urlState, mode: startMode };
+  // Simple mode has two views: a link that names it together with another view gets the first.
+  if (startMode === 'simple' && VIEWS.includes(startState.view) && !SIMPLE_VIEWS.includes(startState.view)) startState.view = 'passes';
+  const store = createStore(startState);
   let api = createApi(resolveApiBase());
 
   const layout = createLayout({ onSearch: (text) => handleSearch(text), onHome: () => goHome() });
   const { els } = layout;
   layout.setEmbed(store.get().embed);
+  layout.setMode(store.get().mode);
   const toasts = createToasts(els.toasts);
 
   const [{ mods: core, missing: coreMissing }, { mods: opt }] = await Promise.all([importAll(CORE_MODULES), importAll(OPTIONAL_MODULES)]);
@@ -254,6 +263,72 @@ async function boot() {
     },
     onClearSource: () => select(null),
   });
+
+  // Simple mode: the same candidates, selection and spectrum the panels get, said in plain words.
+  const simple = createSimpleView({
+    bar: els.simplebar,
+    host: els.simple,
+    plots: { createSpectrumPlot: opt.spectrum && opt.spectrum.createSpectrumPlot },
+    findTarget: (name) => findTarget(targets, name),
+    verdicts: {
+      motionVerdict: opt.motion && opt.motion.motionVerdict,
+      lightCurveVerdict: opt.lightcurve && opt.lightcurve.lightCurveVerdict,
+    },
+    onView: (view) => {
+      if (store.get().view !== view) store.set({ view, t: 0 });
+    },
+    onPickCandidate: (c, i) => {
+      select({ ra: c.ra, dec: c.dec, label: `Candidate ${i + 1}`, candidate: i });
+      if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
+    },
+    onClear: () => select(null),
+    onAdvanced: () => setMode('advanced', { remember: true }),
+  });
+  if (!lib.fitSkyModel || !lib.residualLayer) simple.setViewDisabled('residual', 'The comparison is not available in this build');
+  simple.setView(store.get().view);
+  applyModeToViewer();
+  for (const name of ['setCandidates', 'setSpectrum']) {
+    const base = panels[name];
+    panels[name] = (arg) => {
+      base(arg);
+      try {
+        simple[name](arg);
+      } catch (err) {
+        console.warn('[tombaugh] simple view', err);
+      }
+    };
+  }
+  {
+    const base = panels.setSource;
+    panels.setSource = (source) => {
+      base(source);
+      if (!source) simple.setSelection(null);
+    };
+  }
+
+  /** Simple mode draws the picture without the brightness scale and with a short caption. */
+  function applyModeToViewer() {
+    try {
+      viewer.setOptions({ colorbar: store.get().mode !== 'simple' });
+      refreshCaptions();
+      updateOverlays();
+    } catch {
+      // optional
+    }
+  }
+
+  /** Switch between Simple and Advanced. `remember` keeps the choice for the next visit. */
+  function setMode(mode, { remember = false } = {}) {
+    const next = mode === 'advanced' ? 'advanced' : 'simple';
+    if (remember) storage.set(MODE_KEY, next);
+    const patch = { mode: next };
+    // Simple mode has two views; leaving Advanced from any other one lands on the first.
+    if (next === 'simple' && !SIMPLE_VIEWS.includes(store.get().view)) {
+      patch.view = 'passes';
+      patch.t = 0;
+    }
+    store.set(patch);
+  }
 
   let fieldSummary = null;
   try {
@@ -453,6 +528,7 @@ async function boot() {
     session.error = err;
     player.pause();
     layout.setProgress(null);
+    updateSimpleField();
     const retryable = !err || err.retryable !== false;
     const message = err && err.message ? String(err.message) : 'Something went wrong while loading this position.';
     layout.setStatus({
@@ -584,6 +660,7 @@ async function boot() {
       updateCoverage();
       updateCitation();
       emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+      updateSimpleField();
       if (!res.layers.length) {
         showNoExposures(res);
         updateAbout();
@@ -758,6 +835,7 @@ async function boot() {
         if (token !== session.token) throw Object.assign(new Error('cancelled'), { aborted: true });
         session.byDet.set(det, res);
         emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+        updateSimpleField();
       }
       if (session.loading && session.loading.label === label) {
         session.loading = null;
@@ -784,6 +862,7 @@ async function boot() {
         if (token !== session.token) return;
         session.byDet.set(det, res);
         emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+        updateSimpleField();
         if (session.selection) measureSelection();
       }
     } catch (err) {
@@ -1116,7 +1195,7 @@ async function boot() {
           diverging: !!frame.diverging,
         });
       }
-      viewer.setCaption(frame.caption || null);
+      viewer.setCaption(shownCaption(frame));
     } catch (err) {
       console.warn('[tombaugh] frame failed to draw', err);
     }
@@ -1139,12 +1218,22 @@ async function boot() {
    */
   function decorateCaptions(frames) {
     const extra = captionSuffix();
+    const simpleWords = store.get().mode === 'simple';
     for (const frame of frames || []) {
       if (!frame) continue;
       if (frame.captionBase === undefined) frame.captionBase = frame.caption || { title: '', date: '', wave: '', note: '' };
-      const base = frame.captionBase;
+      let base = frame.captionBase;
+      // Simple mode calls the view "What changed" and a pass a "visit"; the caption follows.
+      if (simpleWords && typeof base.title === 'string') base = { ...base, title: base.title.replace(/^Residual · pass/, 'What changed · visit').replace(/^Pass /, 'Visit ') };
       frame.caption = extra ? { ...base, note: [extra, base.note].filter(Boolean).join(' · ') } : base;
     }
+  }
+
+  /** The caption drawn in the picture: all of it in Advanced mode, the visit and its dates in Simple. */
+  function shownCaption(frame) {
+    const c = frame && frame.caption ? frame.caption : null;
+    if (!c || store.get().mode !== 'simple') return c;
+    return { title: c.title, date: c.date };
   }
 
   function refreshCaptions() {
@@ -1154,7 +1243,7 @@ async function boot() {
     const frame = player.frame();
     if (frame) {
       try {
-        viewer.setCaption(frame.caption || null);
+        viewer.setCaption(shownCaption(frame));
       } catch {
         // optional
       }
@@ -1162,7 +1251,22 @@ async function boot() {
   }
 
   // ---- field summary --------------------------------------------------------------------------
+  function updateSimpleField() {
+    const s = store.get();
+    if (!hasTarget()) return;
+    try {
+      simple.setField({ name: s.name || '', coord: fmtCoord(s.ra, s.dec).deg });
+      const data = session.byDet.get(s.det);
+      if (session.error) simple.setVisits({ error: 'The telescope archive did not answer. Use “Try again” in the picture.' });
+      else if (data) simple.setVisits({ passes: pipeline.describePasses(lib, data.layers).map((p) => ({ label: p.label, total: p.layers.length })) });
+      else simple.setVisits({ loading: true });
+    } catch (err) {
+      console.warn('[tombaugh] simple view', err);
+    }
+  }
+
   function updateFieldSummary() {
+    updateSimpleField();
     if (!fieldSummary) return;
     const s = store.get();
     if (!hasTarget()) {
@@ -1272,7 +1376,8 @@ async function boot() {
     // its own through frame.markers or addOverlay.
     const ownSky = !pluginViews.has(s.view);
     if (frame && session.grid) {
-      if (ownSky && s.gaia && session.gaia.stars.length && lib.gridSkyToPix) {
+      // Simple mode leaves the catalogue rings out: the picture and the moving thing are enough.
+      if (ownSky && s.gaia && s.mode !== 'simple' && session.gaia.stars.length && lib.gridSkyToPix) {
         try {
           overlays.gaia = ghostsFor(frame);
         } catch (err) {
@@ -1436,6 +1541,22 @@ async function boot() {
       note: motionNote(sel, verdict),
     });
     updateOverlays();
+    try {
+      const passCount = m && m.track.length && opt.motion && opt.motion.passPositions ? opt.motion.passPositions(m.track).length : undefined;
+      simple.setSelection({
+        key: Number.isInteger(sel.candidate) ? `c${sel.candidate}` : `${sel.x},${sel.y}`,
+        label: sel.label || '',
+        measured: m ? m.measured : null,
+        gaia: m && m.catalogue
+          ? { pmra: m.catalogue.pmra, pmdec: m.catalogue.pmdec, total: m.catalogue.total, source: 'catalogue' }
+          : m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
+        passes: passCount,
+        lightCurve: sel.lightCurve,
+        saturated: !!(m && m.saturated),
+      });
+    } catch (err) {
+      console.warn('[tombaugh] simple view', err);
+    }
     emit('select', { ...sel });
   }
 
@@ -1565,6 +1686,7 @@ async function boot() {
 
   // ---- search, targets, navigation ------------------------------------------------------------
   let landing = null;
+  let landingPlain = true;
   let landingFallback = null;
   let resolveToken = 0;
 
@@ -1802,11 +1924,28 @@ async function boot() {
     layout.setProgress(null);
     layout.setScreen('landing');
     document.title = 'Tombaugh: a blink comparator for the 102-color sky';
+    // The start page speaks plainly in Simple mode; rebuild it if the mode changed since it was made.
+    const plain = store.get().mode !== 'advanced';
+    if (landing && landingPlain !== plain) {
+      try {
+        landing.destroy();
+      } catch {
+        // rebuilt below either way
+      }
+      landing = null;
+      clear(els.landing);
+    }
     if (!landing && !landingFallback) {
       if (opt.landing && typeof opt.landing.createLanding === 'function') {
         try {
+          landingPlain = plain;
           landing = opt.landing.createLanding(els.landing, {
-            targets: tourTargets,
+            plain,
+            onMode: () => {
+              setMode(plain ? 'advanced' : 'simple', { remember: true });
+              showLanding();
+            },
+            targets: plain ? tourTargets.map(plainTarget) : tourTargets,
             onPick: (t) => pickTarget(t),
             onSearch: (text) => handleSearch(text),
             onSurprise: () => surprise(),
@@ -1879,14 +2018,25 @@ async function boot() {
 
   function buildHelp() {
     const body = clear(els.helpBody);
-    const steps = h(
+    const simpleMode = store.get().mode !== 'advanced';
+    const steps = simpleMode
+      ? h(
+        'ol',
+        { class: 'help-steps' },
+        h('li', null, 'Type a place or a name in the box at the top, or pick one of the five places on the start page.'),
+        h('li', null, 'Press play. Each frame is one visit by the telescope, months apart: stars stay put, anything that moves jumps.'),
+        h('li', null, 'Switch to “What changed” to subtract everything that stayed the same. Whatever is left moved or changed brightness.'),
+        h('li', null, 'Click any star to find out whether it is moving and whether its brightness changed.'),
+        h('li', null, 'Use Share to copy a link to this view. Advanced, at the top right, opens every view, all six detectors, the plots and the measuring tools.'),
+      )
+      : h(
       'ol',
       { class: 'help-steps' },
       h('li', null, 'Type coordinates or a name in the box at the top, or pick a challenge target.'),
       h('li', null, 'Watch the movie. In the Passes view every frame is one survey pass, six months apart: stars stay put, movers jump.'),
       h('li', null, 'Switch to Residual to subtract what the unchanging sky should look like. What is left moved or changed.'),
       h('li', null, 'Click any source to read its spectrum, its light curve and its motion compared with Gaia.'),
-      h('li', null, 'Use Share to copy a link that reopens exactly this view.'),
+      h('li', null, 'Use Share to copy a link that reopens exactly this view. Simple, at the top right, goes back to the short version of this page.'),
     );
     const keys = h('dl', { class: 'keys' });
     const list = opt.shortcuts && Array.isArray(opt.shortcuts.SHORTCUTS) ? opt.shortcuts.SHORTCUTS : FALLBACK_SHORTCUTS;
@@ -1975,6 +2125,7 @@ async function boot() {
 
   els.btnShare.addEventListener('click', () => share());
   els.btnHelp.addEventListener('click', () => openHelp());
+  if (els.btnMode) els.btnMode.addEventListener('click', () => setMode(store.get().mode === 'advanced' ? 'simple' : 'advanced', { remember: true }));
   if (opt.fogmap && typeof opt.fogmap.createFogMap === 'function') {
     els.btnMap.hidden = false;
     els.btnMap.title = 'An all-sky map of the patches anyone has opened with this tool';
@@ -2012,14 +2163,16 @@ async function boot() {
   });
 
   // ---- keyboard -------------------------------------------------------------------------------
+  // Keys for controls that Simple mode does not show do nothing there.
+  const advancedOnly = () => store.get().mode === 'advanced';
   const keymap = {
     Space: () => player.toggle(),
     ArrowLeft: () => player.step(-1),
     ArrowRight: () => player.step(1),
     b: () => player.toggleBlink(),
     r: () => store.set({ view: store.get().view === 'residual' ? 'passes' : lib.fitSkyModel ? 'residual' : store.get().view, t: 0 }),
-    g: () => store.set({ gaia: !store.get().gaia }),
-    f: () => store.set({ flags: !store.get().flags }),
+    g: () => (advancedOnly() ? store.set({ gaia: !store.get().gaia }) : false),
+    f: () => (advancedOnly() ? store.set({ flags: !store.get().flags }) : false),
     '?': () => openHelp(),
     Escape: () => {
       if (layout.isSheetOpen()) layout.setSheet(false);
@@ -2027,7 +2180,7 @@ async function boot() {
       return undefined;
     },
   };
-  for (let d = 1; d <= 6; d++) keymap[String(d)] = () => store.set({ det: d, t: 0 });
+  for (let d = 1; d <= 6; d++) keymap[String(d)] = () => (advancedOnly() ? store.set({ det: d, t: 0 }) : false);
   const keysEnabled = () => document.documentElement.dataset.screen === 'console' && !document.querySelector('dialog[open]');
   if (opt.shortcuts && typeof opt.shortcuts.bindShortcuts === 'function') {
     try {
@@ -2054,6 +2207,15 @@ async function boot() {
     const has = (k) => changed.includes(k);
     emit('state', { state: s, changed });
     if (has('embed')) layout.setEmbed(s.embed);
+    if (has('mode')) {
+      layout.setMode(s.mode);
+      applyModeToViewer();
+    }
+    if (has('view')) {
+      simple.setView(s.view);
+      // A view that only Advanced mode shows (a link, a story, a tool): show the controls for it.
+      if (s.mode === 'simple' && !SIMPLE_VIEWS.includes(s.view)) queueMicrotask(() => setMode('advanced'));
+    }
     if (has('ra') || has('dec')) {
       document.title = titleFor(s);
       if (hasTarget()) startTarget();
@@ -2062,6 +2224,7 @@ async function boot() {
     }
     if (has('name')) updateSearchLine();
     if (!hasTarget()) return;
+    if (has('name') || has('det')) updateSimpleField();
     if (has('fov') || has('zodi')) {
       resetField({ keepSelection: true });
       session.key = targetKey(s);

@@ -57,6 +57,7 @@
       <button class="btn" type="button" id="btn-map" aria-haspopup="dialog" hidden>Sky map</button>
       <button class="btn" type="button" id="btn-share" title="Copy a link to exactly this view">Share</button>
       <button class="btn" type="button" id="btn-help" aria-haspopup="dialog" title="Help and keyboard shortcuts (?)">Help</button>
+      <button class="btn btn-mode" type="button" id="btn-mode" data-testid="mode-switch" aria-pressed="false" title="Show every view, detector, plot and tool">Advanced</button>
     </nav>
   </header>
 
@@ -67,6 +68,7 @@
         <button class="btn btn-sheet" type="button" id="btn-sheet" aria-haspopup="dialog" aria-controls="controls">Controls</button>
       </div>
       <div class="modeopts" id="modeopts" aria-live="polite"></div>
+      <div class="simplebar" id="simplebar" data-testid="simplebar"></div>
 
       <div class="stage-body">
         <div class="controls" id="controls" role="group" aria-label="Display controls">
@@ -96,6 +98,7 @@
     </section>
 
     <aside class="side" id="side" aria-label="Measurements">
+      <section class="simple" id="simple" data-testid="simple" aria-label="What Tombaugh found here"></section>
       <div class="tabs" id="tabs" role="tablist" aria-label="Measurement panels">
         <button class="tab" role="tab" type="button" id="tab-spectrum" aria-controls="panel-spectrum" aria-selected="true">Spectrum</button>
         <button class="tab" role="tab" type="button" id="tab-lightcurve" aria-controls="panel-lightcurve" aria-selected="false" tabindex="-1">Light curve</button>

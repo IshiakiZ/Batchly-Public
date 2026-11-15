@@ -168,6 +168,9 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     btnMap: $('btn-map'),
     btnShare: $('btn-share'),
     btnHelp: $('btn-help'),
+    btnMode: $('btn-mode'),
+    simplebar: $('simplebar'),
+    simple: $('simple'),
     viewSeg: $('view-seg'),
     btnSheet: $('btn-sheet'),
     btnSheetClose: $('btn-sheet-close'),
@@ -210,6 +213,16 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
   function setEmbed(on) {
     if (on) root.dataset.embed = '1';
     else delete root.dataset.embed;
+  }
+  /** 'simple' (the default) or 'advanced': which of the two faces of the console is showing. */
+  function setMode(mode) {
+    const advanced = mode === 'advanced';
+    root.dataset.mode = advanced ? 'advanced' : 'simple';
+    if (els.btnMode) {
+      els.btnMode.setAttribute('aria-pressed', advanced ? 'true' : 'false');
+      els.btnMode.textContent = advanced ? 'Simple' : 'Advanced';
+      els.btnMode.title = advanced ? 'Back to the simple view: the picture and what changed' : 'Show every view, detector, plot and tool';
+    }
   }
   /** The persistent "SIMULATED SKY, not real data" badge in the top bar. */
   function setSimulated(on) {
@@ -681,6 +694,7 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     els,
     setScreen,
     setEmbed,
+    setMode,
     setSimulated,
     selectTab,
     addTab,

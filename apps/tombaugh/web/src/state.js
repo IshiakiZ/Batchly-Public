@@ -26,7 +26,14 @@ export const URL_DEFAULTS = Object.freeze({
   gaia: true,
   flags: false,
   embed: false,
+  // 'simple' (the default: the picture, two views, plain-language findings) or 'advanced'
+  // (every view, detector, plot and tool).
+  mode: 'simple',
 });
+
+/** The two display modes, and the views the simple one offers. */
+export const MODES = Object.freeze(['simple', 'advanced']);
+export const SIMPLE_VIEWS = Object.freeze(['passes', 'residual']);
 
 /** Session-only state (not in the URL). */
 export const SESSION_DEFAULTS = Object.freeze({
@@ -141,7 +148,38 @@ export function parseQuery(search) {
   if (params.has('gaia')) out.gaia = bool(params.get('gaia'));
   if (params.has('flags')) out.flags = bool(params.get('flags'));
   if (params.has('embed')) out.embed = bool(params.get('embed'));
+  const mode = params.get('mode');
+  if (MODES.includes(mode)) out.mode = mode;
   return out;
+}
+
+/**
+ * Which mode a visit starts in. Pure.
+ *   1. `mode=` in the address wins.
+ *   2. An address that asks for something only Advanced mode shows (a view other than the two
+ *      simple ones, a body to follow, an embed, a non-default detector setting such as a lens or
+ *      a distance) opens Advanced, so links made before there were two modes still work.
+ *   3. Otherwise the visitor's last explicit choice (`stored`), and Simple for a first visit.
+ * @param {object} urlState  parseQuery(search)
+ * @param {string} search    the raw query string
+ * @param {string|null} stored  the remembered choice, if any
+ */
+export function initialMode(urlState = {}, search = '', stored = null) {
+  if (MODES.includes(urlState.mode)) return urlState.mode;
+  if (urlState.embed) return 'advanced';
+  if (typeof urlState.view === 'string' && !SIMPLE_VIEWS.includes(urlState.view)) return 'advanced';
+  let params = null;
+  try {
+    params = new URLSearchParams(search || '');
+  } catch {
+    params = null;
+  }
+  if (params) {
+    for (const key of ['body', 'panel', 'lens', 'dist', 'ch', 'stretch', 'flags', 'story', 'tour']) {
+      if (params.has(key)) return 'advanced';
+    }
+  }
+  return stored === 'advanced' ? 'advanced' : 'simple';
 }
 
 function trimNumber(value, digits) {
@@ -172,6 +210,7 @@ export function stateToQuery(state, keep = '') {
   if (typeof s.gaia === 'boolean' && s.gaia !== URL_DEFAULTS.gaia) params.set('gaia', s.gaia ? '1' : '0');
   if (typeof s.flags === 'boolean' && s.flags !== URL_DEFAULTS.flags) params.set('flags', s.flags ? '1' : '0');
   if (s.embed) params.set('embed', '1');
+  if (s.mode === 'advanced') params.set('mode', 'advanced');
   if (keep) {
     let old;
     try {
