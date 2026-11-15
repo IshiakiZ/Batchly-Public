@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:16:05.004Z, sources sha256 5763ac36130b17e1.
+Single-file build of 111 modules, 2026-11-15T10:23:27.296Z, sources sha256 e709715950ce3d13.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -5575,8 +5575,11 @@ strip.setAttribute('aria-label', 'No exposures listed');
 return;
 }
 const passes = summarizePasses(refs);
-const mine = refs.filter((r) => r.det === info.det).length;
-passValue.textContent = `${passes.length} pass${passes.length === 1 ? '' : 'es'} · ${refs.length} exposures · D${info.det}: ${mine}`;
+const mineRefs = refs.filter((r) => r.det === info.det);
+const mine = mineRefs.length;
+const minePasses = mine ? summarizePasses(mineRefs).length : 0;
+const mineText = mine && minePasses !== passes.length ? `${mine} in ${minePasses} pass${minePasses === 1 ? '' : 'es'}` : String(mine);
+passValue.textContent = `${passes.length} pass${passes.length === 1 ? '' : 'es'} · ${refs.length} exposures · D${info.det}: ${mineText}`;
 strip.setAttribute(
 'aria-label',
 `Exposures of this spot: ${passes.map((p) => `${p.label}, ${p.dates}, ${p.total} exposures`).join('; ')}. Detector ${info.det} has ${mine}.`,
@@ -9142,16 +9145,19 @@ const ex = x - core.x;
 const ey = y - core.y;
 const r = Math.hypot(ex, ey);
 if (r <= core.r || r > rHalo) continue;
-m += v; a += Math.abs(v); dx += v * ex; dy += v * ey; ar += Math.abs(v) * r; np++;
+np++;
+if (st.snr && !(Math.abs(st.snr[i]) >= 2)) continue;
+m += v; a += Math.abs(v); dx += v * ex; dy += v * ey; ar += Math.abs(v) * r;
 }
 }
 return { m, a, dx, dy, ar, np };
 };
-const usable = stacks.map(moments).filter((q) => q.np >= 12 && q.a > 0);
+const usable = stacks.map(moments).filter((q) => q.np >= 12);
 const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0 };
 if (usable.length < 2) return none;
 const f = usable[0];
 const l = usable[usable.length - 1];
+if (!(f.a + l.a > 0) || !(f.ar + l.ar > 0)) return none;
 const ddx = l.dx - f.dx;
 const ddy = l.dy - f.dy;
 const dipole = Math.hypot(ddx, ddy) / (f.ar + l.ar);
@@ -39613,10 +39619,12 @@ const CSS = `
 .tbs-status.is-ready { font-size: max(15px, calc(var(--tbs-u) * 2)); padding: 14px 22px; border-color: #E53C27; }
 .tbs-status.is-ready .tbs-status__bar { display: none; }
 .tbs-controls {
-  position: absolute; right: calc(var(--tbs-fx) + 12px); top: calc(var(--tbs-fy) + 12px);
+  position: absolute; right: calc(var(--tbs-fx) + 6px); top: calc(var(--tbs-fy) + 6px);
   display: flex; align-items: center; gap: 10px; pointer-events: auto;
+  /* opaque, and tall enough to cover the header buttons it sits on */
+  padding: 8px 8px 8px 14px; background: #171715; border-radius: 2px;
 }
-.tbs-keys { padding: 5px 9px; background: rgba(23, 23, 21, 0.9); border-radius: 2px; font-size: 12px; color: rgba(247, 242, 231, 0.86); white-space: nowrap; }
+.tbs-keys { padding: 5px 0; border-radius: 2px; font-size: 12px; color: rgba(247, 242, 231, 0.86); white-space: nowrap; }
 .tbs-stop {
   appearance: none; height: 32px; padding: 0 14px; background: #171715; color: #F7F2E7; border: 1px solid rgba(247, 242, 231, 0.6);
   border-radius: 2px; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; white-space: nowrap;
