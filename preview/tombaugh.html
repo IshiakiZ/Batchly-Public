@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:33:44.149Z, sources sha256 9838d4739e7794f2.
+Single-file build of 111 modules, 2026-11-15T10:35:29.770Z, sources sha256 c7c81a7822279bca.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -37369,7 +37369,7 @@ ui.result.hidden = st.phase !== 'done';
 if (st.phase === 'done') renderResult();
 ui.foot.textContent = st.hypothetical
 ? 'Track from the parallax model in core/distance.js, seen from the centre of the Earth. SPHEREx Level 2 spectral images (IRSA).'
-: 'Positions from JPL Horizons, seen from the centre of the Earth; SPHEREx is in low Earth orbit, which matters by less than a pixel beyond about 2 AU. SPHEREx Level 2 spectral images (IRSA).';
+: 'Positions from JPL Horizons, seen from the centre of the Earth; SPHEREx is in low Earth orbit, which matters by less than a pixel beyond about 2 AU. SPHEREx Level 2 spectral images (IRSA). A link can start this: add ?body=pluto to the address.';
 }
 function renderProgress() {
 if (!ui) return;
@@ -37498,6 +37498,25 @@ build: buildView,
 }
 } catch (err) {
 warn('view could not be added', err);
+}
+let startBody = '';
+try {
+const search = globalThis.location && typeof globalThis.location.search === 'string' ? globalThis.location.search : '';
+startBody = String(new URLSearchParams(search).get('body') || '').trim().slice(0, 60);
+} catch {
+startBody = '';
+}
+if (startBody) {
+const wanted = startBody.toLowerCase();
+const entry = CATALOGUE.find((b) => b.id === wanted || String(b.name).toLowerCase() === wanted) || null;
+setTimeout(safe(async () => {
+if (disposed) return;
+if (panel && typeof panel.show === 'function') panel.show();
+await follow(entry ? { entry } : { text: startBody });
+if (disposed || st.phase !== 'plan') return;
+await loadExposures();
+if (!disposed && st.phase === 'done' && st.items.length) openInViewer();
+}), 400);
 }
 return {
 state: () => st,
