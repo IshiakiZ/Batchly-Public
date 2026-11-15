@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:59:46.981Z, sources sha256 d957263ed0b4cecd.
+Single-file build of 111 modules, 2026-11-15T11:10:35.810Z, sources sha256 dc849fcb9ad1a723.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -7357,7 +7357,7 @@ if (document.documentElement.dataset.screen !== 'console' || session.error || (!
 else updateSearchLine();
 }
 }
-function pickTarget(target) {
+function pickTarget(target, keep = {}) {
 let pos = { ra: target.ra, dec: target.dec };
 let note = '';
 const now = mjdNow();
@@ -7371,11 +7371,11 @@ note = `position for ${yearOfMjd(now).toFixed(1)} (catalogue epoch ${Number(targ
 pos = { ra: target.ra, dec: target.dec };
 }
 if (!Number.isFinite(pos.ra) || !Number.isFinite(pos.dec)) pos = { ra: target.ra, dec: target.dec };
-const patch = { view: 'passes' };
+const patch = { view: keep.view || 'passes' };
 store.set(patch);
-goTo({ ra: pos.ra, dec: pos.dec, name: target.name, det: target.det, fov: target.fov, note });
+goTo({ ra: pos.ra, dec: pos.dec, name: target.name, det: keep.det || target.det, fov: keep.fov || target.fov, note });
 }
-async function handleSearch(text) {
+async function handleSearch(text, keep = {}) {
 const query = String(text || '').trim();
 if (!query) return;
 const coord = parseCoord(query);
@@ -7391,7 +7391,7 @@ known = null;
 }
 if (!known) known = findTarget(targets, query);
 if (known) {
-pickTarget(known);
+pickTarget(known, keep);
 return;
 }
 const token = ++resolveToken;
@@ -7425,7 +7425,8 @@ note = `position for ${yearOfMjd(now).toFixed(1)} (epoch ${epoch.toFixed(1)} mov
 } catch {
 }
 }
-goTo({ ra: pos.ra, dec: pos.dec, name: res.name || query, note });
+if (keep.view) store.set({ view: keep.view });
+goTo({ ra: pos.ra, dec: pos.dec, name: res.name || query, det: keep.det || null, fov: keep.fov || null, note });
 } catch (err) {
 if (token !== resolveToken) return;
 if (err && err.status === 404) reportSearchProblem(`No object called “${query}” was found. Check the spelling, or type coordinates such as 269.45 4.69.`);
@@ -8013,6 +8014,11 @@ document.title = titleFor(store.get());
 startTarget();
 } else {
 showLanding();
+if (urlState.name) {
+handleSearch(urlState.name, { det: urlState.det, fov: urlState.fov, view: urlState.view }).catch((err) => {
+console.warn('[tombaugh] the name in the link could not be opened', err);
+});
+}
 }
 if (viewer.missing) {
 toasts.show('The image viewer module is missing from this build, so frames cannot be drawn.', { kind: 'alert', timeout: 8000 });
@@ -23486,7 +23492,7 @@ aliases: [
 name: 'WISE 0855-0714',
 ra: sexagesimal(8, 55, 10.831) * 15,
 dec: -sexagesimal(7, 14, 42.53),
-epoch: 2014.3,
+epoch: 2010.35,
 pmra: -8118,
 pmdec: 680,
 parallax: 439,
