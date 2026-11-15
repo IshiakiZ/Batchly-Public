@@ -851,11 +851,15 @@ Files: `proxy/src/horizons.js`, `proxy/src/horizons.test.js`, `web/src/plugins/m
   The first call is now deferred by a microtask.
 - **`node --test web/` fails on Node 22.23 before any test runs** ("Cannot find module .../web": a directory
   argument is not expanded). `node --test "web/**/*.test.js"` runs everything.
-- **Not done in this pass** (seen, not fixed): the date labels of a trail can still overlap when every
-  candidate position is taken (`placeTag` in overlays.js falls back to the first anchor instead of
-  dropping the label); the player line under the timeline still shortens a long note at the end; the
+- **Trail date labels** (`web/src/render/overlays.js`): `placeTag` takes `optional: true`; the trail
+  tries four positions per date (both sides, near and further out), newest and oldest first, and drops
+  a date that finds no free spot instead of drawing it over another label.
+- **Not done in this pass** (seen, not fixed): the player line under the timeline still shortens a long note at the end; the
   readout next to the plugin tool buttons is squeezed to a few characters under about 420 px of viewer
   width; a missing plugin file is still a browser-logged 404 on the dev server (the page itself only
   warns); no `og:image` (scrapers do not take data URIs); the per-view "About" texts, the Escape /
-  focus-return audit of the controls sheet and the `?debug=1` timings were wired but not reviewed view
-  by view.
+  focus-return audit of the controls sheet were not reviewed view by view. `?debug=1` on the synthetic
+  10 arcmin field (42 layers of 196 x 196, headless Chromium): buildMovie 33 to 315 ms per view, the sky
+  model fit 667 ms once, measureMotion 186 ms, measureSpectrum 14 ms; the first renderFrame after a view
+  change is 8 to 23 ms (over the 8 ms budget for Exposures and Passes), later stretch changes stay under
+  it. Nothing was optimised.

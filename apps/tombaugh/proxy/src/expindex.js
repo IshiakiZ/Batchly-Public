@@ -41,15 +41,15 @@
 //   readExposureHeader(key, opts) -> { mjd, crval1, crval2, pc11, pc12, pc21, pc22 }
 //   encodePart(part) / decodePart(u8)       the TBX1 container
 //
-// Cache objects (all under index/v1/):
+// Cache objects (all under index/v2/; one set per processing-version folder of a week):
 //   dirs.json                     { fetchedAt, dirs: [{ release, dir, prefix, version }] }
-//   <release>/<dir>/list.json     { release, dir, version, partSize, exposures: ["0001_1", ...],
+//   <release>/<dir>/<version>/list.json     { release, dir, version, partSize, exposures: ["0001_1", ...],
 //                                   dets: [63, ...] | null }   exposures = the detector-1 files,
 //                                   sorted; dets[i] = bit mask of the detectors (bit d-1) that
 //                                   have a file for exposure i
-//   <release>/<dir>/part-<k>.bin  TBX1 (below): exposures [k*partSize, (k+1)*partSize)
-//   <release>/<dir>/all.bin       TBX1 with every exposure of the directory (written with meta)
-//   <release>/<dir>/meta.json     { release, dir, version, n, parts, partSize, mjdMin, mjdMax,
+//   <release>/<dir>/<version>/part-<k>.bin  TBX1 (below): exposures [k*partSize, (k+1)*partSize)
+//   <release>/<dir>/<version>/all.bin       TBX1 with every exposure of the directory (written with meta)
+//   <release>/<dir>/<version>/meta.json     { release, dir, version, n, parts, partSize, mjdMin, mjdMax,
 //                                   bad, cells: "<base64 of 81 bytes>", all: true, builtAt }
 //   manifest.json                 { builtAt, dirs: [meta...] }
 //
@@ -70,7 +70,7 @@ import { parseHeaderBlock } from './fits.js';
 import { rangeGet, listKeys, listReleaseDirs, parseKey, makeKey, keyToId, mapLimit, releaseRank } from './s3.js';
 import { M, DET_SHAPE, FP_CRPIX, FP_NPIX, FP_SCALE_DEG, attitudeFromWcs, detectorWcs, detPixToSky } from './focalplane.js';
 
-export const INDEX_ROOT = 'index/v1';
+export const INDEX_ROOT = 'index/v2';
 export const DIRS_KEY = `${INDEX_ROOT}/dirs.json`;
 export const MANIFEST_KEY = `${INDEX_ROOT}/manifest.json`;
 export const HEADER_BYTES = 28800; // primary (2880) + IMAGE header (25920) of a Level-2 file
@@ -83,11 +83,15 @@ const CELL_BYTES = 81; // 648 bits
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-const dirBase = (release, dir) => `${INDEX_ROOT}/${release}/${dir}`;
-const listKeyOf = (release, dir) => `${dirBase(release, dir)}/list.json`;
-const metaKeyOf = (release, dir) => `${dirBase(release, dir)}/meta.json`;
-const allKeyOf = (release, dir) => `${dirBase(release, dir)}/all.bin`;
-const partKeyOf = (release, dir, k) => `${dirBase(release, dir)}/part-${k}.bin`;
+// One index unit is one processing-version folder of one week directory. Most weeks have two:
+// the main run ("l2b-v27-2026-199") and a small "l2b_retry-..." run with the exposures that
+// were processed again. Both are indexed; the unit's identity is release/dir/version.
+const dirBase = (release, dir, version) => `${INDEX_ROOT}/${release}/${dir}/${version}`;
+const listKeyOf = (release, dir, version) => `${dirBase(release, dir, version)}/list.json`;
+const metaKeyOf = (release, dir, version) => `${dirBase(release, dir, version)}/meta.json`;
+const allKeyOf = (release, dir, version) => `${dirBase(release, dir, version)}/all.bin`;
+const partKeyOf = (release, dir, version, k) => `${dirBase(release, dir, version)}/part-${k}.bin`;
+const unitOf = (m) => `${m.release}/${m.dir}/${m.version}`;
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -362,7 +366,7 @@ async function buildList(entry, opts) {
 }
 
 async function loadPart(cache, list, k) {
-  const u8 = await cache.get(partKeyOf(list.release, list.dir, k));
+  const u8 = await cache.get(partKeyOf(list.release, list.dir, list.version, k));
   if (!u8) return null;
   try {
     const part = decodePart(u8);
@@ -439,8 +443,8 @@ async function buildPart(list, k, opts) {
 async function mergeIntoManifest(cache, metas) {
   const manifest = (await getJson(cache, MANIFEST_KEY)) || {};
   const byDir = new Map();
-  for (const m of Array.isArray(manifest.dirs) ? manifest.dirs : []) byDir.set(`${m.release}/${m.dir}`, m);
-  for (const m of metas) byDir.set(`${m.release}/${m.dir}`, m);
+  for (const m of Array.isArray(manifest.dirs) ? manifest.dirs : []) byDir.set(unitOf(m), m);
+  for (const m of metas) byDir.set(unitOf(m), m);
   const out = { builtAt: new Date().toISOString(), dirs: sortMetas([...byDir.values()]) };
   await putJson(cache, MANIFEST_KEY, out);
   return out;
@@ -473,7 +477,7 @@ async function finalizeDir(cache, list, parts, opts) {
   const { release, dir, version } = list;
   await putBytes(
     cache,
-    allKeyOf(release, dir),
+    allKeyOf(release, dir, version),
     encodePart({ release, dir, version, start: 0, exposures: list.exposures, rows, dets: list.dets }),
     'application/octet-stream',
   );
@@ -491,7 +495,7 @@ async function finalizeDir(cache, list, parts, opts) {
     all: true,
     builtAt: new Date().toISOString(),
   };
-  await putJson(cache, metaKeyOf(release, dir), meta);
+  await putJson(cache, metaKeyOf(release, dir, version), meta);
   if (opts.updateManifest !== false) await mergeIntoManifest(cache, [meta]);
   return meta;
 }
@@ -516,16 +520,16 @@ export async function indexBuildStep(cache, target, opts = {}) {
     version = entry.version;
   }
 
-  let list = await getJson(cache, listKeyOf(release, dir));
+  let list = await getJson(cache, listKeyOf(release, dir, version));
   if (!list || list.version !== version || !Array.isArray(list.exposures) || !(list.partSize >= 1)) {
     list = await buildList({ release, dir, version }, opts);
-    await putJson(cache, listKeyOf(release, dir), list);
+    await putJson(cache, listKeyOf(release, dir, version), list);
   }
   const n = list.exposures.length;
   const parts = Math.ceil(n / list.partSize);
   const result = (part, done) => ({ release, dir, part, parts, n, done });
 
-  const meta = await getJson(cache, metaKeyOf(release, dir));
+  const meta = await getJson(cache, metaKeyOf(release, dir, version));
   if (meta && meta.version === version && meta.n === n && meta.parts === parts) {
     // Finished earlier. If the caller got here the manifest may have lost this directory (two
     // workers finishing at once overwrite each other's manifest), so merge it again.
@@ -543,7 +547,7 @@ export async function indexBuildStep(cache, target, opts = {}) {
   let built = -1;
   if (k < parts) {
     const part = await buildPart(list, k, opts);
-    await putBytes(cache, partKeyOf(release, dir, k), encodePart(part), 'application/octet-stream');
+    await putBytes(cache, partKeyOf(release, dir, version, k), encodePart(part), 'application/octet-stream');
     have.push(part);
     built = k;
     for (let j = k + 1; j < parts; j++) {
@@ -587,23 +591,23 @@ export async function indexStatus(cache, opts = {}) {
   const manifest = await getJson(cache, MANIFEST_KEY);
   const metas = manifest && Array.isArray(manifest.dirs) ? manifest.dirs : [];
   const dirs = (await currentDirs(cache, opts)) || metas.map((m) => ({ release: m.release, dir: m.dir, version: m.version }));
-  const byDir = new Map(metas.map((m) => [`${m.release}/${m.dir}`, m]));
+  const byDir = new Map(metas.map((m) => [unitOf(m), m]));
   const healed = [];
   let exposuresDone = 0;
   const rows = await mapLimit(dirs, opts.statusConcurrency || 16, async (d) => {
     const base = { release: d.release, dir: d.dir, version: d.version };
-    const known = byDir.get(`${d.release}/${d.dir}`);
+    const known = byDir.get(unitOf(d));
     if (known && known.version === d.version) {
       exposuresDone += known.n;
       return { ...base, n: known.n, parts: known.parts, partsDone: known.parts, done: true };
     }
-    const list = await getJson(cache, listKeyOf(d.release, d.dir));
+    const list = await getJson(cache, listKeyOf(d.release, d.dir, d.version));
     if (!list || list.version !== d.version || !Array.isArray(list.exposures)) {
       return { ...base, n: null, parts: null, partsDone: 0, done: false };
     }
     const n = list.exposures.length;
     const parts = Math.ceil(n / list.partSize);
-    const meta = await getJson(cache, metaKeyOf(d.release, d.dir));
+    const meta = await getJson(cache, metaKeyOf(d.release, d.dir, d.version));
     if (meta && meta.version === d.version && meta.n === n) {
       healed.push(meta);
       exposuresDone += n;
@@ -644,7 +648,7 @@ export async function rebuildManifest(cache, opts = {}) {
   const dirs = await currentDirs(cache, opts);
   if (!dirs) throw new Error('exposure index: no directory list yet');
   const metas = await mapLimit(dirs, opts.statusConcurrency || 16, async (d) => {
-    const meta = await getJson(cache, metaKeyOf(d.release, d.dir));
+    const meta = await getJson(cache, metaKeyOf(d.release, d.dir, d.version));
     return meta && meta.version === d.version && typeof meta.cells === 'string' ? meta : null;
   });
   const manifest = { builtAt: new Date().toISOString(), dirs: sortMetas(metas.filter(Boolean)) };
@@ -714,7 +718,7 @@ async function loadDirForSearch(cache, meta, memo, maxBytes) {
   if (hit) return hit;
   let parts = null;
   if (meta.all) {
-    const u8 = await cache.get(allKeyOf(meta.release, meta.dir));
+    const u8 = await cache.get(allKeyOf(meta.release, meta.dir, meta.version));
     if (u8) {
       try {
         const part = decodePart(u8);
@@ -726,7 +730,7 @@ async function loadDirForSearch(cache, meta, memo, maxBytes) {
   }
   if (!parts) {
     const loaded = await mapLimit(Array.from({ length: meta.parts }, (_, k) => k), 6, async (k) => {
-      const u8 = await cache.get(partKeyOf(meta.release, meta.dir, k));
+      const u8 = await cache.get(partKeyOf(meta.release, meta.dir, meta.version, k));
       if (!u8) return null;
       try {
         const part = decodePart(u8);
@@ -754,13 +758,14 @@ async function loadManifestForSearch(cache, memo, ttlMs, maxBytes) {
     const current = new Set(dirs.map((d) => `${d.release}/${d.dir}/${d.version}`));
     metas = metas.filter((m) => current.has(`${m.release}/${m.dir}/${m.version}`));
   }
-  // One copy per week directory: a DR beats a QR, then the higher number.
+  // One release per week directory (a DR beats a QR, then the higher number), and every
+  // processing-version folder of that release.
   const best = new Map();
   for (const m of metas) {
     const prev = best.get(m.dir);
-    if (!prev || releaseRank(m.release) > releaseRank(prev.release)) best.set(m.dir, m);
+    if (!prev || releaseRank(m.release) > releaseRank(prev)) best.set(m.dir, m.release);
   }
-  const list = [...best.values()].map((m) => ({ meta: m, cells: fromBase64(m.cells) }));
+  const list = metas.filter((m) => best.get(m.dir) === m.release).map((m) => ({ meta: m, cells: fromBase64(m.cells) }));
   const value = { dirs: list, dirsTotal: dirs ? dirs.length : list.length };
   memoPut(memo, 'manifest', value, 400 * list.length + 1000, maxBytes);
   return value;
@@ -983,7 +988,14 @@ async function runSearch(cache, opts, target) {
   const counts = [];
   let frames = [];
   for (let k = 0; k < nd; k++) {
-    const list = perDet[k].sort(byTime);
+    // The same exposure can sit in the main run and in the retry run: keep the later run
+    // (ids differ only in the version text, and "l2b_retry" sorts after "l2b-").
+    const seen = new Map();
+    for (const f of perDet[k]) {
+      const prev = seen.get(f.obsid);
+      if (!prev || f.id > prev.id) seen.set(f.obsid, f);
+    }
+    const list = [...seen.values()].sort(byTime);
     const kept = thin(list, maxPerDet);
     counts.push({ det: detList[k], total: list.length, returned: kept.length });
     frames = frames.concat(kept);

@@ -11,6 +11,13 @@ listable S3 bucket with HTTP Range support. We use it for two things:
 
 Everything below was measured on real files through a browser on Nov 15 2026.
 
+> **Correction, Nov 15 2026 (measured on the live bucket).** A week directory does not have exactly
+> one version prefix. All 151 directories have a main run (`l2b-v27-<year>-<day>/`) and 122 of
+> them also have a small retry run (`l2b_retry-v27-<year>-<day>/`, a few to a few dozen
+> exposures that were processed again; file names carry the same version text). The index
+> therefore treats every `<release>/<dir>/<version>` folder as its own unit (storage root
+> `index/v2/`), searches both, and keeps the retry copy when an exposure is in both.
+
 ## Bucket facts (verified)
 
 - Base URL: `https://nasa-irsa-spherex.s3.amazonaws.com` (virtual-hosted, no region in the host; the

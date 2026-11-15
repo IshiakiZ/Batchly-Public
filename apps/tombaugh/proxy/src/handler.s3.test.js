@@ -205,3 +205,32 @@ test('synthetic backend: /identify answers from the fake sky, /ephemeris, /track
   assert.equal((await handler(new Request(`${base}track`, { method: 'POST', body: '{}' }))).status, 503);
   assert.equal((await handler(new Request(`${base}index`))).status, 404);
 });
+
+test('s3 backend: a week with a main and a retry folder is indexed as two units and searched as one', async () => {
+  const s3 = createFakeS3();
+  const V_RETRY = 'l2b_retry-v27-2026-273';
+  const OTHER = [100, -30];
+  makeFakeSurvey(s3, {
+    dirs: [
+      { release: 'qr3', dir: '2026W25_2A', version: V_QR, n: 200, seed: 5, ...poleFor(TARGET, 80), mjd0: 61209.0, centre: TARGET },
+      { release: 'qr3', dir: '2026W25_2A', version: V_RETRY, n: 60, seed: 9, ...poleFor(OTHER, 30), mjd0: 61209.5, centre: OTHER, missing: 0 },
+    ],
+  });
+  const handler = createHandler({ backend: 's3', cache: createMemoryCache(), fetchImpl: s3.fetchImpl, s3Options: { backoffMs: 1, timeoutMs: 5000 }, log: () => {} });
+  const call = async (path, init) => handler(new Request(`https://proxy.test/api/${path}`, init));
+  await buildIndex(call);
+  const status = await (await call('index?full=1')).json();
+  assert.equal(status.dirsTotal, 2);
+  assert.deepEqual(status.dirs.map((d) => d.version).sort(), [V_QR, V_RETRY].sort());
+  assert.equal(status.complete, true);
+
+  const main = await (await call(`search?ra=${TARGET[0]}&dec=${TARGET[1]}&max=0`)).json();
+  assert.equal(main.complete, true);
+  assert.ok(main.frames.length > 0 && main.frames.every((f) => f.id.includes(`/${V_QR}/`)), 'the main run answers at its field');
+  const retry = await (await call(`search?ra=${OTHER[0]}&dec=${OTHER[1]}&max=0`)).json();
+  assert.ok(retry.frames.length > 0 && retry.frames.every((f) => f.id.includes(`/${V_RETRY}/`)), 'the retry run answers at its field');
+  for (const body of [main, retry]) {
+    const keys = body.frames.map((f) => `${f.obsid}/${f.det}`);
+    assert.equal(new Set(keys).size, keys.length, 'one frame per exposure and detector');
+  }
+});

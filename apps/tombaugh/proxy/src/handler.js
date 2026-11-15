@@ -906,7 +906,9 @@ export function createHandler(options = {}) {
       const dir = params.get('dir');
       if (release && dir) {
         if (!/^[a-z0-9]{2,8}$/.test(release) || !/^[A-Za-z0-9_]{4,24}$/.test(dir)) throw new HttpError(400, 'release or dir has an unexpected shape');
-        const step = await expindex.indexBuildStep(cache, { release, dir }, buildOpts);
+        const version = params.get('version');
+        if (version && !/^[0-9A-Za-z._-]{4,60}$/.test(version)) throw new HttpError(400, 'version has an unexpected shape');
+        const step = await expindex.indexBuildStep(cache, version ? { release, dir, version } : { release, dir }, buildOpts);
         indexMemo.clear();
         return jsonResponse({ steps: [step] });
       }

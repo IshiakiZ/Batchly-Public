@@ -221,7 +221,7 @@ test('chooseReleases and releaseRank implement the release rule', () => {
   assert.ok(releaseRank('qr3') > releaseRank('qr2'));
 });
 
-test('listReleaseDirs: all DRs, highest QR only, DR wins, last version prefix, known versions reused', async () => {
+test('listReleaseDirs: all DRs, highest QR only, DR wins, every version folder is an entry', async () => {
   const s3 = createFakeS3({ pageSize: 4 });
   const file = (rel, dir, ver) => s3.put(`${rel}/level2/${dir}/${ver}/1/level2_${dir}_0001_1D1_spx_${ver}.fits`, bytes(4));
   s3.put('index.html', bytes(3));
@@ -229,7 +229,7 @@ test('listReleaseDirs: all DRs, highest QR only, DR wins, last version prefix, k
   file('qr2', '2026W10_1A', 'l2b-v25-2026-100'); // superseded quick release: ignored
   file('qr3', '2026W20_1A', 'l2b-v27-2026-273'); // also in dr1: the DR wins
   for (const dir of ['2026W20_2A', '2026W21_1A', '2026W40_2A']) file('qr3', dir, 'l2b-v27-2026-273');
-  file('qr3', '2026W21_1A', 'l2b-v28-2026-290'); // two versions: take the last
+  file('qr3', '2026W21_1A', 'l2b_retry-v27-2026-273'); // two version folders: both are entries
   s3.put('qr3/level2/README.txt', bytes(3));
   const opts = { fetchImpl: s3.fetchImpl, ...fast };
 
@@ -239,18 +239,18 @@ test('listReleaseDirs: all DRs, highest QR only, DR wins, last version prefix, k
     { release: 'dr1', dir: '2025W18_1A', prefix: 'dr1/level2/2025W18_1A/l2b-v20-2025-300/', version: 'l2b-v20-2025-300' },
     { release: 'dr1', dir: '2026W20_1A', prefix: 'dr1/level2/2026W20_1A/l2b-v20-2025-300/', version: 'l2b-v20-2025-300' },
     { release: 'qr3', dir: '2026W20_2A', prefix: 'qr3/level2/2026W20_2A/l2b-v27-2026-273/', version: 'l2b-v27-2026-273' },
-    { release: 'qr3', dir: '2026W21_1A', prefix: 'qr3/level2/2026W21_1A/l2b-v28-2026-290/', version: 'l2b-v28-2026-290' },
+    { release: 'qr3', dir: '2026W21_1A', prefix: 'qr3/level2/2026W21_1A/l2b-v27-2026-273/', version: 'l2b-v27-2026-273' },
+    { release: 'qr3', dir: '2026W21_1A', prefix: 'qr3/level2/2026W21_1A/l2b_retry-v27-2026-273/', version: 'l2b_retry-v27-2026-273' },
     { release: 'qr3', dir: '2026W40_2A', prefix: 'qr3/level2/2026W40_2A/l2b-v27-2026-273/', version: 'l2b-v27-2026-273' },
   ]);
 
-  // With the previous result as `known`, only a new directory costs a version lookup.
-  file('qr3', '2026W41_1A', 'l2b-v28-2026-290');
-  s3.resetStats();
-  const again = await listReleaseDirs({ ...opts, known: dirs });
-  assert.equal(again.length, 7);
-  assert.equal(again[6].dir, '2026W41_1A');
-  const versionLookups = s3.requests.filter((r) => r.kind === 'list' && /level2\/[^/]+\/$/.test(r.prefix));
-  assert.deepEqual(versionLookups.map((r) => r.prefix), ['qr3/level2/2026W41_1A/']);
+  // A retry folder that appears later for a directory that was already listed is picked up.
+  file('qr3', '2026W41_1A', 'l2b-v27-2026-273');
+  file('qr3', '2026W20_2A', 'l2b_retry-v27-2026-273');
+  const again = await listReleaseDirs(opts);
+  assert.equal(again.length, 9);
+  assert.deepEqual(again.filter((d) => d.dir === '2026W20_2A').map((d) => d.version), ['l2b-v27-2026-273', 'l2b_retry-v27-2026-273']);
+  assert.equal(again[8].dir, '2026W41_1A');
 });
 
 test('mapLimit keeps order and never runs more than the limit at once', async () => {

@@ -341,16 +341,16 @@ export function releaseRank(release) {
 }
 
 /**
- * The week directories to index: [{ release, dir, prefix, version }] sorted by dir, where
+ * The folders to index: [{ release, dir, prefix, version }] sorted by dir then version, where
  * prefix = '<release>/level2/<dir>/<version>/'. Release rule: all dr<N>, only the highest
- * qr<N>, and a directory present in both is taken from the DR. Each directory has one
- * processing-version prefix; if there are several the lexicographically last is used.
+ * qr<N>, and a directory present in both is taken from the DR. A directory has one entry per
+ * processing-version folder (measured Nov 15 2026: all 151 directories have "l2b-v27-...",
+ * 122 also have "l2b_retry-v27-...").
  *
- * opts.known: a previous result; directories already in it (same release and dir) keep their
- * version without another list request. opts.concurrency (default 12) bounds parallel lists.
+ * opts.concurrency (default 12) bounds parallel lists.
  */
 export async function listReleaseDirs(opts = {}) {
-  const { known = null, concurrency = 12 } = opts;
+  const { concurrency = 12 } = opts;
   const releases = chooseReleases(await listPrefixes('', opts));
   const perRelease = await mapLimit(releases, 4, async (release) => {
     const root = `${release}/level2/`;
@@ -369,27 +369,18 @@ export async function listReleaseDirs(opts = {}) {
     for (const dir of dirs) if (!chosen.has(dir)) chosen.set(dir, release);
   }
 
-  const knownVersion = new Map();
-  if (Array.isArray(known)) {
-    for (const k of known) {
-      if (k && k.release && k.dir && k.version) knownVersion.set(`${k.release}/${k.dir}`, k.version);
-    }
-  }
-
+  // Every processing-version folder of a directory is its own entry. Most weeks have two: the
+  // main run and a small "l2b_retry-..." run. They are listed afresh every time, because a
+  // retry folder can appear after the main one.
   const entries = [...chosen.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const out = await mapLimit(entries, concurrency, async ([dir, release]) => {
     const root = `${release}/level2/${dir}/`;
-    let version = knownVersion.get(`${release}/${dir}`) || null;
-    if (!version) {
-      const versions = (await listPrefixes(root, opts))
-        .filter((p) => p.startsWith(root) && p.endsWith('/'))
-        .map((p) => p.slice(root.length, -1))
-        .filter((v) => SEGMENT_RE.test(v) && !v.includes('..'))
-        .sort();
-      if (versions.length === 0) return null; // an empty directory: nothing to index yet
-      version = versions[versions.length - 1];
-    }
-    return { release, dir, prefix: `${root}${version}/`, version };
+    const versions = (await listPrefixes(root, opts))
+      .filter((p) => p.startsWith(root) && p.endsWith('/'))
+      .map((p) => p.slice(root.length, -1))
+      .filter((v) => SEGMENT_RE.test(v) && !v.includes('..'))
+      .sort();
+    return versions.map((version) => ({ release, dir, prefix: `${root}${version}/`, version }));
   });
-  return out.filter(Boolean);
+  return out.flat();
 }

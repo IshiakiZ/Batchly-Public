@@ -327,7 +327,7 @@ test('build step by step, status during a partial build, manifest, search agains
   assert.equal(step0.parts, 3);
   assert.equal(s3.summary().lists, 6 * 2, 'six detector directories, two pages each');
   assert.equal(s3.summary().ranges, 150, 'one Range request per exposure header; the file that is not FITS is not asked twice');
-  const list = JSON.parse(new TextDecoder().decode(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/list.json`)));
+  const list = JSON.parse(new TextDecoder().decode(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/${V_DR}/list.json`)));
   assert.deepEqual(list.exposures, readable.map((e) => e.suffix).sort());
   assert.deepEqual(list.dets, readable.slice().sort((a, b) => (a.suffix < b.suffix ? -1 : 1)).map((e) => e.dets));
   assert.equal(list.partSize, 150);
@@ -354,7 +354,7 @@ test('build step by step, status during a partial build, manifest, search agains
   assert.deepEqual(await indexBuildStep(cache, { release: 'dr1', dir: A.dir }, opts), { release: 'dr1', dir: A.dir, part: -1, parts: 3, n: nA, done: true });
   assert.equal(s3.requests.length, 0);
 
-  const meta = JSON.parse(new TextDecoder().decode(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/meta.json`)));
+  const meta = JSON.parse(new TextDecoder().decode(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/${V_DR}/meta.json`)));
   assert.equal(meta.n, nA);
   assert.equal(meta.parts, 3);
   assert.equal(meta.bad, 2, 'the two unreadable files are NaN rows');
@@ -362,7 +362,7 @@ test('build step by step, status during a partial build, manifest, search agains
   assert.equal(meta.mjdMin, Math.min(...mjds));
   assert.equal(meta.mjdMax, Math.max(...mjds));
   assert.equal(atob(meta.cells).length, 81);
-  const part0 = decodePart(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/part-0.bin`));
+  const part0 = decodePart(await cache.inner.get(`${INDEX_ROOT}/dr1/${A.dir}/${V_DR}/part-0.bin`));
   assert.equal(part0.count, 150);
   const junkRow = part0.exposures.indexOf(junk.suffix);
   assert.ok(junkRow >= 0 && Number.isNaN(part0.rows[junkRow * 7]) && Number.isNaN(part0.rows[junkRow * 7 + 6]));
@@ -493,7 +493,7 @@ test('a directory added later appears after refreshDirs(force) and more build st
   const dirs = await refreshDirs(cache, { ...opts, force: true });
   assert.deepEqual(dirs.map((d) => d.dir), ['2025W30_1B', '2026W20_1A', '2026W25_2A', '2026W26_1A', '2026W40_2A']);
   assert.equal(dirs[4].version, 'l2b-v28-2026-290');
-  assert.equal(s3.summary().lists, 1 + 2 + 1, 'root, two releases, and one version lookup for the new directory only');
+  assert.equal(s3.summary().lists, 1 + 2 + 5, 'root, two releases, and one version lookup per directory');
   // An old list is also refreshed without force once it is older than six hours.
   const later = await refreshDirs(cache, { ...opts, now: () => Date.now() + 7 * 3600 * 1000 });
   assert.equal(later.length, 5);
@@ -555,14 +555,14 @@ test('when S3 is failing the step throws and writes nothing; a later step succee
     indexBuildStep(cache, { release: 'dr1', dir }, { ...opts, retries: 1, maxExposures: 60 }),
     (err) => err.retryable === true && err.code === 'UPSTREAM' && /headers of dr1/.test(err.message),
   );
-  assert.equal(await cache.inner.get(`${INDEX_ROOT}/dr1/${dir}/part-0.bin`), null, 'no part full of NaN was stored');
+  assert.equal(await cache.inner.get(`${INDEX_ROOT}/dr1/${dir}/${V_DR}/part-0.bin`), null, 'no part full of NaN was stored');
   // A listing failure fails the step too.
   fault.times = 0;
   const { cache: cache2 } = setup();
   await refreshDirs(cache2, opts);
   s3.addFault({ match: /^list:dr1\/level2\/.*\/3\/$/, status: 500, times: 1e9 });
   await assert.rejects(indexBuildStep(cache2, { release: 'dr1', dir }, { ...opts, retries: 1 }), (err) => err.retryable === true);
-  assert.equal(await cache2.inner.get(`${INDEX_ROOT}/dr1/${dir}/list.json`), null);
+  assert.equal(await cache2.inner.get(`${INDEX_ROOT}/dr1/${dir}/${V_DR}/list.json`), null);
   s3.clearFaults();
   const step = await indexBuildStep(cache, { release: 'dr1', dir }, { ...opts, maxExposures: 60 });
   assert.deepEqual([step.part, step.done], [0, false]);
@@ -573,7 +573,7 @@ test('when S3 is failing the step throws and writes nothing; a later step succee
   for (const e of bad) s3.addFault({ match: new RegExp(`level2_${e.obsid}D1_`), error: true, times: 1e9 });
   const next = await indexBuildStep(cache, { release: 'dr1', dir }, opts);
   assert.equal(next.part, 1);
-  const part = decodePart(await cache.inner.get(`${INDEX_ROOT}/dr1/${dir}/part-1.bin`));
+  const part = decodePart(await cache.inner.get(`${INDEX_ROOT}/dr1/${dir}/${V_DR}/part-1.bin`));
   assert.equal(part.rows.filter((v, i) => i % 7 === 0 && Number.isNaN(v)).length, 2);
   // Unknown directory.
   await assert.rejects(indexBuildStep(cache, { release: 'qr3', dir: '2031W01_1A' }, opts), /no directory/);
@@ -656,11 +656,11 @@ test('memo: parts and manifest are kept in memory, capped by bytes', async () =>
   assert.equal(memo.size, 5);
 
   // Without all.bin (older index) the parts are used.
-  await cache.inner.delete(`${INDEX_ROOT}/dr1/2025W30_1B/all.bin`);
+  await cache.inner.delete(`${INDEX_ROOT}/dr1/2025W30_1B/${V_DR}/all.bin`);
   const viaParts = await searchIndex(cache, TARGET[0], TARGET[1], {});
   assert.deepEqual(viaParts.frames, first.frames);
   // A directory whose data vanished from the cache is reported, not fatal.
-  await cache.inner.delete(`${INDEX_ROOT}/dr1/2025W30_1B/part-0.bin`);
+  await cache.inner.delete(`${INDEX_ROOT}/dr1/2025W30_1B/${V_DR}/part-0.bin`);
   const partial = await searchIndex(cache, TARGET[0], TARGET[1], {});
   assert.deepEqual([partial.dirsFailed, partial.dirsSearched, partial.complete], [1, 3, false]);
   assert.ok(partial.frames.length < first.frames.length && partial.frames.every((f) => !f.obsid.startsWith('2025W30_1B')));
@@ -784,7 +784,7 @@ test('search speed: 10 directories, 18,000 exposures x 6 detectors', async () =>
     const dir = `2026W${10 + d}_1A`;
     const meta = { release: 'qr3', dir, version: V_QR, n, parts: 2, partSize: 900, mjdMin: rows[0], mjdMax: rows[(n - 1) * 7], bad: 0,
       cells: btoa(String.fromCharCode(...coverageCells(rows))), all: true, builtAt: 'x' };
-    await cache.put(`${INDEX_ROOT}/qr3/${dir}/all.bin`, encodePart({ release: 'qr3', dir, version: V_QR, start: 0, exposures, rows, dets: null }));
+    await cache.put(`${INDEX_ROOT}/qr3/${dir}/${V_QR}/all.bin`, encodePart({ release: 'qr3', dir, version: V_QR, start: 0, exposures, rows, dets: null }));
     metas.push(meta);
     dirs.push({ release: 'qr3', dir, version: V_QR, prefix: `qr3/level2/${dir}/${V_QR}/` });
   }
