@@ -19,6 +19,13 @@ hired for was called Planet X.
 *Real SPHEREx data: Pluto followed across 225 exposures, with the methane-ice bands marked on its
 spectrum. Open it yourself: <https://batch-ly.com/tombaugh/index.html?body=pluto>*
 
+| | | |
+|---|---|---|
+| ![Three passes of Barnard's Star, blinked: the star steps north out of its Gaia ring](docs/real/barnard-blink.gif) | ![The residual view of the same field, blinked: the bright and dark sides swap as the star moves](docs/real/barnard-residual-blink.gif) | ![Pluto held at the centre while the background stars change from visit to visit](docs/real/pluto-follow.gif) |
+| Barnard's Star, one frame per six-month pass. The star steps north, away from its Gaia ring. | The same field with the predicted sky subtracted. What moved is what is left. | Pluto, followed. Each visit has different stars behind it; the stack of all 225 exposures leaves Pluto alone. |
+
+*These three are frames captured from the tool on real SPHEREx data, played in a loop.*
+
 ## Results on real data
 
 Measured by the tool itself, in a browser, on real SPHEREx Level 2 images (Data Release 1 and
