@@ -4,6 +4,28 @@ A 30-second screen recording of the live tool, and a seven-slide alternative. Th
 either: a video of 30 seconds or less, or a deck of at most seven slides including the title and
 intro slides. Public link, in English.
 
+## Ready-made demo
+
+Both forms of the demo already exist in [demo/](demo/), made from screen captures of the live tool
+on real SPHEREx data (15 November 2026). Nothing in them is simulated.
+
+| File | What it is |
+|---|---|
+| [demo/tombaugh-demo.mp4](demo/tombaugh-demo.mp4) | The video: 29.6 seconds, 1920 x 1080, no sound. Pluto, Barnard's Star blink and residual, the motion measured against Gaia, the validation result, the link |
+| [demo/tombaugh-slides.pdf](demo/tombaugh-slides.pdf) | Seven slides as a PDF |
+| [demo/frames/](demo/frames/) | The captures both are built from |
+
+Rebuild them with `node tools/demo/make-video.mjs` and `node tools/demo/make-slides.mjs`
+(Playwright and ffmpeg). `--live <address>` changes the address on the video's last card.
+
+The video is a composite: full-window captures of the tool, with the image area replaced frame by
+frame by captures of the same view as the movie was stepped. The small frame counter under the
+image is covered while frames are swapped. Captions sit outside the captures. To submit the video,
+upload the file somewhere public (a video site or a shared drive) and use that link. The PDF opens
+in the browser from its GitHub page and can be linked as it is.
+
+The rest of this file is the shot list for anyone who wants to record their own take by hand.
+
 **Rule for this recording.** Show only what the live tool shows on real SPHEREx data. If a shot
 does not show what its caption says, change the caption or drop the shot. Do not adjust the
 footage to fit the script. Anything recorded on the practice sky must say "simulated" on screen.

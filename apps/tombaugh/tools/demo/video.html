@@ -1,0 +1,191 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  The 30-second demo, as one page whose picture is a pure function of time: window.renderAt(t).
+  tools/demo/make-video.mjs steps t, photographs each frame and hands the frames to ffmpeg.
+  Every image shown is a capture of the live tool on real SPHEREx data (docs/demo/frames/).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tombaugh demo</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --dim: #A8A59A; --line: rgba(247,242,231,0.18); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); }
+  body { width: 1920px; height: 1080px; overflow: hidden; position: relative; color: var(--paper);
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
+  .mono { font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; }
+  #top { position: absolute; left: 80px; right: 80px; top: 0; height: 84px; display: flex; align-items: center; justify-content: space-between; }
+  #top .mark { font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 900; font-size: 34px; letter-spacing: 0.2em; }
+  #top .sub { margin-left: 22px; font-size: 20px; color: var(--dim); }
+  #top .real { font-size: 17px; letter-spacing: 0.14em; color: var(--paper); display: flex; align-items: center; gap: 12px; }
+  #top .dot { width: 11px; height: 11px; background: var(--signal); display: inline-block; }
+  #stage { position: absolute; left: 80px; top: 84px; width: 1760px; height: 814px; overflow: hidden; border: 1px solid var(--line); background: #111110; }
+  #box { position: absolute; left: 0; top: 0; width: 1528px; height: 707px; transform-origin: 0 0; }
+  #box img { position: absolute; display: block; }
+  #base, #base2 { left: 0; top: 0; width: 1528px; height: 707px; }
+  #crop { left: 240px; top: 150px; width: 376px; height: 376px; }
+  #hl { position: absolute; border: 2px solid var(--signal); box-shadow: 0 0 0 2000px rgba(23,23,21,0.0); }
+  #cap { position: absolute; left: 80px; right: 80px; top: 916px; height: 130px; padding-left: 26px; border-left: 5px solid var(--signal); display: flex; flex-direction: column; justify-content: center; }
+  #cap .a { font-size: 43px; line-height: 54px; font-weight: 600; letter-spacing: -0.005em; }
+  #cap .b { font-size: 25px; line-height: 36px; color: var(--dim); margin-top: 4px; }
+  #bar { position: absolute; left: 0; bottom: 0; height: 6px; background: var(--signal); }
+  #card { position: absolute; inset: 0; background: var(--ink); display: flex; flex-direction: column; justify-content: center; padding: 0 150px; }
+  #card .bg { position: absolute; inset: 0; background-size: cover; background-position: center top; opacity: 0.09; }
+  /* Hides the frame counter under the image while captured frames are swapped in above it. */
+  #mask { position: absolute; left: 238px; top: 637px; width: 380px; height: 22px; background: #171715; }
+  #card .eyebrow { font-size: 21px; letter-spacing: 0.2em; color: var(--dim); position: relative; }
+  #card h1 { margin: 26px 0 0; font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 900; font-size: 158px; line-height: 1; letter-spacing: 0.14em; position: relative; }
+  #card .l1 { margin-top: 44px; font-size: 50px; line-height: 64px; font-weight: 600; max-width: 1500px; position: relative; }
+  #card .l2 { margin-top: 18px; font-size: 50px; line-height: 64px; font-weight: 600; max-width: 1560px; position: relative; }
+  #card .l2 b, #card .l1 b { color: var(--signal); font-weight: 600; }
+  #card .url { margin-top: 46px; font-size: 44px; position: relative; }
+  #card .url span { color: var(--dim); font-size: 30px; margin-left: 26px; }
+  #card .foot { position: absolute; left: 150px; right: 150px; bottom: 70px; font-size: 21px; line-height: 32px; color: var(--dim); display: flex; align-items: center; gap: 30px; }
+  #card .foot img { width: 92px; height: 92px; display: block; }
+</style>
+</head>
+<body>
+  <div id="top">
+    <div><span class="mark">TOMBAUGH</span><span class="sub">a blink comparator for the 102-color sky</span></div>
+    <div class="real mono"><span class="dot"></span>REAL SPHEREx DATA &middot; SCREEN CAPTURES OF THE LIVE TOOL</div>
+  </div>
+  <div id="stage"><div id="box"><img id="base" alt=""><img id="base2" alt=""><img id="crop" alt=""><div id="mask"></div><div id="hl"></div></div></div>
+  <div id="cap"><div class="a"></div><div class="b"></div></div>
+  <div id="card"><div class="bg"></div><div class="eyebrow mono"></div><h1></h1><div class="l1"></div><div class="l2"></div><div class="url mono"></div>
+    <div class="foot"><img alt="" id="logo"><div id="foottext"></div></div></div>
+  <div id="bar"></div>
+<script>
+// Tombaugh - SPHEREx blink comparator. Apache-2.0.
+// AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+const F = new URLSearchParams(location.search).get('frames') || '../../docs/demo/frames/';
+const LIVE = new URLSearchParams(location.search).get('live') || 'batch-ly.com/tombaugh';
+const TOTAL = 29.6;
+const K = 1760 / 1528;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+const ramp = (t, a, b) => ease((t - a) / (b - a));
+
+// Each scene: [start, end, base image, list of crops (null = the base's own picture), seconds per crop,
+// caption, sub-caption, focus(t) -> { rect: [x0,y0,x1,y1] | null, zoom, hl: [x0,y0,x1,y1] | null }].
+const FULL = { rect: null, zoom: 1, hl: null };
+const SCENES = [
+  { a: 3.2, b: 7.4, base: 'pluto-ui.jpg', crops: ['pluto-01.png', null, 'pluto-02.png', 'pluto-03.png', 'pluto-04.png', 'pluto-05.png', 'pluto-06.png', 'pluto-07-all.png'], per: 0.52,
+    cap: 'One link follows Pluto through 225 real exposures.', sub: 'The frame rides along with Pluto, so it holds still while the stars change behind it.', focus: () => FULL },
+  { a: 7.4, b: 10.6, base: 'pluto-ui.jpg', crops: ['pluto-07-all.png'], per: 99,
+    cap: 'Stack all four visits: Pluto alone. Its spectrum shows methane ice.', sub: 'Absorption at 0.89, 1.16, 1.38, 1.72, 2.3 and 3.3 µm, from 98 clean measurements.',
+    focus: (u) => ({ rect: [200, 110, 1528, 620], zoom: 1 + 0.12 * ramp(u, 0.1, 0.9), hl: u > 0.25 ? [716, 204, 1502, 512] : null }) },
+  { a: 10.6, b: 14.6, base: 'barnard-passes-ui.jpg', crops: ['barnard-pass1.png', 'barnard-pass2.png', 'barnard-pass3.png'], per: 0.44,
+    cap: 'Barnard’s Star, three visits six months apart.', sub: 'Blink them: one star steps north. Rings mark where Gaia says each star should be.',
+    focus: (u) => ({ rect: [0, 60, 1100, 660], zoom: 1 + 0.25 * ramp(u, 0.0, 0.5), hl: null }) },
+  { a: 14.6, b: 17.9, base: 'barnard-residual-ui.jpg', crops: [null, 'barnard-res2.png', 'barnard-res3.png'], per: 0.55,
+    cap: 'Subtract the sky predicted for each color.', sub: 'Every exposure is a different wavelength, so the tool learns each pixel’s spectrum first. Only change is left.',
+    focus: () => ({ rect: [0, 60, 1100, 660], zoom: 1.25, hl: null }) },
+  { a: 17.9, b: 21.9, base: 'barnard-motion-ui.jpg', crops: [], per: 99,
+    cap: 'Measured: 12 ± 2 arcsec a year, heading 355°.', sub: 'Gaia says 10.39 at 356°. The blind search listed this star as its one candidate: “Moved”.',
+    focus: (u) => ({ rect: [640, 110, 1528, 560], zoom: 1.25 + 0.3 * ramp(u, 0.0, 0.45), hl: u > 0.4 ? [650, 464, 1100, 488] : null }) },
+  { a: 21.9, b: 24.4, base: 'validation-ui.jpg', crops: [], per: 99,
+    cap: 'All five challenge targets, checked against the catalogues.', sub: '34 comparisons of motion, direction, parallax and brightness. Every one within 3 sigma.',
+    focus: (u) => ({ rect: [640, 180, 1528, 600], zoom: 1.3 + 0.25 * ramp(u, 0.0, 0.6), hl: u > 0.3 ? [650, 263, 1012, 285] : null }) },
+  { a: 24.4, b: 26.3, base: 'validation-rwaur-ui.jpg', crops: [], per: 99,
+    cap: 'RW Aurigae brightened by 40 % in six months: 11 sigma.', sub: 'Stars that should stand still do: the null test on field stars reads zero.',
+    focus: () => ({ rect: [640, 0, 1528, 470], zoom: 1.55, hl: [650, 324, 1310, 346] }) },
+];
+
+const cache = new Map();
+function src(name) { return F + name; }
+function preload() {
+  const names = new Set(['landing-ui.jpg', 'missing-mass.png']);
+  for (const s of SCENES) { names.add(s.base); for (const c of s.crops) if (c) names.add(c); }
+  return Promise.all([...names].map((n) => new Promise((res) => { const im = new Image(); im.onload = im.onerror = () => res(); im.src = src(n); cache.set(n, im); })));
+}
+
+function setBox(focus) {
+  const z = K * (focus.zoom || 1);
+  let tx = 0, ty = 0;
+  if (focus.rect && focus.zoom > 1) {
+    const [x0, y0, x1, y1] = focus.rect;
+    tx = 1760 / 2 - ((x0 + x1) / 2) * z;
+    ty = 814 / 2 - ((y0 + y1) / 2) * z;
+    tx = clamp(tx, 1760 - 1528 * z, 0);
+    ty = clamp(ty, 814 - 707 * z, 0);
+  }
+  $('box').style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${z.toFixed(5)})`;
+  const hl = $('hl');
+  if (focus.hl) {
+    const [x0, y0, x1, y1] = focus.hl;
+    hl.style.display = 'block';
+    hl.style.left = `${x0}px`; hl.style.top = `${y0}px`; hl.style.width = `${x1 - x0}px`; hl.style.height = `${y1 - y0}px`;
+    hl.style.borderWidth = `${(2.4 / (focus.zoom || 1)).toFixed(2)}px`;
+  } else hl.style.display = 'none';
+}
+
+function card(t) {
+  const c = $('card');
+  const intro = t < 3.2, outro = t >= 26.3;
+  if (!intro && !outro) { c.style.display = 'none'; return; }
+  c.style.display = 'flex';
+  const bg = c.querySelector('.bg');
+  bg.style.backgroundImage = `url(${src('landing-ui.jpg')})`;
+  const eyebrow = c.querySelector('.eyebrow'), h1 = c.querySelector('h1'), l1 = c.querySelector('.l1'), l2 = c.querySelector('.l2'), url = c.querySelector('.url');
+  const foot = c.querySelector('.foot');
+  if (intro) {
+    c.style.opacity = String(1 - ramp(t, 2.95, 3.2));
+    eyebrow.textContent = 'NASA SPACE APPS 2026  /  PLANET X AND SPHEREx  /  TEAM MISSING MASS';
+    h1.textContent = 'TOMBAUGH';
+    l1.innerHTML = 'In 1930 Clyde Tombaugh found Pluto by blinking two photographs of the same sky.';
+    l2.innerHTML = 'This does it with NASA’s SPHEREx survey, in <b>102 infrared colors</b>.';
+    l1.style.opacity = String(ramp(t, 0.15, 0.6));
+    l2.style.opacity = String(ramp(t, 1.35, 1.8));
+    url.style.display = 'none';
+    foot.style.display = 'none';
+  } else {
+    const u = t - 26.3;
+    c.style.opacity = String(ramp(u, 0, 0.3));
+    eyebrow.textContent = 'ANY SPOT ON THE SKY  /  NO INSTALL, NO ACCOUNT  /  OPEN SOURCE';
+    h1.textContent = 'TOMBAUGH';
+    l1.innerHTML = 'See what moved. Measure it. Check it against what is known.';
+    l2.innerHTML = '';
+    l1.style.opacity = String(ramp(u, 0.25, 0.7));
+    url.style.display = 'block';
+    url.innerHTML = `${LIVE}<span>github.com/IshiakiZ/Batchly-Public</span>`;
+    url.style.opacity = String(ramp(u, 0.7, 1.15));
+    foot.style.display = 'flex';
+    foot.style.opacity = String(ramp(u, 0.9, 1.4));
+    $('logo').src = src('missing-mass.png');
+    $('foottext').innerHTML = 'Team Missing Mass, NASA Space Apps Challenge 2026. Data: NASA SPHEREx Level 2 spectral images (NASA/IPAC Infrared Science Archive), Gaia DR3, JPL Horizons.<br>The code was written with Claude, an AI model. Not affiliated with or endorsed by NASA.';
+  }
+}
+
+window.renderAt = function renderAt(t) {
+  t = clamp(t, 0, TOTAL);
+  $('bar').style.width = `${(1920 * t / TOTAL).toFixed(1)}px`;
+  card(t);
+  const s = SCENES.find((x) => t >= x.a && t < x.b) || (t < 3.2 ? SCENES[0] : SCENES[SCENES.length - 1]);
+  const u = clamp((t - s.a) / (s.b - s.a), 0, 1);
+  $('base').src = src(s.base);
+  $('base2').style.display = 'none';
+  const crop = $('crop');
+  if (s.crops.length) {
+    const i = Math.min(s.crops.length === 1 ? 0 : Math.floor(Math.max(0, t - s.a) / s.per) % s.crops.length, s.crops.length - 1);
+    const name = s.crops[i];
+    if (name) { crop.style.display = 'block'; crop.src = src(name); } else crop.style.display = 'none';
+  } else crop.style.display = 'none';
+  $('mask').style.display = s.crops.length ? 'block' : 'none';
+  setBox(s.focus(u));
+  const cap = $('cap');
+  cap.querySelector('.a').textContent = s.cap;
+  cap.querySelector('.b').textContent = s.sub;
+  const fade = Math.min(ramp(t, s.a, s.a + 0.25), 1);
+  cap.style.opacity = String(t < 3.2 || t >= 26.3 ? 0 : fade);
+  return t;
+};
+window.TOTAL = TOTAL;
+window.ready = preload().then(() => { window.renderAt(0); return true; });
+</script>
+</body>
+</html>

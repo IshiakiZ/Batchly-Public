@@ -1,0 +1,212 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  The seven-slide version of the demo. tools/demo/make-slides.mjs prints it to docs/demo/tombaugh-slides.pdf.
+  Every picture is a screen capture of the live tool on real SPHEREx data (docs/demo/frames/), except the
+  small line drawing on slide 3, which is a diagram.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tombaugh: seven slides</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --dim: #A8A59A; --line: rgba(247,242,231,0.2); }
+  @page { size: 1920px 1080px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .mono { font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; }
+  .slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; padding: 84px 110px 70px; page-break-after: always; break-after: page; background: var(--ink); }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .num { position: absolute; right: 110px; top: 60px; font-size: 20px; letter-spacing: 0.16em; color: var(--dim); }
+  .eyebrow { font-size: 20px; letter-spacing: 0.2em; color: var(--dim); text-transform: uppercase; }
+  h2 { margin: 16px 0 0; font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 800; font-size: 64px; line-height: 72px; letter-spacing: -0.01em; max-width: 1560px; }
+  h2 b { color: var(--signal); font-weight: 800; }
+  p, li { font-size: 30px; line-height: 44px; }
+  .dim { color: var(--dim); }
+  .cols { display: flex; gap: 60px; margin-top: 44px; }
+  .shot { border: 1px solid var(--line); display: block; }
+  .cap { font-size: 21px; line-height: 30px; color: var(--dim); margin-top: 12px; }
+  ul { margin: 0; padding: 0; list-style: none; }
+  li { padding-left: 34px; position: relative; margin-bottom: 18px; }
+  li::before { content: ''; position: absolute; left: 0; top: 17px; width: 14px; height: 14px; background: var(--signal); }
+  .foot { position: absolute; left: 110px; right: 110px; bottom: 40px; font-size: 18px; color: var(--dim); display: flex; justify-content: space-between; letter-spacing: 0.04em; }
+  table { border-collapse: collapse; width: 100%; margin-top: 36px; }
+  th { text-align: left; font-size: 18px; letter-spacing: 0.14em; color: var(--dim); font-weight: 500; padding: 0 18px 12px 0; border-bottom: 1px solid var(--line); text-transform: uppercase; }
+  td { font-size: 27px; line-height: 36px; padding: 15px 18px 15px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.m { font-family: 'JetBrains Mono', monospace; font-size: 24px; }
+  td .s { color: var(--dim); font-size: 21px; }
+  .big { font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 900; font-size: 170px; line-height: 1; letter-spacing: 0.14em; margin-top: 30px; }
+  .crop { width: 376px; height: 376px; border: 1px solid var(--line); display: block; }
+  .op { font-size: 90px; font-weight: 300; color: var(--dim); align-self: center; padding-bottom: 60px; }
+  .tile { text-align: left; }
+  .kpi { display: flex; gap: 46px; margin-top: 34px; }
+    .kpi > div { border-left: 4px solid var(--signal); padding-left: 20px; }
+  .kpi .v { font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 800; font-size: 60px; line-height: 64px; }
+  .arch { display: flex; align-items: stretch; gap: 22px; margin-top: 34px; }
+  .arch .b { flex: 1; border: 1px solid var(--line); padding: 20px 24px; }
+  .arch .b .t { font-size: 18px; letter-spacing: 0.16em; color: var(--dim); text-transform: uppercase; }
+  .arch .b .d { font-size: 25px; line-height: 34px; margin-top: 8px; }
+  .arch .a { align-self: center; font-size: 44px; color: var(--signal); }
+  .kpi .k { font-size: 21px; line-height: 28px; color: var(--dim); margin-top: 6px; max-width: 300px; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <div style="position:absolute; inset:0; background: url(../../docs/demo/frames/landing-ui.jpg) center top / cover; opacity: 0.10;"></div>
+  <div style="position: relative; padding-top: 150px;">
+    <div class="eyebrow mono">NASA Space Apps 2026 / Planet X and SPHEREx / Team Missing Mass</div>
+    <div class="big">TOMBAUGH</div>
+    <p style="font-size: 52px; line-height: 66px; font-weight: 600; margin: 40px 0 0;">A blink comparator for the 102-color sky.</p>
+    <p class="dim" style="max-width: 1400px; margin-top: 22px;">Give it any spot on the sky. It plays every SPHEREx image of that spot as a movie, subtracts the sky it predicts, and measures what moved or changed.</p>
+    <p class="mono" style="font-size: 38px; margin-top: 46px;">batch-ly.com/tombaugh <span class="dim" style="font-size: 26px; margin-left: 22px;">github.com/IshiakiZ/Batchly-Public</span></p>
+  </div>
+  <div class="foot" style="align-items: center;"><span style="display:flex; align-items:center; gap: 20px;"><img src="../../docs/demo/frames/missing-mass.png" alt="" style="width: 70px; height: 70px;">Code written with Claude, an AI model, under the team's direction. Not affiliated with or endorsed by NASA.</span><span class="mono">1 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">The problem</div>
+  <h2>SPHEREx never photographs a patch of sky in the same color twice.</h2>
+  <div class="cols">
+    <div style="flex: 1;">
+      <ul>
+        <li>In 1930 Clyde Tombaugh found Pluto by flipping between two photographs of the same stars and watching for the dot that jumped.</li>
+        <li>SPHEREx images the whole sky in 102 infrared colors, 0.75 to 5 µm. Its filter makes the wavelength depend on where a star lands on the detector.</li>
+        <li>So two exposures of one patch differ in color everywhere. Blink them and <b style="color: var(--signal);">everything flickers</b>.</li>
+        <li>Pixels are 6.15 arcsec and each patch is revisited about every six months. Barnard's Star, the fastest star in the sky, moves 1.7 pixels a year.</li>
+      </ul>
+    </div>
+    <div>
+      <img class="shot" src="../../docs/demo/frames/barnard-passes-ui.jpg" alt="" style="width: 780px;">
+      <div class="cap">The tool on Barnard's Star: one deep frame per visit, real SPHEREx data.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Tombaugh / team Missing Mass</span><span class="mono">2 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">The idea</div>
+  <h2>Predict the sky in each color, subtract it, and look at what is left.</h2>
+  <div class="cols" style="gap: 34px; margin-top: 50px; align-items: flex-start;">
+    <div class="tile"><img class="crop" src="../../docs/demo/frames/barnard-pass3.png" alt=""><div class="cap" style="max-width: 376px;">What SPHEREx saw on one visit.</div></div>
+    <div class="op">−</div>
+    <div class="tile">
+      <svg class="crop" viewBox="0 0 376 376" role="img" aria-label="Diagram: a smooth spectrum fitted through one pixel's measurements">
+        <rect width="376" height="376" fill="#111110"/>
+        <line x1="40" y1="320" x2="350" y2="320" stroke="#A8A59A" stroke-width="1"/><line x1="40" y1="40" x2="40" y2="320" stroke="#A8A59A" stroke-width="1"/>
+        <path d="M40 250 C 90 120, 130 90, 170 150 S 250 260, 350 280" fill="none" stroke="#F7F2E7" stroke-width="3"/>
+        <g fill="#E53C27"><circle cx="62" cy="205" r="6"/><circle cx="96" cy="140" r="6"/><circle cx="131" cy="118" r="6"/><circle cx="168" cy="152" r="6"/><circle cx="205" cy="196" r="6"/><circle cx="246" cy="236" r="6"/><circle cx="290" cy="262" r="6"/><circle cx="334" cy="270" r="6"/></g>
+        <text x="195" y="350" fill="#A8A59A" font-size="18" text-anchor="middle" font-family="Inter, sans-serif">wavelength</text>
+        <text x="22" y="180" fill="#A8A59A" font-size="18" text-anchor="middle" font-family="Inter, sans-serif" transform="rotate(-90 22 180)">brightness of one pixel</text>
+      </svg>
+      <div class="cap" style="max-width: 376px;">Every exposure adds one point to each pixel's spectrum. The fit predicts that pixel in any color. (Diagram.)</div>
+    </div>
+    <div class="op">=</div>
+    <div class="tile"><img class="crop" src="../../docs/demo/frames/barnard-res3.png" alt=""><div class="cap" style="max-width: 376px;">What is left: Barnard's Star, more light to the north, less to the south.</div></div>
+    <div style="flex: 1; padding-left: 26px;">
+      <ul>
+        <li>A mover leaves a red and blue pair.</li>
+        <li>A variable leaves a pulse.</li>
+        <li>Everything that stayed the same cancels.</li>
+        <li>It runs in the browser. No install, no account.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Tombaugh / team Missing Mass</span><span class="mono">3 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">Result 1 / real SPHEREx data</div>
+  <h2>Pluto, the world Tombaugh found: followed, stacked, and its <b>methane ice</b> read.</h2>
+  <div class="cols" style="margin-top: 30px;">
+    <div>
+      <img class="shot" src="../../docs/demo/frames/pluto-ui-v3d1.jpg" alt="" style="width: 1180px;">
+      <div class="cap">One link, ?body=pluto. The frame follows Pluto, so it holds still while the stars go by.</div>
+    </div>
+    <div style="flex: 1;">
+      <ul>
+        <li>JPL Horizons says where Pluto was. The index finds every exposure that caught it: <b>225</b>, in 4 visits.</li>
+        <li>98 clean measurements give a spectrum from 0.76 to 4.97 µm.</li>
+        <li>Methane-ice bands at 0.89, 1.16, 1.38, 1.72, 2.3 and 3.3 µm. The 2.3 µm band is about 53 % deep.</li>
+        <li>About ten seconds, from link to spectrum.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Tombaugh / team Missing Mass</span><span class="mono">4 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">Result 2 / real SPHEREx data</div>
+  <h2>Barnard's Star: found blind, then measured against Gaia.</h2>
+  <div class="cols" style="margin-top: 30px;">
+    <div>
+      <img class="shot" src="../../docs/demo/frames/barnard-motion-ui.jpg" alt="" style="width: 1180px;">
+      <div class="cap">Residual view on the left; the motion fitted through three visits on the right.</div>
+    </div>
+    <div style="flex: 1;">
+      <ul>
+        <li>The blind search lists <b>one</b> candidate in this field: "Moved. Its halo shifted north."</li>
+        <li>Measured: <b>12 ± 2 arcsec a year</b>, heading 355°.</li>
+        <li>Gaia: 10.39 arcsec a year, heading 356°. Agreement within 0.6 sigma.</li>
+        <li>The star saturates the detector, so its position comes from the unsaturated light around the core.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Tombaugh / team Missing Mass</span><span class="mono">5 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">Validation / real SPHEREx data, 15 November 2026</div>
+  <h2>Five of five challenge targets. <b>34 comparisons, all within 3 sigma.</b></h2>
+  <table>
+    <tr><th>Target</th><th>Tombaugh measures</th><th>Catalogue</th><th>Sigma</th></tr>
+    <tr><td>Barnard's Star</td><td class="m">11903 ± 2426 mas/yr at 355 ± 12°</td><td class="m">10380 at 356°</td><td class="m">+0.6</td></tr>
+    <tr><td>Epsilon Indi Ba,Bb</td><td class="m">4511 ± 648 mas/yr at 125.9 ± 8.2°<br><span class="s">methane band depth 0.600 ± 0.002</span></td><td class="m">4635 at 123.9°</td><td class="m">−0.2</td></tr>
+    <tr><td>WISE 0855-0714</td><td class="m">8016 ± 1249 mas/yr at 277.9 ± 8.9°</td><td class="m">8169 at 274.6°</td><td class="m">−0.1</td></tr>
+    <tr><td>RW Aurigae</td><td class="m">×1.397 ± 0.041 brighter, Sep 2025 → Mar 2026<br><span class="s">no motion detected</span></td><td class="m">irregular variable</td><td class="m">11.0</td></tr>
+    <tr><td>R Draconis</td><td class="m">×0.717 ± 0.056 fainter, Mar → Apr 2026<br><span class="s">no motion detected</span></td><td class="m">Mira variable</td><td class="m">4.3</td></tr>
+  </table>
+  <div class="kpi">
+    <div><div class="v">0.3″</div><div class="k">field stars land this close to Gaia, a twentieth of a pixel</div></div>
+    <div><div class="v">0 ± 0.2″/yr</div><div class="k">measured motion of stars that should not move (best field)</div></div>
+    <div><div class="v">0</div><div class="k">candidates in a control field with nothing in it</div></div>
+    <div><div class="v">993</div><div class="k">automated tests, plus a cross-check against Astropy</div></div>
+  </div>
+  <div class="foot"><span>Catalogue: what a perfect measurement on the same dates would give. For the two variables, sigma is the significance of the change. Full tables: docs/RESULTS.md</span><span class="mono">6 / 7</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow mono">How it is built, and what it cannot do</div>
+  <h2>One web page, NASA's public data, and honest limits.</h2>
+  <div class="cols" style="margin-top: 36px;">
+    <div style="flex: 1;">
+      <ul>
+        <li>A browser app with no dependencies does the science: frames, sky model, centroids, photometry.</li>
+        <li>A small proxy reads NASA's public SPHEREx bucket through our own index of <b>272,963 exposures</b>, and sends the browser about 70 KB per exposure.</li>
+        <li>Also inside: Gaia rings, molecule lenses, a distance dial, a shared sky map of what has been looked at, sound, an injection test, exports.</li>
+        <li>Open source, Apache 2.0. All code and tests were written by Claude, an AI model, under the team's direction; the idea is the team's.</li>
+      </ul>
+    </div>
+    <div style="flex: 1;">
+      <ul>
+        <li>Motions under about 1 arcsec a year cannot be seen: 6-arcsec pixels, three or four visits.</li>
+        <li>Saturated stars are measured from their wings, with larger errors.</li>
+        <li><b>No new object is claimed.</b> A candidate is a place to look. A real Planet X would probably be too faint for single exposures.</li>
+        <li>Data: SPHEREx Level 2 spectral images, NASA/IPAC Infrared Science Archive (DR1 DOI 10.26131/IRSA678, QR3 DOI 10.26131/IRSA662); Gaia DR3 (ESA); JPL Horizons; SIMBAD (CDS).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="arch">
+    <div class="b"><div class="t mono">Your browser</div><div class="d">The Tombaugh page: viewer, sky model, measurements, plots. One file, 1.6 MB.</div></div>
+    <div class="a">⇄</div>
+    <div class="b"><div class="t mono">Small proxy</div><div class="d">An edge function with our exposure index. Finds the exposures, cuts out the patch.</div></div>
+    <div class="a">⇄</div>
+    <div class="b"><div class="t mono">Public archives</div><div class="d">NASA's SPHEREx bucket on AWS Open Data, IRSA, Gaia, JPL Horizons, SIMBAD.</div></div>
+  </div>
+  <div class="foot"><span>Team Missing Mass, NASA Space Apps Challenge 2026. Not affiliated with or endorsed by NASA. All screenshots are captures of the live tool.</span><span class="mono">7 / 7</span></div>
+</section>
+
+</body>
+</html>

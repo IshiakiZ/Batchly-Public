@@ -41,8 +41,10 @@ A survey that revisits the whole sky every six months is a search for anything n
 [DEMO-URL]
 ```
 
-A screen recording of 30 seconds or less, in English, at a public link. Script:
-[DEMO-SCRIPT.md](DEMO-SCRIPT.md).
+A video of 30 seconds or less, or seven slides, in English, at a public link. Both are ready in
+[demo/](demo/): `tombaugh-demo.mp4` (29.6 s; upload it somewhere public and paste that link) and
+`tombaugh-slides.pdf` (seven slides; its GitHub page opens in a browser without sign-in and can be
+pasted as it is). Shot list and notes: [DEMO-SCRIPT.md](DEMO-SCRIPT.md).
 
 ---
 
