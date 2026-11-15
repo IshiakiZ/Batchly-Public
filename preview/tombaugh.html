@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T12:10:41.696Z, sources sha256 7c37a5b10b65cfcf.
+Single-file build of 111 modules, 2026-11-15T12:14:05.275Z, sources sha256 c887c2ea05d676a9.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -7259,7 +7259,8 @@ updateOverlays();
 emit('select', { ...sel });
 }
 const LIGHTCURVE_NOTE = 'Brightness over time, relative to the source\u2019s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
-const MOTION_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+const MOTION_NOTE_SHORT = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion.';
+const MOTION_NOTE = `${MOTION_NOTE_SHORT.slice(0, -1)}, compared with the proper motion Gaia lists for the nearest star.`;
 function lightCurveNote(sel) {
 const lc = sel.lightCurve || [];
 const wing = (sel.spectrum || []).find((p) => p && p.sat && Number.isFinite(p.wingR1));
@@ -7293,6 +7294,7 @@ if (m && m.catalogue) {
 notes.push(`No Gaia star at this position matches ${m.catalogue.name || 'this object'}, so the comparison is with its published motion (SIMBAD values in the built-in target table).`);
 }
 if (m && m.saturated) notes.push('The star saturates the detector, so its position in each pass is taken from the unsaturated light around the flagged core.');
+if (m && m.catalogue) return `${notes.join(' ')} ${MOTION_NOTE_SHORT}`;
 return notes.length ? `${notes.join(' ')} ${MOTION_NOTE}` : MOTION_NOTE;
 }
 function updateAbout() {
@@ -15768,6 +15770,21 @@ const mv = formatWithError(m.total * k, hasErr ? m.errTotal * k : NaN);
 const significant = hasErr ? m.total >= 3 * m.errTotal : m.total > 0;
 if (!significant) {
 const upper = hasErr ? m.total + 2 * m.errTotal : NaN;
+if (hasErr && gaiaPm && m.total >= 2 * m.errTotal && g.total >= 2 * m.errTotal
+&& isNum(m.pmra) && isNum(m.pmdec) && isNum(g.pmra) && isNum(g.pmdec)) {
+const diff = Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec);
+if (diff <= 2 * m.errTotal) {
+const gv = mv.dec === null ? formatNumber(g.total * k, 4) : formatFixed(g.total * k, clamp(mv.dec + 1, 0, 4));
+return {
+kind: 'agree',
+weak: true,
+text: `Measured ${mv.text} ${unit}: ${(m.total / m.errTotal).toFixed(1)} sigma, short of a detection on its own. ${Says} ${gv}, in the same direction: consistent.`,
+signal: false,
+sigma: diff / m.errTotal,
+unit,
+};
+}
+}
 let text = hasErr
 ? `No motion detected: less than ${formatNumber(upper * k, 2)} ${unit} (2 sigma).`
 : 'No motion detected.';
