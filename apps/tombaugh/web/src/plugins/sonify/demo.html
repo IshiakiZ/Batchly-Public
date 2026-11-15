@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  Standalone demo and visual test page for the Listen plugin (web/src/plugins/sonify/).
+  A fake app stands in for the shell. Every measurement on this page is synthetic.
+  Serve web/ over HTTP and open src/plugins/sonify/demo.html
+    ?w=380          width of the side column in px (try 320 and 440)
+    ?select=dwarf   start with a source selected (star, dwarf, giant, faint)
+  Nothing plays until a control is pressed. The spectrum plot on the left listens to the
+  'tombaugh:sonify-cursor' event to show that other parts of the page can follow the sound.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh plugin demo: Listen</title>
+<style>
+  html, body { margin: 0; background: #171715; color: #F7F2E7; font: 13px/1.5 Arial, Helvetica, sans-serif; }
+  main { display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 20px 48px; align-items: flex-start; max-width: 1080px; margin: 0 auto; }
+  .stage { flex: 1 1 380px; min-width: 0; max-width: 600px; }
+  h1 { font: 900 20px/1.2 "Arial Black", Arial, sans-serif; margin: 0 0 4px; }
+  .lede { color: rgba(247, 242, 231, 0.68); margin: 0 0 16px; max-width: 58ch; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+  .bar button, .tool { background: transparent; color: #F7F2E7; border: 1px solid #77766E; border-radius: 3px; font: 12px Arial, sans-serif; padding: 6px 10px; cursor: pointer; }
+  .bar button:hover, .tool:hover:not(:disabled) { border-color: #F7F2E7; }
+  .bar button:focus-visible, .tool:focus-visible { outline: 2px solid #F7F2E7; outline-offset: 2px; }
+  .bar button[aria-pressed="true"] { border-color: #F7F2E7; background: rgba(247, 242, 231, 0.08); }
+  .plot { background: #1E1E1B; border: 1px solid rgba(247, 242, 231, 0.14); border-radius: 3px; padding: 12px 14px 10px; }
+  .plot-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 30px; margin-bottom: 6px; }
+  .plot-title { font: bold 13px Arial, sans-serif; }
+  .toolstrip { display: flex; gap: 6px; }
+  .tool[aria-pressed="true"] { background: #F7F2E7; color: #171715; border-color: #F7F2E7; }
+  .tool:disabled { color: rgba(247, 242, 231, 0.5); border-color: rgba(247, 242, 231, 0.14); cursor: not-allowed; }
+  #spec { display: block; width: 100%; height: auto; }
+  #spec .axis { stroke: rgba(119, 118, 110, 0.7); stroke-width: 1; }
+  #spec .pt { fill: #F7F2E7; }
+  #spec .cursor { stroke: #E53C27; stroke-width: 1.5; }
+  #spec text { fill: rgba(247, 242, 231, 0.68); font: 11px Consolas, monospace; }
+  .log { margin: 10px 0 0; font: 11px/1.5 Consolas, monospace; color: rgba(247, 242, 231, 0.68); min-height: 17px; }
+  .side { flex: 0 0 auto; width: var(--side-w, 380px); max-width: 100%; background: #1E1E1B; border: 1px solid rgba(247, 242, 231, 0.14); border-radius: 3px; }
+  .tabs { display: flex; border-bottom: 1px solid rgba(247, 242, 231, 0.14); }
+  .tab { padding: 11px 20px 9px; font: 12px Arial, sans-serif; letter-spacing: 0.04em; color: #F7F2E7; border-bottom: 2px solid #F7F2E7; }
+  .panel { padding: 16px 20px 20px; }
+  .panel-body { display: grid; gap: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage">
+    <h1>Listen</h1>
+    <p class="lede">Plugin demo with a fake app. Pick a source, then press Listen or one of the Play buttons. Nothing plays by itself. All data here is synthetic.</p>
+    <div class="bar" id="sources" role="group" aria-label="Pick a source"></div>
+    <div class="plot">
+      <div class="plot-head">
+        <span class="plot-title" id="plot-title">Spectrum</span>
+        <span class="toolstrip" id="toolstrip"></span>
+      </div>
+      <svg id="spec" viewBox="0 0 560 220" role="img" aria-label="Spectrum of the selected source">
+        <line class="axis" x1="36" y1="190" x2="548" y2="190"></line>
+        <line class="axis" x1="36" y1="12" x2="36" y2="190"></line>
+        <g id="pts"></g>
+        <line class="cursor" id="cursor" x1="0" x2="0" y1="12" y2="190" visibility="hidden"></line>
+        <text x="36" y="208">0.75</text><text x="290" y="208" text-anchor="middle">wavelength, µm</text><text x="548" y="208" text-anchor="end">5.0</text>
+      </svg>
+    </div>
+    <p class="log" id="log" aria-hidden="true"></p>
+  </div>
+  <aside class="side" id="side" aria-label="Side column">
+    <div class="tabs" id="tabs"></div>
+    <div id="panels"></div>
+  </aside>
+</main>
+
+<script type="module">
+import { CURSOR_EVENT, PLAY_EVENT, install, meta } from './index.js';
+
+const params = new URLSearchParams(location.search);
+document.getElementById('side').style.setProperty('--side-w', `${Math.max(280, Number(params.get('w')) || 380)}px`);
+
+// ---- synthetic measurements --------------------------------------------------------------------
+const WAVES = Array.from({ length: 102 }, (_, i) => 0.75 * (5 / 0.75) ** (i / 101));
+const planck = (w, t) => 1 / (w ** 3 * Math.expm1(14387.77 / (w * t)));
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const gauss = (r) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+function spectrum(shape, { peak = 5000, noise = 25, bands = [], seed = 1 } = {}) {
+  const rand = mulberry32(seed);
+  const raw = WAVES.map((w) => bands.reduce((f, b) => f * (1 - b.depth * Math.exp(-0.5 * ((w - b.center) / b.sigma) ** 2)), shape(w)));
+  const top = Math.max(...raw);
+  return WAVES.map((wave, i) => ({ wave, flux_uJy: (raw[i] / top) * peak + noise * gauss(rand), err_uJy: noise }));
+}
+const PASSES = [60840, 61025, 61205];
+function lightCurve(levels, { n = 20, err = 0.03, seed = 7 } = {}) {
+  const rand = mulberry32(seed);
+  return levels.flatMap((level, k) => Array.from({ length: n }, (_, i) => ({ mjd: PASSES[k] + (i * 6) / n, ratio: level + err * gauss(rand), err, wave: 1 + i * 0.1 })));
+}
+
+const SOURCES = {
+  star: { label: 'Cool star with a dip', binned: spectrum((w) => planck(w, 3200), { peak: 18000, noise: 60, seed: 11, bands: [{ center: 3.3, sigma: 0.12, depth: 0.4 }] }), lightCurve: lightCurve([1, 1.01, 0.99], { err: 0.02 }) },
+  dwarf: { label: 'Methane dwarf', binned: spectrum((w) => planck(w, 900), { peak: 2600, noise: 20, seed: 3, bands: [{ center: 3.3, sigma: 0.2, depth: 0.93 }, { center: 2.25, sigma: 0.12, depth: 0.5 }, { center: 1.67, sigma: 0.07, depth: 0.4 }] }), lightCurve: lightCurve([1, 1.02, 0.98], { err: 0.05, seed: 5 }) },
+  giant: { label: 'Variable giant', binned: spectrum((w) => planck(w, 2900), { peak: 60000, noise: 150, seed: 21, bands: [{ center: 4.67, sigma: 0.05, depth: 0.35 }] }), lightCurve: lightCurve([1, 2, 1.1], { err: 0.03, seed: 9 }) },
+  faint: { label: 'Faint, no light curve', binned: spectrum(() => 1, { peak: 60, noise: 30, seed: 41 }), lightCurve: [] },
+};
+
+// ---- fake app ----------------------------------------------------------------------------------
+const listeners = new Map();
+let selected = null;
+const tools = {};
+const app = {
+  version: 'demo',
+  api: { baseUrl: '/api' },
+  viewer: null,
+  on(event, fn) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => listeners.get(event).delete(fn);
+  },
+  emit(event, payload) {
+    for (const fn of listeners.get(event) || []) fn(payload);
+  },
+  selection: () => selected,
+  addTool({ id, label, title, onClick }) {
+    const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'tool', textContent: label, title });
+    btn.dataset.tool = id;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.addEventListener('click', (e) => onClick(e));
+    document.getElementById('toolstrip').append(btn);
+    tools[id] = btn;
+    return {
+      setActive: (on) => btn.setAttribute('aria-pressed', String(!!on)),
+      setDisabled: (off, reason) => {
+        btn.disabled = !!off;
+        btn.title = off && reason ? reason : title;
+      },
+      remove: () => btn.remove(),
+    };
+  },
+  addPanel({ id, title, render }) {
+    const tab = Object.assign(document.createElement('div'), { className: 'tab', textContent: title });
+    const body = Object.assign(document.createElement('div'), { className: 'panel-body' });
+    const panel = Object.assign(document.createElement('section'), { className: 'panel', id: `panel-${id}` });
+    panel.append(body);
+    document.getElementById('tabs').append(tab);
+    document.getElementById('panels').append(panel);
+    const handle = render(body);
+    return { show() {}, hide() {}, remove() { if (handle && handle.dispose) handle.dispose(); tab.remove(); panel.remove(); } };
+  },
+};
+
+// ---- the spectrum plot, which follows the cursor event ------------------------------------------
+const NS = 'http://www.w3.org/2000/svg';
+const xOf = (wave) => 36 + ((wave - 0.75) / 4.25) * 512;
+function drawSpectrum(points) {
+  const g = document.getElementById('pts');
+  g.replaceChildren();
+  document.getElementById('cursor').setAttribute('visibility', 'hidden');
+  if (!points || !points.length) return;
+  const top = Math.max(...points.map((p) => p.flux_uJy)) * 1.08;
+  for (const p of points) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('class', 'pt');
+    c.setAttribute('cx', xOf(p.wave).toFixed(1));
+    c.setAttribute('cy', (190 - (Math.max(0, p.flux_uJy) / top) * 172).toFixed(1));
+    c.setAttribute('r', '2');
+    g.append(c);
+  }
+}
+
+const events = { cursor: [], play: [] };
+const logEl = document.getElementById('log');
+window.addEventListener(CURSOR_EVENT, (e) => {
+  events.cursor.push(e.detail);
+  const cursor = document.getElementById('cursor');
+  if (e.detail.playing && typeof e.detail.wave === 'number') {
+    const x = xOf(e.detail.wave).toFixed(1);
+    cursor.setAttribute('x1', x);
+    cursor.setAttribute('x2', x);
+    cursor.setAttribute('visibility', 'visible');
+    logEl.textContent = `${CURSOR_EVENT}  wave ${e.detail.wave.toFixed(3)} µm  note ${e.detail.index + 1} of ${e.detail.total}`;
+  } else if (e.detail.playing) {
+    logEl.textContent = `${CURSOR_EVENT}  mjd ${e.detail.mjd.toFixed(2)}  ratio ${e.detail.ratio.toFixed(2)}  note ${e.detail.index + 1} of ${e.detail.total}`;
+  } else {
+    cursor.setAttribute('visibility', 'hidden');
+    logEl.textContent = `${CURSOR_EVENT}  ended`;
+  }
+});
+window.addEventListener(PLAY_EVENT, (e) => {
+  events.play.push(e.detail);
+  logEl.textContent = `${PLAY_EVENT}  ${e.detail.kind}: ${e.detail.scheduled} notes over ${e.detail.duration.toFixed(1)} s`;
+});
+
+const buttons = {};
+function select(id) {
+  const s = id && SOURCES[id] ? SOURCES[id] : null;
+  selected = s ? { ra: 269.45, dec: 4.74, x: 30, y: 30, spectrum: s.binned, binned: s.binned, lightCurve: s.lightCurve } : null;
+  for (const [key, b] of Object.entries(buttons)) b.setAttribute('aria-pressed', String(key === id));
+  document.getElementById('plot-title').textContent = s ? `Spectrum: ${s.label}` : 'Spectrum';
+  drawSpectrum(s ? s.binned : null);
+  logEl.textContent = '';
+  app.emit('select', selected);
+}
+const bar = document.getElementById('sources');
+for (const [id, s] of Object.entries(SOURCES)) {
+  const b = Object.assign(document.createElement('button'), { type: 'button', textContent: s.label });
+  b.dataset.source = id;
+  b.setAttribute('aria-pressed', 'false');
+  b.addEventListener('click', () => select(id));
+  bar.append(b);
+  buttons[id] = b;
+}
+const clear = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Clear selection', id: 'btn-clear' });
+clear.addEventListener('click', () => select(null));
+bar.append(clear);
+
+const plugin = install(app);
+window.demo = { app, plugin, meta, select, events, tools, SOURCES };
+if (params.get('select')) select(params.get('select'));
+</script>
+</body>
+</html>

@@ -1,0 +1,766 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  demo.html - the story plugin on its own, against a stand-in app: a canvas that draws a made-up
+  field, a small store, and loading delays, shaped like the plugin `app` object of
+  CONTRACT-PLUGINS.md and like the shell's page (same element ids and classes). Nothing here is
+  real data; every frame id says "l2b-syn" so the plugin labels the picture "Synthetic data".
+
+  Serve web/ (python3 -m http.server 8795 -directory web) and open
+    /src/plugins/story/demo.html                          the launcher (Tours tab, Tour tool)
+    /src/plugins/story/demo.html?story=demo&record=1      the film, in recording mode
+    /src/plugins/story/demo.html?story=tour               the guided tour
+  Extra parameter for this page only: delay=<factor> scales the fake loading delays.
+-->
+<html lang="en" data-screen="console">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Story plugin demo · Tombaugh</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../../../styles.css">
+<style>
+  /* Only what the stand-in needs on top of the shell stylesheet. */
+  html, body { background: #171715; color: #F7F2E7; font-family: Arial, Helvetica, sans-serif; }
+  .fake-note { font-size: 11px; color: #ADA99E; }
+  .fake-seg .seg-btn { appearance: none; background: none; border: 0; border-left: 1px solid rgba(247, 242, 231, 0.3); color: #ADA99E; flex: 1; cursor: pointer; }
+  .fake-seg .seg-btn:first-child { border-left: 0; }
+  .fake-seg .seg-btn[aria-checked="true"] { color: #F7F2E7; background: rgba(247, 242, 231, 0.07); font-weight: bold; }
+  .fake-ctl { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid rgba(247, 242, 231, 0.14); font-size: 12px; }
+  .fake-ctl b { font-weight: normal; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: #ADA99E; }
+  .fake-dets { display: flex; gap: 4px; }
+  .fake-dets button { flex: 1; height: 26px; background: none; color: #ADA99E; border: 1px solid rgba(247, 242, 231, 0.3); border-radius: 2px; cursor: pointer; font: inherit; }
+  .fake-dets button[aria-pressed="true"] { color: #F7F2E7; border-color: #F7F2E7; }
+  .fake-ticks { display: flex; gap: 2px; height: 14px; align-items: stretch; }
+  .fake-ticks i { flex: 1; background: rgba(247, 242, 231, 0.18); }
+  .fake-ticks i.is-on { background: #F7F2E7; }
+  .fake-big { font-family: Consolas, "Liberation Mono", monospace; font-size: 20px; line-height: 1.5; }
+  .fake-big small { font-size: 12px; color: #ADA99E; }
+  .fake-plot { width: 100%; height: auto; display: block; background: #11110F; border: 1px solid rgba(247, 242, 231, 0.14); }
+  #viewer canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+  #map-canvas { width: 100%; height: auto; display: block; }
+  .tool { font-size: 12px; padding: 0 10px; height: 26px; background: none; border: 0; border-left: 1px solid rgba(247, 242, 231, 0.3); color: #ADA99E; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar" id="topbar">
+    <a class="brand" id="brand" href="./demo.html" aria-label="Story plugin demo">
+      <span class="wordmark">TOMBAUGH</span>
+      <span class="tagline">story plugin demo, stand-in app, synthetic picture</span>
+    </a>
+    <p class="fake-note">This page fakes the tool so the story plugin can run alone. Open the Tours tab, press the Tour tool, or add ?story=demo&amp;record=1.</p>
+    <nav class="top-actions" aria-label="Page actions">
+      <button class="btn" type="button" id="btn-map">Sky map</button>
+    </nav>
+  </header>
+
+  <main class="console" id="console">
+    <section class="stage" id="stage" aria-label="Sky viewer">
+      <div class="modebar" id="modebar">
+        <div class="seg seg-modes fake-seg" id="view-seg" role="radiogroup" aria-label="View mode"></div>
+      </div>
+      <div class="modeopts" id="modeopts"></div>
+      <div class="stage-body">
+        <div class="controls" id="controls" role="group" aria-label="Display controls">
+          <div class="controls-body" id="controls-body">
+            <div class="fake-ctl"><b>Detector</b><div class="fake-dets" id="dets"></div><span class="fake-note">0.75 to 5.0 µm</span></div>
+            <div class="fake-ctl"><b>Overlays</b><label><input type="checkbox" id="chk-gaia"> Gaia rings</label></div>
+            <div class="fake-ctl"><b>Field</b><span id="field-name">-</span></div>
+          </div>
+        </div>
+        <div class="viewcol">
+          <div class="viewer-frame" id="viewer-frame">
+            <div class="viewer" id="viewer" tabindex="-1" aria-label="Sky image. North is up, east is left."></div>
+            <div class="viewer-status" id="viewer-status" hidden></div>
+          </div>
+          <div class="toolrow">
+            <div class="readout" id="readout" aria-hidden="true">Click a source to measure it</div>
+            <div class="toolstrip" id="toolstrip" role="toolbar" aria-label="Viewer tools"></div>
+          </div>
+          <div class="player" id="player" role="group" aria-label="Movie player">
+            <div class="player-row">
+              <div class="player-transport">
+                <button class="btn" type="button" id="btn-prev" aria-label="Previous frame">‹</button>
+                <button class="btn btn-play" type="button" id="btn-play" aria-pressed="false">Play</button>
+                <button class="btn" type="button" id="btn-next" aria-label="Next frame">›</button>
+              </div>
+              <span class="player-count" id="count"></span>
+            </div>
+            <div class="fake-ticks" id="ticks"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="side" aria-label="Measurements">
+      <div class="tabs" id="tabs" role="tablist" aria-label="Measurement panels"></div>
+      <div class="panels" id="panels"></div>
+      <footer class="cite" id="cite"><p class="cite-text">Stand-in data for the story plugin demo. Not SPHEREx data.</p></footer>
+    </aside>
+  </main>
+</div>
+
+<dialog class="dialog dialog-wide" id="map-dialog" aria-labelledby="map-title">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="map-title">Where people have looked</h2>
+    <button class="btn btn-quiet" type="button" data-close-dialog aria-label="Close sky map">Close</button>
+  </div>
+  <div class="dialog-body" id="map-body">
+    <canvas id="map-canvas" width="900" height="420"></canvas>
+    <p class="panel-note" id="map-count"></p>
+  </div>
+</dialog>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script type="module">
+import { install, meta } from './index.js';
+import { skyToClient } from './spotlight.js';
+import { TARGETS, positionNow } from '../../core/targets.js';
+import { makeGrid, gridSkyToPix, gridPixToSky } from '../../core/wcs.js';
+
+const $ = (id) => document.getElementById(id);
+const query = new URLSearchParams(location.search);
+const DELAY = Number(query.get('delay')) > 0 ? Number(query.get('delay')) : 1;
+window.TOMBAUGH_LIVE_URL = '[LIVE-URL]';
+
+// ---- a tiny store -----------------------------------------------------------------------------
+function createStore(initial) {
+  let state = { ...initial };
+  const subs = new Set();
+  return {
+    get: () => state,
+    set(patch) {
+      const changed = Object.keys(patch || {}).filter((k) => state[k] !== patch[k]);
+      if (!changed.length) return state;
+      state = { ...state, ...patch };
+      for (const fn of [...subs]) fn(state, changed);
+      return state;
+    },
+    subscribe(fn) {
+      subs.add(fn);
+      return () => subs.delete(fn);
+    },
+  };
+}
+const store = createStore({ ra: 210.80227, dec: 54.34895, name: 'M101', fov: 4, det: 2, view: 'passes', ch: 8, lens: 'methane', gaia: true, flags: false, t: 0 });
+
+const listeners = new Map();
+const emit = (event, payload) => {
+  for (const fn of listeners.get(event) || []) fn(payload);
+};
+
+// ---- a made-up sky ----------------------------------------------------------------------------
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const hash = (text) => [...String(text)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
+const PASSES = [60836, 61018, 61201]; // mid-June 2025, mid-December 2025, mid-June 2026
+const DET_BANDS = { 1: [0.75, 1.09], 2: [1.1, 1.62], 3: [1.63, 2.41], 4: [2.42, 3.82], 5: [3.83, 4.41], 6: [4.42, 5.0] };
+const MJD_2016 = 57388;
+
+const session = { token: 0, grid: null, stars: [], entry: null, movie: null, index: 0, playing: false, timer: null, selection: null, loading: '', overlays: new Set() };
+
+function findEntry(s) {
+  return TARGETS.find((t) => t.name === s.name) || null;
+}
+
+function buildField(s) {
+  const grid = makeGrid(s.ra, s.dec, s.fov);
+  const rand = mulberry(hash(`${s.ra.toFixed(3)},${s.dec.toFixed(3)}`));
+  const half = (s.fov * 60) / 2;
+  const stars = [];
+  for (let i = 0; i < 26; i++) {
+    const [ra, dec] = gridPixToSky(grid, (grid.n - 1) / 2 - ((rand() * 2 - 1) * half * 0.92) / grid.scale, (grid.n - 1) / 2 + ((rand() * 2 - 1) * half * 0.92) / grid.scale);
+    stars.push({ ra, dec, flux: 0.25 + 3 * rand() ** 3, slope: rand() * 3 - 1.5 });
+  }
+  return { grid, stars, entry: findEntry(s) };
+}
+
+function gaussian(img, n, x, y, amp, sigma = 1.25) {
+  const r = Math.ceil(sigma * 3.5);
+  for (let j = Math.max(0, Math.round(y) - r); j <= Math.min(n - 1, Math.round(y) + r); j++) {
+    for (let i = Math.max(0, Math.round(x) - r); i <= Math.min(n - 1, Math.round(x) + r); i++) {
+      img[j * n + i] += amp * Math.exp(-((i - x) ** 2 + (j - y) ** 2) / (2 * sigma * sigma));
+    }
+  }
+}
+
+function buildMovie(s, field) {
+  const { grid, stars, entry } = field;
+  const n = grid.n;
+  const rand = mulberry(hash(`${s.view}${s.det}${s.name}`));
+  const band = DET_BANDS[s.det] || DET_BANDS[3];
+  const targetAt = (mjd) => {
+    const p = entry ? positionNow(entry, mjd) : { ra: s.ra, dec: s.dec };
+    return gridSkyToPix(grid, p.ra, p.dec);
+  };
+  const frames = [];
+  const iso = (mjd) => new Date((mjd - 40587) * 86400000).toISOString().slice(0, 10);
+  const mk = (mjd, title, wave, fill, extra = {}) => {
+    const image = new Float32Array(n * n);
+    for (let k = 0; k < image.length; k++) image[k] = (rand() - 0.5) * 0.09;
+    fill(image);
+    frames.push({ id: `fake/level2/l2b-syn-${s.view}-${frames.length}`, mjd, image, range: [-0.12, 1.6], caption: { title, date: iso(mjd), wave, note: '' }, ...extra });
+  };
+  const fieldStars = (image, gain = () => 1) => {
+    for (const st of stars) {
+      const [x, y] = gridSkyToPix(grid, st.ra, st.dec);
+      gaussian(image, n, x, y, st.flux * gain(st));
+    }
+  };
+
+  if (s.view === 'exposures') {
+    let k = 0;
+    for (const pass of PASSES) {
+      for (let e = 0; e < 8; e++) {
+        const mjd = pass - 3 + e * 0.8;
+        const wave = band[0] + rand() * (band[1] - band[0]);
+        const mid = (band[0] + band[1]) / 2;
+        const sky = (rand() - 0.5) * 0.5;
+        k += 1;
+        mk(mjd, `Exposure ${k} of 24`, `${wave.toFixed(2)} µm`, (image) => {
+          for (let i = 0; i < image.length; i++) image[i] += sky;
+          fieldStars(image, (st) => (wave / mid) ** (st.slope * 5));
+          const [x, y] = targetAt(mjd);
+          gaussian(image, n, x, y, 3.4 * (wave / mid) ** 2.5);
+        });
+      }
+    }
+  } else if (s.view === 'residual') {
+    const mean = targetAt((PASSES[0] + PASSES[2]) / 2);
+    PASSES.forEach((mjd, i) => {
+      mk(mjd, `Pass ${i + 1} minus predicted sky`, 'residual', (image) => {
+        const [x, y] = targetAt(mjd);
+        if (entry) {
+          gaussian(image, n, x, y, 1.5);
+          gaussian(image, n, mean[0], mean[1], -1.1, 1.9);
+        }
+      }, { range: [-1.1, 1.1], diverging: true });
+    });
+  } else if (s.view === 'lens') {
+    mk(PASSES[1], 'Methane lens (3.3 µm)', 'band depth', (image) => fieldStars(image), {
+      tint: () => {
+        const [x, y] = targetAt(PASSES[1]);
+        return { x, y };
+      },
+    });
+  } else {
+    PASSES.forEach((mjd, i) => {
+      mk(mjd, `Pass ${i + 1} of 3, stacked`, `${band[0]}-${band[1]} µm`, (image) => {
+        fieldStars(image);
+        if (entry) {
+          const [x, y] = targetAt(mjd);
+          gaussian(image, n, x, y, 3.4);
+        }
+      });
+    });
+  }
+  return { view: s.view, frames };
+}
+
+// ---- the stand-in viewer ----------------------------------------------------------------------
+const viewerEl = $('viewer');
+const canvas = document.createElement('canvas');
+viewerEl.append(canvas);
+const ctx = canvas.getContext('2d');
+const tile = document.createElement('canvas');
+const view = { zoom: 1, cx: 0, cy: 0 };
+const viewerListeners = new Map();
+
+function box() {
+  return { left: 0, top: 0, width: canvas.width, height: canvas.height };
+}
+
+function draw() {
+  const w = viewerEl.clientWidth;
+  const h = viewerEl.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  ctx.fillStyle = '#11110F';
+  ctx.fillRect(0, 0, w, h);
+  const grid = session.grid;
+  const frame = session.movie ? session.movie.frames[session.index] : null;
+  if (!grid || !frame) {
+    ctx.fillStyle = '#ADA99E';
+    ctx.font = '13px Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(session.loading || 'No frames', w / 2, h / 2);
+    return;
+  }
+  const n = grid.n;
+  if (tile.width !== n) {
+    tile.width = n;
+    tile.height = n;
+  }
+  const tctx = tile.getContext('2d');
+  const data = tctx.createImageData(n, n);
+  const [lo, hi] = frame.range;
+  const tint = frame.tint ? frame.tint() : null;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const v = frame.image[y * n + x];
+      let t = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+      if (!frame.diverging) t = Math.asinh(t * 6) / Math.asinh(6);
+      const o = ((n - 1 - y) * n + x) * 4;
+      let r = 23 + t * 224;
+      let g = 23 + t * 219;
+      let b = 21 + t * 210;
+      if (tint) {
+        const d2 = (x - tint.x) ** 2 + (y - tint.y) ** 2;
+        const wgt = Math.exp(-d2 / 14);
+        const glow = wgt * 1.1;
+        r = Math.min(255, r * (1 - wgt) + 229 * glow + r * 0);
+        g = g * (1 - wgt) + 60 * glow;
+        b = b * (1 - wgt) + 39 * glow;
+      }
+      data.data[o] = r;
+      data.data[o + 1] = g;
+      data.data[o + 2] = b;
+      data.data[o + 3] = 255;
+    }
+  }
+  tctx.putImageData(data, 0, 0);
+  const size = Math.floor(Math.min(w, h));
+  const k = (size * view.zoom) / n;
+  const ox = Math.floor((w - size) / 2);
+  const oy = Math.floor((h - size) / 2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, size, size);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tile, ox + size / 2 + (-0.5 - view.cx) * k, oy + size / 2 - (n - 0.5 - view.cy) * k, n * k, n * k);
+  const project = (ra, dec) => skyToClient(grid, view, box(), ra, dec);
+  const s = store.get();
+  if (s.gaia) {
+    ctx.strokeStyle = 'rgba(247, 242, 231, 0.75)';
+    ctx.lineWidth = 1;
+    const rings = session.stars.map((st) => ({ ra: st.ra, dec: st.dec }));
+    if (session.entry) rings.push(positionNow(session.entry, MJD_2016));
+    for (const g of rings) {
+      const p = project(g.ra, g.dec);
+      if (!p || !p.inside) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  const markers = [];
+  for (const fn of session.overlays) {
+    const extra = fn(frame, session.index);
+    if (extra && Array.isArray(extra.markers)) markers.push(...extra.markers);
+  }
+  if (session.selection) markers.push({ ...session.selection, kind: 'click' });
+  ctx.strokeStyle = '#F7F2E7';
+  ctx.fillStyle = '#F7F2E7';
+  ctx.font = '12px Arial';
+  for (const m of markers) {
+    const p = project(m.ra, m.dec);
+    if (!p || !p.inside) continue;
+    ctx.beginPath();
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      ctx.moveTo(p.x + dx * 5, p.y + dy * 5);
+      ctx.lineTo(p.x + dx * 13, p.y + dy * 13);
+    }
+    ctx.stroke();
+    if (m.label) ctx.fillText(m.label, p.x + 16, p.y + 4);
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(23, 23, 21, 0.82)';
+  ctx.fillRect(ox, oy + size - 26, size, 26);
+  ctx.fillStyle = '#F7F2E7';
+  ctx.font = '12px Consolas, "Liberation Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`${frame.caption.title}   ${frame.caption.date}   ${frame.caption.wave}`, ox + 10, oy + size - 9);
+  ctx.textAlign = 'right';
+  ctx.fillText('N up, E left', ox + size - 10, oy + size - 9);
+}
+
+canvas.addEventListener('pointerup', (e) => {
+  const grid = session.grid;
+  if (!grid || !session.movie) return;
+  const r = canvas.getBoundingClientRect();
+  const u = ((e.clientX - r.left) * canvas.width) / r.width;
+  const v = ((e.clientY - r.top) * canvas.height) / r.height;
+  const size = Math.floor(Math.min(canvas.width, canvas.height));
+  const k = (size * view.zoom) / grid.n;
+  const x = view.cx + (u - Math.floor((canvas.width - size) / 2) - size / 2) / k;
+  const y = view.cy - (v - Math.floor((canvas.height - size) / 2) - size / 2) / k;
+  const [ra, dec] = gridPixToSky(grid, x, y);
+  for (const fn of viewerListeners.get('click') || []) fn({ ra, dec, x, y });
+});
+
+const viewer = {
+  canvas,
+  element: viewerEl,
+  getView: () => ({ ...view }),
+  setView(v = {}) {
+    if (session.grid && Number.isFinite(v.ra) && Number.isFinite(v.dec)) [view.cx, view.cy] = gridSkyToPix(session.grid, v.ra, v.dec);
+    if (Number.isFinite(v.cx)) view.cx = v.cx;
+    if (Number.isFinite(v.cy)) view.cy = v.cy;
+    if (Number.isFinite(v.zoom)) view.zoom = Math.max(1, v.zoom);
+    draw();
+  },
+  resetView() {
+    const c = session.grid ? (session.grid.n - 1) / 2 : 0;
+    Object.assign(view, { zoom: 1, cx: c, cy: c });
+    draw();
+  },
+  on(type, fn) {
+    if (!viewerListeners.has(type)) viewerListeners.set(type, new Set());
+    viewerListeners.get(type).add(fn);
+    return () => viewerListeners.get(type).delete(fn);
+  },
+};
+
+// ---- player -----------------------------------------------------------------------------------
+function renderPlayer() {
+  const frames = session.movie ? session.movie.frames : [];
+  $('count').innerHTML = frames.length ? `<b>${session.index + 1}</b> / ${frames.length}` : '';
+  $('btn-play').textContent = session.playing ? 'Pause' : 'Play';
+  $('btn-play').setAttribute('aria-pressed', String(session.playing));
+  const ticks = $('ticks');
+  if (ticks.childElementCount !== frames.length) {
+    ticks.textContent = '';
+    frames.forEach(() => ticks.append(document.createElement('i')));
+  }
+  [...ticks.children].forEach((el, i) => el.classList.toggle('is-on', i === session.index));
+}
+
+function setIndex(i) {
+  const n = session.movie ? session.movie.frames.length : 0;
+  if (!n) return;
+  session.index = ((i % n) + n) % n;
+  draw();
+  renderPlayer();
+  emit('frame', { index: session.index });
+}
+
+function setPlaying(on) {
+  clearInterval(session.timer);
+  session.playing = !!on; // remembered while a field is still loading
+  if (session.playing && session.movie) {
+    const fps = session.movie.frames.length > 6 ? 7 : 1.5;
+    session.timer = setInterval(() => setIndex(session.index + 1), 1000 / fps);
+  }
+  renderPlayer();
+}
+
+$('btn-play').addEventListener('click', () => setPlaying(!session.playing));
+$('btn-prev').addEventListener('click', () => {
+  setPlaying(false);
+  setIndex(session.index - 1);
+});
+$('btn-next').addEventListener('click', () => {
+  setPlaying(false);
+  setIndex(session.index + 1);
+});
+
+// ---- loading, with delays ---------------------------------------------------------------------
+function setMovie(movie) {
+  const wasPlaying = session.playing;
+  setPlaying(false);
+  session.movie = movie;
+  session.index = 0;
+  session.loading = '';
+  draw();
+  renderPlayer();
+  emit('movie', { view: movie.view, frames: movie.frames });
+  if (wasPlaying) setPlaying(true);
+}
+
+function loadTarget() {
+  const s = store.get();
+  const token = ++session.token;
+  clearInterval(session.timer);
+  const field = buildField(s);
+  Object.assign(session, { grid: field.grid, stars: field.stars, entry: field.entry, movie: null, selection: null });
+  viewer.resetView();
+  session.loading = `Loading ${s.name || 'field'}…`;
+  $('field-name').textContent = s.name || `${s.ra.toFixed(4)} ${s.dec.toFixed(4)}`;
+  renderSelection();
+  draw();
+  renderPlayer();
+  emit('target', { ra: s.ra, dec: s.dec, name: s.name });
+  emit('select', null);
+  setTimeout(() => {
+    if (token === session.token) emit('frames', { det: s.det, count: 20, total: 42, complete: false });
+  }, 250 * DELAY);
+  setTimeout(() => {
+    if (token !== session.token) return;
+    emit('frames', { det: store.get().det, count: 42, total: 42, complete: true });
+    setMovie(buildMovie(store.get(), field));
+  }, (s.view === 'lens' ? 900 : 600) * DELAY);
+}
+
+function rebuild() {
+  const token = ++session.token;
+  const s = store.get();
+  if (!session.grid) return;
+  setTimeout(() => {
+    if (token !== session.token) return;
+    emit('frames', { det: s.det, count: 42, total: 42, complete: true });
+    setMovie(buildMovie(store.get(), { grid: session.grid, stars: session.stars, entry: session.entry }));
+  }, (s.view === 'lens' ? 450 : s.view === 'residual' ? 260 : 140) * DELAY);
+}
+
+store.subscribe((s, changed) => {
+  emit('state', { state: s, changed });
+  syncControls();
+  if (changed.includes('ra') || changed.includes('dec') || changed.includes('fov')) loadTarget();
+  else if (['view', 'det', 'lens'].some((k) => changed.includes(k))) rebuild();
+  else draw();
+});
+
+// ---- measuring a source -----------------------------------------------------------------------
+function select({ ra, dec }) {
+  if (!session.movie) return;
+  const token = session.token;
+  setTimeout(() => {
+    if (token !== session.token) return;
+    const entry = session.entry;
+    const rand = mulberry(hash(`${ra.toFixed(4)}${dec.toFixed(4)}`));
+    const spectrum = [];
+    for (let i = 0; i < 60; i++) {
+      const wave = 0.75 + (i / 59) * 4.25;
+      const dip = entry && entry.kind !== 'mover' ? 1 - 0.55 * Math.exp(-(((wave - 3.3) / 0.22) ** 2)) : 1;
+      spectrum.push({ wave, flux_uJy: 900 * (wave / 2) ** -1.1 * dip * (1 + (rand() - 0.5) * 0.12), err_uJy: 40 });
+    }
+    const total = entry ? Math.hypot(entry.pmra, entry.pmdec) : 0;
+    const motion = entry
+      ? { measured: { pmra: entry.pmra * 0.992, pmdec: entry.pmdec * 0.992, total: total * 0.992, errTotal: 420 }, gaia: { pmra: entry.pmra, pmdec: entry.pmdec, total }, track: [] }
+      : { measured: { pmra: 12, pmdec: -20, total: 23, errTotal: 310 }, gaia: null, track: [] };
+    session.selection = { ra, dec, spectrum, binned: spectrum, lightCurve: [], motion };
+    renderSelection();
+    draw();
+    emit('select', { ...session.selection });
+  }, 160 * DELAY);
+}
+viewer.on('click', select);
+
+function renderSelection() {
+  const sel = session.selection;
+  const spec = $('spectrum-body');
+  const mot = $('motion-body');
+  if (!spec || !mot) return;
+  if (!sel) {
+    spec.innerHTML = '<p class="panel-note">Click a source in the image to see its spectrum.</p>';
+    mot.innerHTML = '<p class="panel-note">Click a source to measure how it moves between passes.</p>';
+    return;
+  }
+  const pts = sel.spectrum;
+  const max = Math.max(...pts.map((p) => p.flux_uJy));
+  const dots = pts.map((p) => `<circle cx="${(20 + ((p.wave - 0.75) / 4.25) * 300).toFixed(1)}" cy="${(150 - (p.flux_uJy / max) * 125).toFixed(1)}" r="2.4" fill="#F7F2E7"/>`).join('');
+  const bands = [1.1, 1.63, 2.42, 3.83, 4.42].map((w) => `<line x1="${20 + ((w - 0.75) / 4.25) * 300}" x2="${20 + ((w - 0.75) / 4.25) * 300}" y1="10" y2="150" stroke="rgba(247,242,231,0.16)"/>`).join('');
+  spec.innerHTML = `<p class="panel-what">Clicked source <span class="num">${sel.ra.toFixed(4)} ${sel.dec.toFixed(4)}</span></p>
+    <svg class="fake-plot" viewBox="0 0 340 176" role="img" aria-label="Stand-in spectrum">${bands}<line x1="20" x2="320" y1="150" y2="150" stroke="#77766E"/>${dots}
+    <text x="20" y="168" fill="#ADA99E" font-size="10" font-family="Arial">0.75 µm</text><text x="320" y="168" fill="#ADA99E" font-size="10" font-family="Arial" text-anchor="end">5.0 µm</text></svg>
+    <p class="panel-note">60 points across the six detector bands (stand-in values).</p>`;
+  const m = sel.motion;
+  const gaia = m.gaia ? `${(m.gaia.total / 1000).toFixed(2)} arcsec/yr` : 'no match';
+  mot.innerHTML = `<p class="panel-what">Motion between passes</p>
+    <svg class="fake-plot" viewBox="0 0 340 150" role="img" aria-label="Stand-in motion meter">
+      <line x1="120" y1="130" x2="118" y2="26" stroke="#F7F2E7" stroke-width="3"/><path d="M118 16 l-7 14 h14 z" fill="#F7F2E7"/>
+      <line x1="210" y1="130" x2="208" y2="24" stroke="#E53C27" stroke-width="3"/><path d="M208 14 l-7 14 h14 z" fill="#E53C27"/>
+      <text x="120" y="146" fill="#F7F2E7" font-size="11" font-family="Arial" text-anchor="middle">Tombaugh</text>
+      <text x="210" y="146" fill="#F7F2E7" font-size="11" font-family="Arial" text-anchor="middle">Gaia</text></svg>
+    <p class="fake-big">${(m.measured.total / 1000).toFixed(2)} ± ${(m.measured.errTotal / 1000).toFixed(2)} <small>arcsec/yr, measured</small><br>${gaia} <small>Gaia DR3</small></p>`;
+}
+
+// ---- layout pieces the shell would own --------------------------------------------------------
+const VIEW_LABELS = { passes: 'Passes', exposures: 'Exposures', residual: 'Residual', lens: 'Lens', diff: 'Difference' };
+for (const [id, label] of Object.entries(VIEW_LABELS)) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'seg-btn';
+  btn.setAttribute('role', 'radio');
+  btn.dataset.view = id;
+  btn.textContent = label;
+  btn.addEventListener('click', () => store.set({ view: id, t: 0 }));
+  $('view-seg').append(btn);
+}
+for (let d = 1; d <= 6; d++) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = String(d);
+  btn.dataset.det = String(d);
+  btn.addEventListener('click', () => store.set({ det: d }));
+  $('dets').append(btn);
+}
+$('chk-gaia').addEventListener('change', (e) => store.set({ gaia: e.target.checked }));
+function syncControls() {
+  const s = store.get();
+  for (const b of $('view-seg').children) b.setAttribute('aria-checked', String(b.dataset.view === s.view));
+  for (const b of $('dets').children) b.setAttribute('aria-pressed', String(Number(b.dataset.det) === s.det));
+  $('chk-gaia').checked = !!s.gaia;
+}
+
+const tabs = [];
+function addTab(id, title) {
+  const tab = document.createElement('button');
+  tab.className = 'tab';
+  tab.type = 'button';
+  tab.id = `tab-${id}`;
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('aria-controls', `panel-${id}`);
+  tab.textContent = title;
+  const panel = document.createElement('section');
+  panel.className = 'panel';
+  panel.id = `panel-${id}`;
+  panel.setAttribute('role', 'tabpanel');
+  panel.hidden = true;
+  const body = document.createElement('div');
+  body.className = 'panel-body';
+  body.id = `${id}-body`;
+  panel.append(body);
+  $('tabs').append(tab);
+  $('panels').append(panel);
+  const entry = { id, tab, panel, body, onShow: null };
+  tabs.push(entry);
+  tab.addEventListener('click', () => showTab(id));
+  return entry;
+}
+function showTab(id) {
+  for (const t of tabs) {
+    const on = t.id === id;
+    t.tab.setAttribute('aria-selected', String(on));
+    t.panel.hidden = !on;
+    if (on && t.onShow) t.onShow();
+  }
+}
+addTab('spectrum', 'Spectrum');
+addTab('lightcurve', 'Light curve').body.innerHTML = '<p class="panel-note">Stand-in light curve panel.</p>';
+addTab('motion', 'Motion');
+showTab('spectrum');
+
+const mapDialog = $('map-dialog');
+function drawMap() {
+  const c = $('map-canvas');
+  const g = c.getContext('2d');
+  g.fillStyle = '#11110F';
+  g.fillRect(0, 0, c.width, c.height);
+  const cx = c.width / 2;
+  const cy = c.height / 2;
+  const a = c.width / 2 - 20;
+  const b = c.height / 2 - 20;
+  g.fillStyle = '#0B0B0A';
+  g.beginPath();
+  g.ellipse(cx, cy, a, b, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(247, 242, 231, 0.3)';
+  g.stroke();
+  const rand = mulberry(42);
+  for (let i = 0; i < 37; i++) {
+    const t = rand() * Math.PI * 2;
+    const r = Math.sqrt(rand()) * 0.94;
+    g.fillStyle = i < 5 ? '#E53C27' : `rgba(247, 242, 231, ${0.35 + rand() * 0.6})`;
+    g.fillRect(cx + Math.cos(t) * r * a - 5, cy + Math.sin(t) * r * b - 5, 10, 10);
+  }
+  $('map-count').textContent = '37 of 12,288 patches opened (0.3%). Stand-in counts.';
+}
+$('btn-map').addEventListener('click', () => {
+  drawMap();
+  if (!mapDialog.open) mapDialog.showModal();
+});
+mapDialog.querySelector('[data-close-dialog]').addEventListener('click', () => mapDialog.close());
+
+// ---- the plugin `app` object ------------------------------------------------------------------
+const app = {
+  version: 'demo',
+  store,
+  viewer,
+  target() {
+    const s = store.get();
+    return Number.isFinite(s.ra) && Number.isFinite(s.dec) ? { ra: s.ra, dec: s.dec, name: s.name || '' } : null;
+  },
+  grid: () => session.grid,
+  frames: () => (session.movie ? session.movie.frames : []),
+  layers: () => [],
+  movie: () => ({ frames: session.movie ? session.movie.frames.slice() : [], index: session.index, playing: session.playing, view: store.get().view }),
+  setFrameIndex(i) {
+    setPlaying(false);
+    setIndex(i);
+  },
+  play: () => setPlaying(true),
+  pause: () => setPlaying(false),
+  goTo: (t) => store.set({ ra: Number(t.ra), dec: Number(t.dec), name: t.name || '', t: 0 }),
+  gaia: () => session.stars.slice(),
+  selection: () => (session.selection ? { ...session.selection } : null),
+  on(event, fn) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => listeners.get(event).delete(fn);
+  },
+  addTool({ id, label, title, onClick, group = 'extra' }) {
+    let host = $('toolstrip').querySelector(`[data-group="${group}"]`);
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'tool-group';
+      host.dataset.group = group;
+      $('toolstrip').append(host);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tool';
+    btn.dataset.tool = id;
+    btn.title = title || label;
+    btn.textContent = label;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.addEventListener('click', (e) => onClick && onClick(e));
+    host.append(btn);
+    return { setActive: (on) => btn.setAttribute('aria-pressed', String(!!on)), setDisabled: (on) => (btn.disabled = !!on), remove: () => btn.remove() };
+  },
+  addPanel({ id, title, render }) {
+    const entry = addTab(id, title);
+    let done = false;
+    entry.onShow = () => {
+      if (done) return;
+      done = true;
+      render(entry.body);
+    };
+    return { show: () => showTab(id), hide: () => showTab('spectrum'), remove: () => (entry.tab.remove(), entry.panel.remove()) };
+  },
+  addOverlay(fn) {
+    session.overlays.add(fn);
+    draw();
+    return () => {
+      session.overlays.delete(fn);
+      draw();
+    };
+  },
+  refreshOverlays: () => draw(),
+  toast(message) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = message;
+    $('toasts').append(el);
+    setTimeout(() => el.remove(), 3600);
+  },
+  explain: () => false,
+};
+
+new ResizeObserver(() => draw()).observe(viewerEl);
+syncControls();
+loadTarget();
+
+window.fakeApp = app;
+window.storyMeta = meta;
+window.story = install(app);
+document.documentElement.dataset.ready = '1';
+</script>
+</body>
+</html>

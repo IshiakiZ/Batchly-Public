@@ -1,0 +1,298 @@
+<!doctype html>
+<!-- Tombaugh - SPHEREx blink comparator. Apache-2.0. -->
+<!-- AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh export plugin demo</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --stone: #77766E; --muted: #ADA99E;
+    --rule: rgba(247, 242, 231, 0.14); --rule-strong: rgba(247, 242, 231, 0.3); --hover: rgba(247, 242, 231, 0.07);
+    --num: Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace; }
+  * { box-sizing: border-box; }
+  html { background: var(--ink); color: var(--paper); font: 14px/1.5 Arial, Helvetica, sans-serif; }
+  body { margin: 0; min-height: 100vh; padding: 24px 16px 40px; display: grid; justify-items: center; align-content: start; gap: 14px; }
+  h1 { margin: 0; font: 900 20px/1.2 "Arial Black", "Arial Bold", Arial, sans-serif; letter-spacing: 0.04em; }
+  p { margin: 0; max-width: 60ch; color: var(--muted); font-size: 13px; text-align: center; }
+  code { font-family: var(--num); color: var(--paper); }
+  .stage { width: min(384px, 100%); display: grid; gap: 8px; }
+  .strip { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-height: 24px; }
+  .tool-group { display: flex; border: 1px solid var(--rule-strong); border-radius: 2px; }
+  .tool { appearance: none; height: 22px; padding: 0 9px; background: transparent; border: 0; border-left: 1px solid var(--rule);
+    color: var(--muted); font-size: 11px; line-height: 1; cursor: pointer; }
+  .tool:first-child { border-left: 0; }
+  .tool:hover { color: var(--paper); background: var(--hover); }
+  .tool[aria-pressed="true"] { color: var(--paper); box-shadow: inset 0 -2px 0 var(--signal); }
+  .tool:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+  .readout { font: 11px/1 var(--num); color: var(--muted); }
+  #view { width: 100%; aspect-ratio: 1; display: block; background: #0E0E0D; border: 1px solid var(--rule-strong); image-rendering: pixelated; cursor: crosshair; }
+  .cap { font: 12px/1.4 var(--num); color: var(--muted); display: flex; justify-content: space-between; gap: 12px; }
+  .modes a { color: var(--paper); text-decoration-color: var(--stone); text-underline-offset: 3px; }
+  /* A stand-in for the shell's modal, used with ?shell=1 */
+  .dialog { width: min(680px, calc(100vw - 32px)); max-height: min(86vh, 820px); padding: 0; background: #1E1E1B; color: var(--paper);
+    border: 1px solid var(--rule-strong); border-radius: 2px; overflow: hidden; }
+  .dialog[open] { display: flex; flex-direction: column; }
+  .dialog::backdrop { background: rgba(10, 10, 9, 0.72); }
+  .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--rule); }
+  .dialog-title { margin: 0; font: 900 15px/1.2 "Arial Black", "Arial Bold", Arial, sans-serif; letter-spacing: 0.04em; }
+  .dialog-body { padding: 18px 20px 22px; overflow-y: auto; display: grid; gap: 18px; }
+  .btn-quiet { appearance: none; height: 32px; padding: 0 8px; background: transparent; border: 1px solid transparent; border-radius: 2px; color: var(--muted); font-size: 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>EXPORT PLUGIN DEMO</h1>
+<p>A fake <code>app</code> with a synthetic eight-frame star field: one source moves, one varies.
+  Press <code>Export</code>. Click the image to select a source and enable the CSV.</p>
+<div class="stage">
+  <div class="strip">
+    <div class="tool-group" aria-label="Player">
+      <button class="tool" id="prev" type="button" aria-label="Previous frame">Prev</button>
+      <button class="tool" id="play" type="button" aria-pressed="false">Play</button>
+      <button class="tool" id="next" type="button" aria-label="Next frame">Next</button>
+    </div>
+    <span class="readout" id="readout"></span>
+    <div id="toolstrip"></div>
+  </div>
+  <canvas id="view" width="384" height="384" aria-label="Synthetic sky frame"></canvas>
+  <div class="cap"><span id="cap-date"></span><span id="cap-wave"></span></div>
+</div>
+<p class="modes">Variants:
+  <a href="?">built-in dialog</a> ·
+  <a href="?shell=1">shell-style <code>openModal</code></a> ·
+  <a href="?view=residual">residual frames</a> ·
+  <a href="?view=lens">colour frames</a> ·
+  <a href="?viewer=0">no viewer</a> ·
+  <a href="?empty=1">nothing loaded</a></p>
+
+<script type="module">
+import { install, meta } from './index.js';
+import { renderFrameRgba, upscaleNearest, frameCaption } from './frame.js';
+
+const params = new URLSearchParams(location.search);
+const VIEW = params.get('view') || 'passes';
+const N = 64;
+
+// ---- synthetic movie ---------------------------------------------------------------------------
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rand) {
+  return Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+}
+function stamp(image, x0, y0, flux, sigma = 1.25) {
+  for (let y = Math.max(0, Math.floor(y0 - 6)); y <= Math.min(N - 1, Math.ceil(y0 + 6)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - 6)); x <= Math.min(N - 1, Math.ceil(x0 + 6)); x++) {
+      image[y * N + x] += flux * Math.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma * sigma));
+    }
+  }
+}
+function makeMovie(view) {
+  const rand = mulberry32(1930);
+  const stars = [];
+  for (let i = 0; i < 26; i++) stars.push({ x: 2 + rand() * (N - 4), y: 2 + rand() * (N - 4), f: 0.6 * Math.exp(rand() * 3.4), tilt: (rand() - 0.5) * 0.5 });
+  const variable = { x: 46.3, y: 17.6 };
+  const frames = [];
+  const waves = [1.67, 1.82, 1.94, 2.05, 2.13, 2.21, 2.3, 2.38];
+  const planes = () => new Float32Array(N * N);
+  for (let f = 0; f < 8; f++) {
+    const image = planes();
+    const still = planes();
+    for (const s of stars) {
+      stamp(image, s.x, s.y, s.f * (1 + s.tilt * (f - 3.5) * 0.08));
+      stamp(still, s.x, s.y, s.f);
+    }
+    const vary = 9 * (1 + 0.7 * Math.sin((f / 8) * 2 * Math.PI));
+    stamp(image, variable.x, variable.y, vary);
+    stamp(still, variable.x, variable.y, 9);
+    const mover = { x: 12 + f * 4.6, y: 44 - f * 2.1 };
+    stamp(image, mover.x, mover.y, 14);
+    const mask = new Uint8Array(N * N);
+    for (let i = 0; i < N * N; i++) image[i] += 0.9 + 0.11 * gauss(rand);
+    // a few flagged pixels and an off-frame corner, to show how missing data is drawn
+    for (let k = 0; k < 5; k++) mask[Math.floor(rand() * N * N)] = 1;
+    if (f === 5) for (let y = 0; y < 7; y++) for (let x = 0; x < 7 - y; x++) mask[(N - 1 - y) * N + x] = 1;
+    const mjd = 60840 + f * 0.31 + (f > 3 ? 183 : 0);
+    const date = new Date((mjd - 40587) * 86400000).toISOString().slice(0, 16).replace('T', ' ');
+    const caption = { title: `Exposure ${f + 1} of 8`, date, wave: `${waves[f].toFixed(2)} µm`, note: 'One source moves 4.6 pixels per frame; one varies by a factor of five.' };
+    if (view === 'residual') {
+      const res = planes();
+      for (let i = 0; i < N * N; i++) res[i] = image[i] - still[i] - 0.9;
+      frames.push({ image: res, mask, range: [-6, 6], diverging: true, mjd, caption: { ...caption, title: `Residual ${f + 1} of 8`, note: 'Observed minus predicted sky: the mover and the variable remain.' } });
+    } else if (view === 'lens') {
+      const r = planes();
+      const g = planes();
+      const b = planes();
+      for (let i = 0; i < N * N; i++) {
+        r[i] = image[i] * (1 + 0.3 * Math.sin(i * 0.37));
+        g[i] = image[i];
+        b[i] = still[i] + 0.9;
+      }
+      frames.push({ image: g, mask, range: [0.7, 12], rgb: { r, g, b, ranges: [[0.7, 12], [0.7, 12], [0.7, 12]] }, mjd, caption: { ...caption, title: `Colour ${f + 1} of 8`, wave: 'D6 + D4 + D2', note: 'Red D6, green D4, blue D2.' } });
+    } else {
+      frames.push({ image, mask, range: [0.7, 12], mjd, caption });
+    }
+  }
+  return frames;
+}
+
+const movieFrames = params.get('empty') ? [] : makeMovie(VIEW);
+
+// ---- fake app ----------------------------------------------------------------------------------
+const listeners = new Map();
+const emit = (event, payload) => {
+  for (const fn of listeners.get(event) || []) {
+    try { fn(payload); } catch (err) { console.warn(err); }
+  }
+};
+const state = { ra: 269.45208, dec: 4.69339, name: "Barnard's Star", fov: 4, det: 3, view: VIEW, stretch: 'asinh', colormap: 'gray' };
+let index = 0;
+let playing = false;
+let timer = null;
+let selection = null;
+
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d');
+function draw() {
+  const frame = movieFrames[index];
+  document.getElementById('readout').textContent = movieFrames.length ? `frame ${index + 1} / ${movieFrames.length}` : 'nothing loaded';
+  if (!frame) {
+    ctx.fillStyle = '#0E0E0D';
+    ctx.fillRect(0, 0, 384, 384);
+    return;
+  }
+  const { data, n } = renderFrameRgba(frame, { stretch: state.stretch });
+  const image = ctx.createImageData(384, 384);
+  image.data.set(upscaleNearest(data, n, 384));
+  ctx.putImageData(image, 0, 0);
+  if (selection) {
+    ctx.strokeStyle = '#E53C27';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc((selection.x + 0.5) * 6, (N - 1 - selection.y + 0.5) * 6, 14, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  const cap = frameCaption(frame);
+  document.getElementById('cap-date').textContent = cap.date;
+  document.getElementById('cap-wave').textContent = cap.wave;
+}
+function setIndex(i) {
+  if (!movieFrames.length) return;
+  index = ((i % movieFrames.length) + movieFrames.length) % movieFrames.length;
+  draw();
+  emit('frame', index);
+}
+function setPlaying(on) {
+  playing = !!on && movieFrames.length > 1;
+  document.getElementById('play').setAttribute('aria-pressed', String(playing));
+  document.getElementById('play').textContent = playing ? 'Pause' : 'Play';
+  clearInterval(timer);
+  if (playing) timer = setInterval(() => setIndex(index + 1), 400);
+}
+document.getElementById('prev').addEventListener('click', () => { setPlaying(false); setIndex(index - 1); });
+document.getElementById('next').addEventListener('click', () => { setPlaying(false); setIndex(index + 1); });
+document.getElementById('play').addEventListener('click', () => setPlaying(!playing));
+
+function fakeSpectrum(seed) {
+  const rand = mulberry32(seed);
+  const points = [];
+  for (let i = 0; i < 68; i++) {
+    const wave = 0.76 + (i / 67) * 4.2;
+    const dip = 1 - 0.55 * Math.exp(-(((wave - 3.3) / 0.16) ** 2));
+    const flux = 900 * Math.pow(wave / 2, -1.4) * dip * (1 + 0.04 * gauss(rand));
+    points.push({ wave, bw: 0.03, flux_uJy: flux, err_uJy: 12 + 6 * rand(), mjd: 60840 + (i % 4) * 0.31 + (i % 2) * 183, flagged: rand() < 0.06, ok: true });
+  }
+  return points;
+}
+canvas.addEventListener('click', (e) => {
+  const box = canvas.getBoundingClientRect();
+  const x = Math.floor(((e.clientX - box.left) / box.width) * N);
+  const y = N - 1 - Math.floor(((e.clientY - box.top) / box.height) * N);
+  selection = { ra: state.ra - ((x - 31.5) * 3.75) / 3600 / Math.cos((state.dec * Math.PI) / 180), dec: state.dec + ((y - 31.5) * 3.75) / 3600, x, y, spectrum: fakeSpectrum(x * 100 + y) };
+  draw();
+  emit('select', selection);
+});
+
+function shellModal({ title = '', render = null, onClose = null } = {}) {
+  // The same structure as web/src/ui/layout.js openModal.
+  const body = document.createElement('div');
+  body.className = 'dialog-body';
+  const dialog = document.createElement('dialog');
+  dialog.className = 'dialog';
+  const head = document.createElement('div');
+  head.className = 'dialog-head';
+  const h2 = document.createElement('h2');
+  h2.className = 'dialog-title';
+  h2.textContent = title;
+  const x = document.createElement('button');
+  x.className = 'btn-quiet';
+  x.type = 'button';
+  x.textContent = 'Close';
+  x.addEventListener('click', () => dialog.close());
+  head.append(h2, x);
+  dialog.append(head, body);
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener('close', () => { try { if (onClose) onClose(); } finally { dialog.remove(); } });
+  document.body.append(dialog);
+  if (render) render(body);
+  dialog.showModal();
+  return { body, close: () => dialog.close() };
+}
+
+const app = {
+  version: 'demo',
+  store: { get: () => ({ ...state }), set: (patch) => { Object.assign(state, patch); emit('state', state); }, subscribe: () => () => {} },
+  viewer: params.get('viewer') === '0' ? null : { toDataURL: () => canvas.toDataURL('image/png') },
+  target: () => (movieFrames.length ? { ra: state.ra, dec: state.dec, name: state.name } : null),
+  grid: () => ({ ra0: state.ra, dec0: state.dec, n: N, scale: 3.75 }),
+  movie: () => ({ frames: movieFrames.slice(), index, playing, view: VIEW }),
+  setFrameIndex: (i) => { setPlaying(false); setIndex(i); },
+  play: () => setPlaying(true),
+  pause: () => setPlaying(false),
+  selection: () => selection,
+  on(event, fn) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => listeners.get(event).delete(fn);
+  },
+  addTool({ id, label, title, onClick, group = 'extra' }) {
+    const strip = document.getElementById('toolstrip');
+    let host = strip.querySelector(`[data-group="${group}"]`);
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'tool-group';
+      host.dataset.group = group;
+      strip.append(host);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tool';
+    btn.dataset.tool = id;
+    btn.title = title || label;
+    btn.textContent = label;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.addEventListener('click', () => onClick && onClick());
+    host.append(btn);
+    return {
+      setActive: (on) => btn.setAttribute('aria-pressed', String(!!on)),
+      setDisabled: (off) => { btn.disabled = !!off; },
+      remove: () => btn.remove(),
+    };
+  },
+  toast: (message) => console.log('[toast]', message),
+};
+if (params.get('shell')) app.openModal = shellModal;
+
+draw();
+const handle = install(app);
+window.demo = { app, handle, meta, setIndex, frames: movieFrames };
+</script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!-- Tombaugh - SPHEREx blink comparator. Apache-2.0. -->
+<!-- AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh injection test demo</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --stone: #77766E; --muted: rgba(247, 242, 231, 0.68); --rule: rgba(247, 242, 231, 0.14); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); font: 13px/1.5 Arial, Helvetica, sans-serif; }
+  body { padding: 20px; }
+  header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 16px; }
+  h1 { font: 900 19px/1 "Arial Black", Arial, sans-serif; letter-spacing: 0.14em; margin: 0; }
+  header span { color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 560px) minmax(300px, 380px); gap: 24px; align-items: start; }
+  @media (max-width: 780px) { main { grid-template-columns: minmax(0, 1fr); } body { padding: 12px; } }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+  .bar label { color: var(--muted); }
+  select, button.host {
+    height: 30px; padding: 0 10px; font: inherit; color: var(--paper); background: var(--ink);
+    border: 1px solid rgba(247, 242, 231, 0.3); border-radius: 2px; cursor: pointer;
+  }
+  button.host:hover, select:hover { border-color: var(--paper); }
+  button.host[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+  #stage { width: 100%; }
+  #strip { display: flex; gap: 6px; margin-left: auto; }
+  #toast { min-height: 1.5em; margin: 8px 0 0; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+  aside h2 { font: 900 13px/1.2 "Arial Black", Arial, sans-serif; letter-spacing: 0.06em; margin: 0 0 12px; }
+  aside { border-left: 1px solid var(--rule); padding-left: 24px; min-width: 0; }
+  @media (max-width: 780px) { aside { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>TOMBAUGH</h1>
+  <span>injection test demo: a synthetic patch, three passes of 14 exposures in detector 6</span>
+</header>
+<main>
+  <div>
+    <div class="bar">
+      <label for="view">View</label>
+      <select id="view"></select>
+      <button class="host" id="prev" type="button" aria-label="Previous frame">&lt;</button>
+      <button class="host" id="next" type="button" aria-label="Next frame">&gt;</button>
+      <button class="host" id="play" type="button" aria-pressed="false">Blink</button>
+      <div id="strip"></div>
+    </div>
+    <div id="stage"></div>
+    <p id="toast" role="status"></p>
+    <p class="hint">Everything on this page is synthetic: noise, six stars with smooth spectra, and whatever the panel plants. Click the image to choose where the next body goes.</p>
+  </div>
+  <aside>
+    <h2 id="panel-title"></h2>
+    <div id="panel"></div>
+  </aside>
+</main>
+
+<script type="module">
+import { createViewer } from '../../render/viewer.js';
+import { makeGrid, gridPixToSky } from '../../core/wcs.js';
+import { stackLayers } from '../../core/stack.js';
+import { fitSkyModel, residualPassStacks } from '../../core/skymodel.js';
+import { splitPasses, passLabel } from '../../core/frames.js';
+import { robustStats, autoRange } from '../../core/stretch.js';
+import { addGaussian, effectiveFwhmArcsec } from './inject.js';
+import { seededRandom } from './recover.js';
+import { install, meta } from './index.js';
+
+const $ = (id) => document.getElementById(id);
+
+// ---- a deterministic synthetic patch ----------------------------------------------------------
+// RA 150, Dec +20, 4 arcmin across. Passes are centred on the dates when the patch is 90 degrees
+// from the Sun (MJD 60811, 60997, 61176), as SPHEREx would see it. Detector 6: 4.42 to 5.00 um.
+const grid = makeGrid(150, 20, 4);
+const n = grid.n, N = n * n;
+const SIGMA = 0.03;                                    // MJy/sr per grid pixel
+const rng = seededRandom(20261115);
+const gauss = () => Math.sqrt(-2 * Math.log(Math.max(rng(), 1e-12))) * Math.cos(2 * Math.PI * rng());
+const stars = [
+  { x: 39, y: 39, flux: 14, slope: -1.2 },             // the "target" in the middle
+  { x: 14.3, y: 60.8, flux: 5, slope: 0.8 },
+  { x: 63.6, y: 20.2, flux: 8, slope: -2.0 },
+  { x: 22.8, y: 17.5, flux: 2.5, slope: 0.2 },
+  { x: 58.1, y: 66.4, flux: 3.5, slope: -0.6 },
+  { x: 70.2, y: 44.9, flux: 1.5, slope: 1.5 },
+];
+const psfSigma = effectiveFwhmArcsec() / 2.3548 / grid.scale;
+const mjds = [];
+for (const q of [60811.25, 60996.75, 61176.5]) for (let i = 0; i < 14; i++) mjds.push(q - 2 + i * 0.3);
+const layers = mjds.map((mjd, i) => {
+  const w0 = 4.44 + 0.54 * (((i * 5) % 14) + 0.5) / 14;  // shuffled, like real exposures
+  const image = new Float32Array(N);
+  const wave = new Float32Array(N);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) wave[y * n + x] = w0 + 0.0004 * (y - n / 2);
+  for (let k = 0; k < N; k++) image[k] = SIGMA * gauss();
+  for (const s of stars) addGaussian(image, n, n, s.x, s.y, psfSigma, s.flux * Math.pow(w0 / 4.7, s.slope), null);
+  return {
+    frame: { id: `synthetic-${i}`, det: 6, mjd, waveCenter: w0 }, mjd, det: 6, image,
+    variance: new Float32Array(N).fill(SIGMA * SIGMA), wave, mask: new Uint8Array(N),
+  };
+});
+
+// ---- a tiny host: just enough of the app object for this plugin --------------------------------
+const viewer = createViewer($('stage'), { unit: 'MJy/sr' });
+viewer.setGrid(grid);
+const listeners = new Map();
+const emit = (event, payload) => { for (const fn of listeners.get(event) || []) { try { fn(payload); } catch (err) { console.error(err); } } };
+const state = { ra: grid.ra0, dec: grid.dec0, det: 6, view: 'passes', t: 0 };
+const pluginViews = new Map();
+const overlayFns = new Set();
+let movie = [];
+let index = 0;
+let selection = null;
+let token = 0;
+let timer = null;
+
+function hostFrames(view) {
+  const passes = splitPasses(layers);
+  if (view === 'residual') {
+    const stacks = residualPassStacks(fitSkyModel(layers), layers);
+    const sig = stacks.map((s) => robustStats(s.image, s.mask).sigma).sort((a, b) => a - b)[1];
+    return stacks.map((s, i) => ({
+      image: s.image, mask: s.mask, range: [-6 * sig, 6 * sig], diverging: true, mjd: s.mjd,
+      caption: { title: `Residual · pass ${i + 1} of ${stacks.length} · ${s.label}`, date: '', wave: 'D6 · 4.42 to 5.00 µm', note: 'Observed minus predicted sky' },
+    }));
+  }
+  return passes.map((pass, i) => {
+    const s = stackLayers(pass);
+    return {
+      image: s.image, mask: s.mask, range: autoRange(s.image, s.mask), mjd: pass[0].mjd,
+      caption: { title: `Pass ${i + 1} of ${passes.length} · ${passLabel(pass)}`, date: '', wave: 'D6 · 4.42 to 5.00 µm', note: `${pass.length} exposures stacked` },
+    };
+  });
+}
+
+function show() {
+  const f = movie[index];
+  if (!f) { viewer.setCaption({ title: 'Nothing to show', date: '', wave: '', note: '' }); return; }
+  viewer.setImage({ image: f.image, mask: f.mask, range: f.range, diverging: !!f.diverging, stretch: f.diverging ? 'linear' : 'asinh', transition: 'cut' });
+  viewer.setCaption(f.caption);
+  const markers = [];
+  if (selection) markers.push({ ra: selection.ra, dec: selection.dec, kind: 'click', label: '' });
+  for (const fn of overlayFns) {
+    try { const extra = fn(f, index); if (extra && Array.isArray(extra.markers)) markers.push(...extra.markers); } catch (err) { console.error(err); }
+  }
+  viewer.setOverlays({ markers });
+  emit('frame', index);
+}
+
+async function rebuild() {
+  const mine = ++token;
+  const pv = pluginViews.get(state.view);
+  let frames = [];
+  try {
+    frames = pv ? await pv.build({ app, state: { ...state }, grid, layers, layersByDet: new Map([[6, layers]]), frames: [], gaia: [] }) : hostFrames(state.view);
+  } catch (err) { console.error(err); }
+  if (mine !== token) return;
+  movie = frames || [];
+  index = Math.min(index, Math.max(0, movie.length - 1));
+  $('view').value = state.view;
+  show();
+  emit('movie', movie);
+}
+
+function addViewOption(id, label) {
+  const o = document.createElement('option');
+  o.value = id; o.textContent = label;
+  $('view').append(o);
+}
+addViewOption('passes', 'Passes');
+addViewOption('residual', 'Residual');
+
+const app = {
+  version: 'demo',
+  viewer,
+  store: {
+    get: () => ({ ...state }),
+    set(patch) { Object.assign(state, patch); emit('state', { ...state }); if ('view' in patch) { index = 0; rebuild(); } },
+    subscribe(fn) { return app.on('state', fn); },
+  },
+  target: () => ({ ra: grid.ra0, dec: grid.dec0, name: 'Synthetic patch' }),
+  grid: () => grid,
+  frames: () => [],
+  layers: () => layers.slice(),
+  movie: () => ({ frames: movie.slice(), index, playing: !!timer, view: state.view }),
+  setFrameIndex(i) { if (movie.length) { index = ((i % movie.length) + movie.length) % movie.length; show(); } },
+  gaia: () => [],
+  selection: () => selection,
+  on(event, fn) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => listeners.get(event).delete(fn);
+  },
+  addTool({ id, label, title, onClick }) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'host'; b.textContent = label || id; b.title = title || ''; b.setAttribute('aria-pressed', 'false');
+    b.dataset.tool = id;
+    b.addEventListener('click', () => onClick && onClick());
+    $('strip').append(b);
+    return { setActive(on) { b.setAttribute('aria-pressed', on ? 'true' : 'false'); }, setDisabled(off) { b.disabled = !!off; }, remove() { b.remove(); } };
+  },
+  addPanel({ title, render }) {
+    $('panel-title').textContent = title.toUpperCase();
+    const handle = render($('panel')) || {};
+    return { show() { $('panel').scrollIntoView({ block: 'nearest' }); if (handle.update) handle.update(); }, hide() {}, remove() { if (handle.dispose) handle.dispose(); } };
+  },
+  addView({ id, label, build }) {
+    if (pluginViews.has(id)) return { remove() {} };
+    pluginViews.set(id, { build });
+    addViewOption(id, label);
+    if (state.view === id) rebuild();
+    return {
+      remove() {
+        pluginViews.delete(id);
+        const o = $('view').querySelector(`option[value="${id}"]`);
+        if (o) o.remove();
+        if (state.view === id) app.store.set({ view: 'passes', t: 0 });
+      },
+    };
+  },
+  addOverlay(fn) { overlayFns.add(fn); show(); return () => { overlayFns.delete(fn); show(); }; },
+  toast(message) { $('toast').textContent = String(message); },
+};
+
+$('view').addEventListener('change', (e) => app.store.set({ view: e.target.value }));
+$('prev').addEventListener('click', () => app.setFrameIndex(index - 1));
+$('next').addEventListener('click', () => app.setFrameIndex(index + 1));
+$('play').addEventListener('click', () => {
+  if (timer) { clearInterval(timer); timer = null; } else { timer = setInterval(() => app.setFrameIndex(index + 1), 700); }
+  $('play').setAttribute('aria-pressed', timer ? 'true' : 'false');
+});
+viewer.on('click', (c) => {
+  if (!c || !Number.isFinite(c.ra)) return;
+  selection = { ra: c.ra, dec: c.dec, x: c.x, y: c.y };
+  show();
+  emit('select', selection);
+});
+
+rebuild();
+const handle = install(app);
+window.demo = { app, handle, meta, layers, grid, gridPixToSky };
+</script>
+</body>
+</html>

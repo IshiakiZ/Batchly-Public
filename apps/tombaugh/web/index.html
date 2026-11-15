@@ -1,0 +1,162 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+-->
+<html lang="en" data-screen="boot">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#171715">
+<title>Tombaugh: a blink comparator for the 102-color sky</title>
+<meta name="description" content="Type a sky position. Tombaugh loads every SPHEREx exposure of that patch, aligns them and plays them as a movie, so that things that move or change stand out.">
+<meta name="generator" content="Code written with Claude (AI) for team Missing Mass">
+<meta name="author" content="Team Missing Mass. All code written by an AI system (Claude) under the team's direction.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tombaugh">
+<meta property="og:title" content="Tombaugh: a blink comparator for the 102-color sky">
+<meta property="og:description" content="Type a sky position. Tombaugh loads every SPHEREx exposure of that patch, aligns them and plays them as a movie, so that things that move or change stand out.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Tombaugh: a blink comparator for the 102-color sky">
+<meta name="twitter:description" content="Every SPHEREx exposure of one patch of sky, aligned and played as a movie. Things that move or change stand out.">
+<!-- The mark: one star at two dates, as a blink comparator shows it. Paper then, Signal now, on Ink. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23171715'/%3E%3Ccircle cx='12.5' cy='18' r='7' fill='%23F7F2E7'/%3E%3Ccircle cx='19.5' cy='14' r='7' fill='%23E53C27'/%3E%3Cpath d='M18.6 13.5a7 7 0 0 0-5.2 11.45 7 7 0 0 0 5.2-11.45z' fill='%23171715' fill-opacity='.38'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#viewer">Skip to the viewer</a>
+
+<div class="app" id="app">
+  <header class="topbar" id="topbar" data-testid="topbar">
+    <a class="brand" id="brand" href="./" aria-label="Tombaugh, start page">
+      <span class="wordmark">TOMBAUGH</span>
+      <span class="tagline">a blink comparator for the 102-color sky <span class="byline">by Missing Mass</span></span>
+    </a>
+
+    <form class="search" id="search" role="search" autocomplete="off">
+      <label class="visually-hidden" for="search-input">Sky coordinates or object name</label>
+      <div class="search-field">
+        <input class="search-input" id="search-input" data-testid="search-input" name="q" type="text" inputmode="text" spellcheck="false"
+               autocapitalize="off" autocomplete="off" aria-describedby="search-status" aria-controls="search-pop"
+               placeholder="RA Dec or a name: 269.45 4.69, 17h57m48s +04d41m36s, Barnard's Star">
+        <button class="btn btn-solid" type="submit" id="search-go">Go</button>
+        <div class="search-pop" id="search-pop" hidden>
+          <p class="pop-heading">Formats that work</p>
+          <ul class="pop-list" id="search-examples"></ul>
+          <p class="pop-heading" id="search-tour-heading">Challenge targets</p>
+          <div class="pop-tour" id="search-tour"></div>
+        </div>
+      </div>
+      <p class="search-status" id="search-status" aria-live="polite"></p>
+    </form>
+
+    <p class="sim-badge" id="sim-badge" role="status" hidden><b>Simulated sky</b>, not real data</p>
+
+    <nav class="top-actions" aria-label="Page actions">
+      <button class="btn" type="button" id="btn-map" aria-haspopup="dialog" hidden>Sky map</button>
+      <button class="btn" type="button" id="btn-share" title="Copy a link to exactly this view">Share</button>
+      <button class="btn" type="button" id="btn-help" aria-haspopup="dialog" title="Help and keyboard shortcuts (?)">Help</button>
+    </nav>
+  </header>
+
+  <main class="console" id="console">
+    <section class="stage" id="stage" aria-label="Sky viewer">
+      <div class="modebar" id="modebar">
+        <div class="seg seg-modes" id="view-seg" role="radiogroup" aria-label="View mode"></div>
+        <button class="btn btn-sheet" type="button" id="btn-sheet" aria-haspopup="dialog" aria-controls="controls">Controls</button>
+      </div>
+      <div class="modeopts" id="modeopts" aria-live="polite"></div>
+
+      <div class="stage-body">
+        <div class="controls" id="controls" role="group" aria-label="Display controls">
+          <div class="sheet-head">
+            <h2 class="sheet-title">Controls</h2>
+            <button class="btn btn-quiet" type="button" id="btn-sheet-close" aria-label="Close controls">Close</button>
+          </div>
+          <div class="controls-body" id="controls-body"></div>
+        </div>
+
+        <div class="viewcol">
+          <div class="viewer-frame" id="viewer-frame">
+            <div class="viewer" id="viewer" data-testid="viewer" tabindex="-1"></div>
+            <div class="viewer-progress" id="viewer-progress" hidden>
+              <div class="viewer-progress-bar"><span id="viewer-progress-fill"></span></div>
+              <span class="viewer-progress-text" id="viewer-progress-text"></span>
+            </div>
+            <div class="viewer-status" id="viewer-status" hidden></div>
+          </div>
+          <div class="toolrow">
+            <div class="readout" id="readout" aria-hidden="true">&nbsp;</div>
+            <div class="toolstrip" id="toolstrip" role="toolbar" aria-label="Viewer tools"></div>
+          </div>
+          <div class="player" id="player" data-testid="player" role="group" aria-label="Movie player"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" id="side" aria-label="Measurements">
+      <div class="tabs" id="tabs" role="tablist" aria-label="Measurement panels">
+        <button class="tab" role="tab" type="button" id="tab-spectrum" aria-controls="panel-spectrum" aria-selected="true">Spectrum</button>
+        <button class="tab" role="tab" type="button" id="tab-lightcurve" aria-controls="panel-lightcurve" aria-selected="false" tabindex="-1">Light curve</button>
+        <button class="tab" role="tab" type="button" id="tab-motion" aria-controls="panel-motion" aria-selected="false" tabindex="-1">Motion</button>
+        <button class="tab" role="tab" type="button" id="tab-candidates" aria-controls="panel-candidates" aria-selected="false" tabindex="-1">Candidates<span class="tab-count" id="tab-candidates-count" hidden></span></button>
+        <button class="tab" role="tab" type="button" id="tab-about" aria-controls="panel-about" aria-selected="false" tabindex="-1">About this view</button>
+      </div>
+      <div class="panels" id="panels">
+        <section class="panel" id="panel-spectrum" data-testid="spectrum-panel" role="tabpanel" aria-labelledby="tab-spectrum" tabindex="0">
+          <h2 class="panel-title">Spectrum</h2>
+          <div class="panel-body" id="spectrum-body"></div>
+        </section>
+        <section class="panel" id="panel-lightcurve" role="tabpanel" aria-labelledby="tab-lightcurve" tabindex="0" hidden>
+          <h2 class="panel-title">Light curve</h2>
+          <div class="panel-body" id="lightcurve-body"></div>
+        </section>
+        <section class="panel" id="panel-motion" role="tabpanel" aria-labelledby="tab-motion" tabindex="0" hidden>
+          <h2 class="panel-title">Motion</h2>
+          <div class="panel-body" id="motion-body"></div>
+        </section>
+        <section class="panel" id="panel-candidates" role="tabpanel" aria-labelledby="tab-candidates" tabindex="0" hidden>
+          <h2 class="panel-title">Candidates</h2>
+          <div class="panel-body" id="candidates-body"></div>
+        </section>
+        <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden>
+          <h2 class="panel-title">About this view</h2>
+          <div class="panel-body" id="about-body"></div>
+        </section>
+      </div>
+      <section class="fieldsum" id="fieldsum" aria-label="Field summary"></section>
+      <footer class="cite" id="cite" aria-label="Data citation and links"></footer>
+    </aside>
+  </main>
+</div>
+
+<div class="landing" id="landing" data-testid="landing" hidden></div>
+
+<div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+
+<dialog class="dialog" id="help-dialog" aria-labelledby="help-title">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="help-title">How to use Tombaugh</h2>
+    <button class="btn btn-quiet" type="button" data-close-dialog aria-label="Close help">Close</button>
+  </div>
+  <div class="dialog-body" id="help-body"></div>
+</dialog>
+
+<dialog class="dialog dialog-wide" id="map-dialog" aria-labelledby="map-title">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="map-title">Where people have looked</h2>
+    <button class="btn btn-quiet" type="button" data-close-dialog aria-label="Close sky map">Close</button>
+  </div>
+  <div class="dialog-body" id="map-body"></div>
+</dialog>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<noscript>
+  <p class="noscript">Tombaugh needs JavaScript to load and align the SPHEREx images.</p>
+</noscript>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
