@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:37:52.310Z, sources sha256 18fd49a81c041e9e.
+Single-file build of 111 modules, 2026-11-15T10:51:36.997Z, sources sha256 e50826020a319132.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -5324,8 +5324,12 @@ factsHead.hidden = !facts.childElementCount;
 });
 __tb_define("src/ui/citation.js", function (__tb_self) { __tb_export(__tb_self, { DOIS: () => DOIS, citationText: () => citationText, createCitation: () => createCitation, externalLinks: () => externalLinks, releaseLabel: () => releaseLabel });
 const DOIS = Object.freeze({
-mission: '10.26131/IRSA629',
-releases: Object.freeze({ qr3: '10.26131/IRSA662' }),
+releases: Object.freeze({
+qr1: '10.26131/IRSA629',
+qr2: '10.26131/IRSA652',
+qr3: '10.26131/IRSA662',
+dr1: '10.26131/IRSA678',
+}),
 });
 const RELEASE_NAMES = { qr1: 'QR1', qr2: 'QR2', qr3: 'QR3', dr1: 'DR1', dr2: 'DR2' };
 function releaseLabel(release) {
@@ -5335,14 +5339,14 @@ return RELEASE_NAMES[key] || String(release || '').toUpperCase();
 function citationText({ releases = [], retrieved = null } = {}) {
 const list = [...new Set(releases.filter(Boolean).map((r) => String(r).toLowerCase()))].sort();
 const names = list.length ? list.map(releaseLabel).join(', ') : 'quick release';
-const extra = list
-.filter((r) => DOIS.releases[r])
-.map((r) => `${releaseLabel(r)} ${DOIS.releases[r]}`);
-if (!extra.length) extra.push(`QR3 ${DOIS.releases.qr3}`);
+const cited = list.filter((r) => DOIS.releases[r]);
+const extra = (cited.length ? cited : ['dr1', 'qr3']).map(
+(r) => `${releaseLabel(r)} DOI ${DOIS.releases[r]}`,
+);
 let date = retrieved instanceof Date ? retrieved : retrieved ? new Date(retrieved) : new Date();
 if (Number.isNaN(date.getTime())) date = new Date();
 const day = date.toISOString().slice(0, 10);
-return `SPHEREx Level 2 spectral images, ${names} (IRSA, DOI ${DOIS.mission} for the mission archive; ${extra.join('; ')}), retrieved ${day}. Gaia DR3.`;
+return `SPHEREx Level 2 spectral images, ${names} (NASA/IPAC Infrared Science Archive; ${extra.join('; ')}), retrieved ${day}. Gaia DR3.`;
 }
 const WISEVIEW_TAIL =
 '&size=176&band=3&speed=20&minbright=-50&maxbright=500&window=0.5&diff_window=1&linear=1&color=&zoom=9&border=0&gaia=0&invert=0&maxdyr=0&scandir=0&neowise=0&diff=0&outer_epochs=0&unique_window=1&smooth_scan=0&shift=0&pmra=0&pmdec=0&synth_a=0&synth_a_sub=0&synth_a_ra=&synth_a_dec=&synth_a_w1=&synth_a_w2=&synth_a_pmra=0&synth_a_pmdec=0&synth_a_mjd=&synth_b=0&synth_b_sub=0&synth_b_ra=&synth_b_dec=&synth_b_w1=&synth_b_w2=&synth_b_pmra=0&synth_b_pmdec=0&synth_b_mjd=';
@@ -41491,7 +41495,7 @@ note: `${fmtCount(q.aperture.exposuresWithFlags)} of ${fmtCount(q.aperture.expos
 }));
 }
 const rel = Object.entries(q.releases || {});
-if (rel.length) rows.push(row(g, 'Data releases', rel.map(([name, n]) => `${name} (${n})`).join(', '), { note: q.synthetic ? 'Synthetic test frames, not observations.' : '' }));
+if (rel.length) rows.push(row(g, 'Data releases', rel.map(([name, n]) => `${String(name).toUpperCase()} (${n})`).join(', '), { note: q.synthetic ? 'Synthetic test frames, not observations.' : '' }));
 return rows;
 }
 function residualRows(m) {
@@ -41619,7 +41623,7 @@ const when = meta.generatedAt ? new Date(meta.generatedAt) : new Date();
 const stamp = Number.isFinite(when.getTime()) ? `${when.toISOString().slice(0, 16).replace('T', ' ')} UTC` : '';
 const releases = releasesOf(list);
 const relText = Object.keys(releases).length
-? Object.entries(releases).map(([name, n]) => `${name} (${n} exposures)`).join(', ')
+? Object.entries(releases).map(([name, n]) => `${String(name).toUpperCase()} (${n} exposures)`).join(', ')
 : 'none found in the loaded frames';
 const synthetic = list.some((m) => m && m.quality && m.quality.synthetic);
 const out = [];
