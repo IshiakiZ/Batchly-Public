@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T11:43:24.968Z, sources sha256 9596bd9df27abfad.
+Single-file build of 111 modules, 2026-11-15T11:52:06.536Z, sources sha256 4e73d036a6e2ad35.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -2952,6 +2952,7 @@ label: `${kind} · ${Number.isFinite(score) ? score.toFixed(1) : '?'}σ`,
 }
 const list = clusterCandidates(out, grid, max);
 list.setAside = Number.isFinite(raw.setAside) ? raw.setAside : 0;
+list.setAsideEdge = Number.isFinite(raw.setAsideEdge) ? raw.setAsideEdge : 0;
 return list;
 }
 function clusterCandidates(list, grid, max = 12, radiusArcsec = 30) {
@@ -5223,8 +5224,11 @@ const facts = h('dl', { class: 'facts' });
 clear(els.aboutBody).append(aboutText, aboutNotes, explainHost, factsHead, facts);
 function setAsideNote(list) {
 const k = list && Number.isFinite(list.setAside) ? list.setAside : 0;
-if (!(k > 0)) return '';
-return `${k} leftover patch${k === 1 ? '' : 'es'} on bright fixed stars ${k === 1 ? 'was' : 'were'} set aside: the star's total light did not change, only its image did.`;
+const e = list && Number.isFinite(list.setAsideEdge) ? list.setAsideEdge : 0;
+const parts = [];
+if (k > 0) parts.push(`${k} leftover patch${k === 1 ? '' : 'es'} on bright fixed stars ${k === 1 ? 'was' : 'were'} set aside: the star's total light did not change, only its image did.`);
+if (e > 0) parts.push(`${e} patch${e === 1 ? '' : 'es'} at the edge of the data ${e === 1 ? 'was' : 'were'} set aside: where one pass ends there is nothing to compare with.`);
+return parts.join(' ');
 }
 function whyNote(c) {
 const sat = saturatedNote(c);
@@ -8608,7 +8612,7 @@ if (variance) variance[i] = va[i] + vb[i];
 return variance ? { image, mask, variance } : { image, mask };
 }
 });
-__tb_define("src/core/skymodel.js", function (__tb_self) { __tb_export(__tb_self, { CHANGE_KINDS: () => CHANGE_KINDS, changeMap: () => changeMap, evalModelAt: () => evalModelAt, findCandidates: () => findCandidates, fitSkyModel: () => fitSkyModel, haloChange: () => haloChange, netChange: () => netChange, predictLayer: () => predictLayer, residualLayer: () => residualLayer, residualPassStacks: () => residualPassStacks, saturatedCores: () => saturatedCores }); const { DETECTORS, splitPasses, passLabel, medianMjd } = __tb_require("src/core/frames.js"); const { stackLayers, medianInPlace } = __tb_require("src/core/stack.js");
+__tb_define("src/core/skymodel.js", function (__tb_self) { __tb_export(__tb_self, { CHANGE_KINDS: () => CHANGE_KINDS, changeMap: () => changeMap, coverageEdge: () => coverageEdge, evalModelAt: () => evalModelAt, findCandidates: () => findCandidates, fitSkyModel: () => fitSkyModel, haloChange: () => haloChange, netChange: () => netChange, predictLayer: () => predictLayer, residualLayer: () => residualLayer, residualPassStacks: () => residualPassStacks, saturatedCores: () => saturatedCores }); const { DETECTORS, splitPasses, passLabel, medianMjd } = __tb_require("src/core/frames.js"); const { stackLayers, medianInPlace } = __tb_require("src/core/stack.js");
 ;
 ;
 const HUBER_K = 1.345;
@@ -9263,6 +9267,42 @@ return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole
 if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
 return { ...none, dipole, monopole };
 }
+function coverageEdge(stack, n) {
+const npix = n * n;
+const edge = new Uint8Array(npix);
+const mk = stack.mask;
+const queue = new Int32Array(npix);
+let tail = 0;
+const push = (i) => { if (edge[i] === 0 && mk[i] !== 0) { edge[i] = 1; queue[tail++] = i; } };
+for (let k = 0; k < n; k++) { push(k); push((n - 1) * n + k); push(k * n); push(k * n + n - 1); }
+for (let head = 0; head < tail; head++) {
+const i = queue[head];
+const x = i % n;
+if (x > 0) push(i - 1);
+if (x < n - 1) push(i + 1);
+if (i >= n) push(i - n);
+if (i < npix - n) push(i + n);
+}
+return edge;
+}
+function atCoverageEdge(blob, edge, n, reach = 2) {
+const pixels = blob.pixels && blob.pixels.length ? blob.pixels : [Math.round(blob.y) * n + Math.round(blob.x)];
+for (const i of pixels) {
+const x = i % n;
+const y = (i - x) / n;
+if (x < 1 || y < 1 || x > n - 2 || y > n - 2) return true;
+for (let dy = -reach; dy <= reach; dy++) {
+const yy = y + dy;
+if (yy < 0 || yy >= n) continue;
+for (let dx = -reach; dx <= reach; dx++) {
+const xx = x + dx;
+if (xx < 0 || xx >= n) continue;
+if (edge[yy * n + xx] !== 0) return true;
+}
+}
+}
+return false;
+}
 function netChange(model, stacks, blob, { rSearch = 4, rAp = 3.5, onSourceRatio = 3 } = {}) {
 const n = model.n;
 const K = model.order + 1;
@@ -9366,7 +9406,7 @@ for (const j of blob.pixels) if (blob.kind > kind[j]) kind[j] = blob.kind;
 return { score, kind, stacks, blobs };
 }
 function findCandidates(model, layers, opts = {}) {
-const { minSnr = 5, minNet = 5, max = 20, radius = 4, minSep = 1.5, starLobes = false } = opts;
+const { minSnr = 5, minNet = 5, max = 20, radius = 4, minSep = 1.5, starLobes = false, edges = false } = opts;
 const stacks = opts.stacks || residualPassStacks(model, layers, opts);
 let blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
 const out = [];
@@ -9400,9 +9440,15 @@ between: change.from >= 0 && change.to >= 0 ? [stacks[change.from].label, stacks
 }
 out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
 let setAside = 0;
+let setAsideEdge = 0;
+const edgeOf = new Map();
 for (const b of blobs) {
 if (out.length >= max) break;
 if (out.some((c) => Math.hypot(c.x - b.x, c.y - b.y) < minSep)) continue;
+if (!edges) {
+if (!edgeOf.has(b.passIndex)) edgeOf.set(b.passIndex, coverageEdge(stacks[b.passIndex], model.n));
+if (atCoverageEdge(b, edgeOf.get(b.passIndex), model.n)) { setAsideEdge++; continue; }
+}
 let net = null;
 if (b.kind === 1) {
 net = netChange(model, stacks, b);
@@ -9426,6 +9472,7 @@ npix: b.npix,
 });
 }
 out.setAside = setAside;
+out.setAsideEdge = setAsideEdge;
 return out;
 }
 });
