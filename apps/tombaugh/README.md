@@ -71,16 +71,21 @@ Live tool: **<https://batch-ly.com/tombaugh/index.html>**
 Type a position (`269.45 4.69`, `17h57m48.5s +04d41m36s`, `17:57:48.5 +04:41:36`) or a name
 (`Barnard's Star`), or take the five-target tour from the first screen.
 
-![Simple mode on Barnard's Star, real data: the picture, a two-way switch, and plain-language answers](docs/real/simple-mode.jpg)
+![The start page: the whole sky as SPHEREx saw it, with the five challenge targets ringed](docs/real/sky-home.jpg)
 
-The page has two modes. **Simple** is the default: the picture with play and blink, a two-way
-switch between "The sky" and "What changed", and a side column that says in plain words what the
-field is, what changed in it and, for any star you click, whether it is moving and whether its
-brightness changed. **Advanced** (the button at the top right) is the full console: eight views,
+The page has two modes. **Simple** is the default, and it starts on the whole sky: SPHEREx's own
+all-sky map, which you drag to look around and scroll to zoom. Sharper pictures load as you zoom
+in. Click any star, or pick a name from the scrollable list in the search box (the challenge
+targets and 468 named stars), press "See what changed", and the tool opens that spot: the photos
+with a Play button, a two-way switch between "Photos" and "What changed", and short answers in
+everyday words to "Moving?" and "Brightness changed?" for any star you click. Anything longer
+sits in a drop-down. **Advanced** (the button at the top right) is the full console: eight views,
 six detectors, the spectrum, light-curve and motion plots, the candidate list with its reasons,
 the Validation tab and the measuring tools. Simple mode measures nothing of its own. Every answer
-in it is Advanced mode's verdict reworded, with the exact sentence kept underneath. The choice is
-remembered in the browser, and a link that asks for something only Advanced shows opens Advanced.
+in it is Advanced mode's verdict reworded. The choice is remembered in the browser, and a link
+that asks for something only Advanced shows opens Advanced.
+
+![Simple mode on Barnard's Star, real data: the picture, a two-way switch, and plain-language answers](docs/real/simple-mode.jpg)
 
 Every view is a link. The state of the page lives in the URL, so a link reproduces what you see and
 can be embedded in another page.
@@ -307,13 +312,13 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 1011 unit tests; they do not touch the network
+# 1033 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file
 ```
 
-`test/e2e.mjs` drives the page in a real browser with Playwright (13 checks pass on the bundled
+`test/e2e.mjs` drives the page in a real browser with Playwright (14 checks pass on the bundled
 page). Playwright is a development tool and is not needed to run or build Tombaugh.
 
 ## Deploying

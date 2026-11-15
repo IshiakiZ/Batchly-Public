@@ -75,6 +75,9 @@ const OPTIONAL_MODULES = [
   ['lightcurve', () => import('./plots/lightcurve.js')],
   ['motion', () => import('./plots/motion.js')],
   ['landing', () => import('./ui/landing.js')],
+  ['home', () => import('./ui/home.js')],
+  ['stardata', () => import('./sky/stardata.js')],
+  ['picklist', () => import('./ui/picklist.js')],
   ['explain', () => import('./ui/explain.js')],
   ['fx', () => import('./ui/fx.js')],
   ['shortcuts', () => import('./ui/shortcuts.js')],
@@ -282,7 +285,6 @@ async function boot() {
       if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
     },
     onClear: () => select(null),
-    onAdvanced: () => setMode('advanced', { remember: true }),
   });
   if (!lib.fitSkyModel || !lib.residualLayer) simple.setViewDisabled('residual', 'The comparison is not available in this build');
   simple.setView(store.get().view);
@@ -309,8 +311,15 @@ async function boot() {
   /** Simple mode draws the picture without the brightness scale and with a short caption. */
   function applyModeToViewer() {
     try {
-      viewer.setOptions({ colorbar: store.get().mode !== 'simple' });
+      const full = store.get().mode !== 'simple';
+      // Simple mode always shows the pictures smoothed; Advanced keeps the true square pixels
+      // unless its own "Smooth" switch is on.
+      viewer.setOptions({ colorbar: full, compass: full, scaleBar: full, smooth: full ? store.get().smooth : true });
+      // The citation block sits at the foot of the column in Advanced mode and inside the
+      // "Data" drop-down in Simple mode.
+      if (els.cite && simple.creditBody) (full ? els.side : simple.creditBody).append(els.cite);
       refreshCaptions();
+      updateSearchLine();
       updateOverlays();
     } catch {
       // optional
@@ -415,6 +424,13 @@ async function boot() {
 
   // ---- status ---------------------------------------------------------------------------------
   function loadingCopy(L) {
+    if (store.get().mode === 'simple') {
+      // Simple mode: say what is happening in a few everyday words and nothing else.
+      if (L.phase === 'search') return { kicker: '', title: 'Finding photos of this spot…', text: '' };
+      if (L.phase === 'model') return { kicker: '', title: 'Comparing the photos…', text: '' };
+      if (L.phase === 'align') return { kicker: '', title: 'Lining the photos up…', text: '' };
+      return { kicker: '', title: 'Getting the photos…', text: '' };
+    }
     const det = `D${L.det}`;
     if (L.phase === 'search') {
       return {
@@ -468,14 +484,16 @@ async function boot() {
     const showingPartial = player.frameCount() > 0 && session.movie && session.movie.key === session.key && L.det === s.det && !L.label && L.phase !== 'search' && L.phase !== 'model';
     if (showingPartial) {
       layout.setStatus(null);
-      layout.setProgress({ done: L.done, total: L.total, text: `${L.done} / ${L.total} exposures` });
+      layout.setProgress({ done: L.done, total: L.total, text: s.mode === 'simple' ? `${L.done} of ${L.total} photos` : `${L.done} / ${L.total} exposures` });
       return;
     }
     layout.setProgress(null);
     const copy = loadingCopy(L);
     const determinate = (L.phase === 'frames' || L.phase === 'align') && L.total > 0;
     let sub = '';
-    if (determinate) {
+    const plainWords = s.mode === 'simple';
+    if (determinate && plainWords) sub = `${L.done} of ${L.total} photos`;
+    else if (determinate) {
       sub = `${L.done} of ${L.total} exposures`;
       if (L.failed) sub += ` · ${L.failed} failed`;
       if (L.skipped) sub += ` · ${L.skipped} not in the archive`;
@@ -490,7 +508,7 @@ async function boot() {
       done: determinate ? L.done : NaN,
       total: determinate ? L.total : NaN,
       sub,
-      found: foundFor(L),
+      found: plainWords ? null : foundFor(L),
     });
   }
 
@@ -531,6 +549,19 @@ async function boot() {
     updateSimpleField();
     const retryable = !err || err.retryable !== false;
     const message = err && err.message ? String(err.message) : 'Something went wrong while loading this position.';
+    if (store.get().mode === 'simple') {
+      layout.setStatus({
+        kind: 'error',
+        kicker: '',
+        title: retryable ? 'The photos did not arrive' : 'There are no photos of this spot',
+        text: retryable ? 'NASA’s archive is sometimes slow. Trying again usually works.' : 'The telescope has not photographed it yet, or it is too close to the edge of a photo. Try another star.',
+        actions: [
+          ...(retryable ? [{ label: 'Try again', primary: true, onClick: () => startLoad() }] : []),
+          { label: 'Back to the sky', primary: !retryable, onClick: () => goHome() },
+        ],
+      });
+      return;
+    }
     layout.setStatus({
       kind: 'error',
       kicker: retryable ? 'The archive did not answer' : 'Could not load this position',
@@ -1233,7 +1264,7 @@ async function boot() {
   function shownCaption(frame) {
     const c = frame && frame.caption ? frame.caption : null;
     if (!c || store.get().mode !== 'simple') return c;
-    return { title: c.title, date: c.date };
+    return { title: c.title };
   }
 
   function refreshCaptions() {
@@ -1389,9 +1420,11 @@ async function boot() {
     }
     const sel = session.selection;
     if (sel && ownSky) {
-      overlays.markers.push({ ra: sel.ra, dec: sel.dec, kind: 'click', label: sel.label || '' });
+      // Simple mode marks the pick without writing on the picture: its name is in the side column.
+      const plainMarks = s.mode === 'simple';
+      overlays.markers.push({ ra: sel.ra, dec: sel.dec, kind: 'click', label: plainMarks ? '' : sel.label || '' });
       const track = sel.motion && sel.motion.track ? sel.motion.track : [];
-      if (track.length >= 2) overlays.trail = track.map((p) => ({ ra: p.ra, dec: p.dec, mjd: p.mjd }));
+      if (track.length >= 2) overlays.trail = track.map((p) => (plainMarks ? { ra: p.ra, dec: p.dec } : { ra: p.ra, dec: p.dec, mjd: p.mjd }));
     }
     if (frame) {
       for (const fn of overlayFns) {
@@ -1677,6 +1710,12 @@ async function boot() {
     }
     const c = fmtCoord(s.ra, s.dec);
     layout.setSearchText(s.name || c.deg);
+    if (s.mode === 'simple') {
+      // Simple mode keeps the line under the box for problems only; the position is one click
+      // away under "About this place".
+      layout.setSearchStatus(null);
+      return;
+    }
     const parts = [];
     if (s.name) parts.push(h('span', { class: 'num' }, c.deg), '  ');
     if (c.hms) parts.push(h('span', { class: 'num' }, `${c.hms} ${c.dms}`));
@@ -1687,6 +1726,19 @@ async function boot() {
   // ---- search, targets, navigation ------------------------------------------------------------
   let landing = null;
   let landingPlain = true;
+  let homeView = null; // where the sky start page was last looking
+  const skyStars = () => (opt.stardata && typeof opt.stardata.starList === 'function' ? opt.stardata.starList() : []);
+
+  /** A star or spot picked on the sky start page, or a name picked from a search list. */
+  function openFromSky(sel) {
+    if (!sel) return;
+    if (sel.target) {
+      pickTarget(sel.target);
+      return;
+    }
+    store.set({ view: 'passes' });
+    goTo({ ra: sel.ra, dec: sel.dec, name: sel.name || '' });
+  }
   let landingFallback = null;
   let resolveToken = 0;
 
@@ -1936,15 +1988,41 @@ async function boot() {
       clear(els.landing);
     }
     if (!landing && !landingFallback) {
-      if (opt.landing && typeof opt.landing.createLanding === 'function') {
+      const onMode = () => {
+        setMode(plain ? 'advanced' : 'simple', { remember: true });
+        showLanding();
+      };
+      if (plain && opt.home && typeof opt.home.createHome === 'function') {
+        // Simple mode starts on the whole sky: look around, click a star, open it.
+        try {
+          landingPlain = plain;
+          landing = opt.home.createHome(els.landing, {
+            targets: targets.map(plainTarget),
+            starts: tourTargets,
+            stars: skyStars(),
+            figures: opt.stardata ? opt.stardata.SKY_FIGURES : [],
+            starCredit: opt.stardata ? opt.stardata.STAR_DATA_CREDIT : '',
+            view: homeView,
+            onView: (v) => {
+              homeView = v;
+            },
+            onMode,
+            onOpen: (sel) => openFromSky(sel),
+            onSearch: (text) => handleSearch(text),
+            reducedMotion: opt.fx && opt.fx.prefersReducedMotion ? opt.fx.prefersReducedMotion(window) : false,
+          });
+        } catch (err) {
+          console.warn('[tombaugh] the sky start page failed to start', err);
+          landing = null;
+          clear(els.landing);
+        }
+      }
+      if (!landing && opt.landing && typeof opt.landing.createLanding === 'function') {
         try {
           landingPlain = plain;
           landing = opt.landing.createLanding(els.landing, {
             plain,
-            onMode: () => {
-              setMode(plain ? 'advanced' : 'simple', { remember: true });
-              showLanding();
-            },
+            onMode,
             targets: plain ? tourTargets.map(plainTarget) : tourTargets,
             onPick: (t) => pickTarget(t),
             onSearch: (text) => handleSearch(text),
@@ -2023,11 +2101,10 @@ async function boot() {
       ? h(
         'ol',
         { class: 'help-steps' },
-        h('li', null, 'Type a place or a name in the box at the top, or pick one of the five places on the start page.'),
-        h('li', null, 'Press play. Each frame is one visit by the telescope, months apart: stars stay put, anything that moves jumps.'),
-        h('li', null, 'Switch to “What changed” to subtract everything that stayed the same. Whatever is left moved or changed brightness.'),
-        h('li', null, 'Click any star to find out whether it is moving and whether its brightness changed.'),
-        h('li', null, 'Use Share to copy a link to this view. Advanced, at the top right, opens every view, all six detectors, the plots and the measuring tools.'),
+        h('li', null, 'Pick a star on the sky, or search for one.'),
+        h('li', null, 'Press Play to flip through the photos. Stars stay put; anything that moves jumps.'),
+        h('li', null, 'Press “What changed” to hide everything that stayed the same.'),
+        h('li', null, 'Click a star to check it.'),
       )
       : h(
       'ol',
@@ -2049,6 +2126,10 @@ async function boot() {
         dt.append(h('kbd', null, fmt(k)));
       });
       keys.append(dt, h('dd', null, sc.label));
+    }
+    if (simpleMode) {
+      body.append(h('div', null, steps));
+      return;
     }
     body.append(h('div', null, h('p', { class: 'pop-heading' }, 'In five steps'), steps), h('div', null, h('p', { class: 'pop-heading' }, 'Keyboard'), keys));
     if (explainer && explainTopics) {
@@ -2126,6 +2207,22 @@ async function boot() {
   els.btnShare.addEventListener('click', () => share());
   els.btnHelp.addEventListener('click', () => openHelp());
   if (els.btnMode) els.btnMode.addEventListener('click', () => setMode(store.get().mode === 'advanced' ? 'simple' : 'advanced', { remember: true }));
+  // Simple mode: a way back to the whole sky, and a pick-list of every name under the search box.
+  const btnSky = document.getElementById('btn-sky');
+  if (btnSky) btnSky.addEventListener('click', () => goHome());
+  if (opt.picklist && opt.home && typeof opt.picklist.attachPickList === 'function') {
+    try {
+      const names = opt.home.pickItems(targets.map(plainTarget), skyStars());
+      opt.picklist.attachPickList(els.searchInput, {
+        items: names,
+        host: els.searchInput.parentNode,
+        enabled: () => store.get().mode !== 'advanced',
+        onPick: (item) => openFromSky(item),
+      });
+    } catch (err) {
+      console.warn('[tombaugh] the search pick-list failed to start', err);
+    }
+  }
   if (opt.fogmap && typeof opt.fogmap.createFogMap === 'function') {
     els.btnMap.hidden = false;
     els.btnMap.title = 'An all-sky map of the patches anyone has opened with this tool';
@@ -2247,7 +2344,7 @@ async function boot() {
     if (has('stretch') || has('colormap')) renderFrame(player.frame());
     if (has('smooth')) {
       try {
-        viewer.setOptions({ smooth: s.smooth });
+        viewer.setOptions({ smooth: s.mode === 'simple' ? true : s.smooth });
       } catch {
         // optional
       }

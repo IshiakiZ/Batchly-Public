@@ -11,7 +11,7 @@ Re-run the commands below to refresh; nothing here is hand-edited test output.
 | File headers | `node tools/check-headers.mjs` | 172 files, 0 without the header |
 | Single-file build | `node tools/build.mjs` | `dist/tombaugh.html`, 1239 kB (365 kB gzipped), 68 modules, 0 warnings |
 | Page on the dev server | `node test/e2e.mjs` | 11 passed, 0 failed (the 12th step is bundle-only) |
-| Single-file bundle | `node test/e2e.mjs --bundle` | 13 passed, 0 failed (the 13th, added 15 Nov, checks Simple mode) |
+| Single-file bundle | `node test/e2e.mjs --bundle` | 14 passed, 0 failed (the 13th and 14th, added 15 Nov, check Simple mode and its whole-sky start page) |
 | Minified bundle | `node tools/build.mjs --minify` then `node test/e2e.mjs --bundle --no-build` | 12 passed, 0 failed (run at 08:04, 49 modules at that time) |
 | Edge function upload set | `node tools/deploy-bundle.mjs` | READY, 17 files, 1 warning (item 3) |
 

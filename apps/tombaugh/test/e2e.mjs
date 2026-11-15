@@ -41,6 +41,7 @@ const STEPS = [
   ['mobile', '390 x 844 viewport lays out without horizontal scroll'],
   ['embed', '?embed=1 hides the top bar'],
   ['simple', 'Simple mode is the default: plain answers, one switch to Advanced, fits a phone'],
+  ['home', 'Simple mode starts on the whole sky: pick a star from the list, open it, come back'],
   ['sandbox', 'bundle runs inside a sandboxed iframe with an opaque origin (bundle mode only)'],
 ];
 
@@ -281,6 +282,8 @@ async function main() {
       pg.on('request', (r) => {
         const u = r.url();
         if (/^(data|blob|about):/.test(u)) return;
+        // The sky start page shows picture tiles straight from IRSA (images only, no data sent).
+        if (u.startsWith('https://irsa.ipac.caltech.edu/data/hips/')) return;
         if (u.startsWith(`${serverUrl}/api/`) || u.startsWith(`${serverUrl}/api?`)) return;
         if (u.startsWith(`${staticServer.url}/tombaugh.html`) || u.startsWith(`${staticServer.url}/frame.html`)) return;
         if (!foreign.includes(u)) foreign.push(u);
@@ -733,8 +736,8 @@ async function main() {
         const changes = await p.locator('.simple-change .simple-change-title').allInnerTexts();
         t.data('changes', changes);
         await p.locator('.simple-change').first().click();
-        await p.waitForFunction(() => document.querySelectorAll('#simple .simple-qa .simple-answer').length >= 2, null, { timeout: 20000 });
-        const answers = await p.locator('#simple .simple-qa').allInnerTexts();
+        await p.waitForFunction(() => document.querySelectorAll('#simple .simple-row .simple-answer').length >= 2, null, { timeout: 20000 });
+        const answers = await p.locator('#simple .simple-row').allInnerTexts();
         t.data('answers', answers.map((a) => a.replace(/\s+/g, ' ').slice(0, 160)));
         await waitFor(() => new URL(p.url()).searchParams.get('view') === 'residual', { timeoutMs: 5000, what: 'view=residual in the URL after picking a change' });
         const pressed = await p.evaluate(() => { const b = document.querySelector('#simplebar [data-view="residual"]'); return b ? b.getAttribute('aria-checked') : null; });
@@ -765,6 +768,80 @@ async function main() {
         if (errs.length) t.data('pageErrors', errs.slice(0, 6).map((e) => `${e.kind}: ${e.text.split('\n')[0]}`));
         allEvents.push(...pw.events.map((e) => ({ page: 'simple', ...e })));
         t.data('screenshots', [`docs/screens/${prefix}simple.png`, `docs/screens/${prefix}simple-mobile.png`]);
+      } finally {
+        await ctx.close();
+      }
+    });
+
+    await step('home', async (t) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      ownShot = true;
+      try {
+        const p = await ctx.newPage();
+        // Keep the test off the network: the sky works from its built-in star list alone.
+        await p.route('https://irsa.ipac.caltech.edu/**', (r) => r.abort());
+        trackForeign(p);
+        const pw = watchPage(p);
+        await p.goto(pageUrl({}, null), { waitUntil: 'load' });
+        await p.waitForSelector('[data-testid="home"]', { state: 'visible', timeout: 15000 });
+        await p.waitForFunction(() => { const c = document.querySelector('.skyglobe-stars'); return !!c && c.width > 300; }, null, { timeout: 10000 });
+        await sleep(600);
+        // The star layer is drawn: a good share of its pixels are lit.
+        const lit = await p.evaluate(() => {
+          const c = document.querySelector('.skyglobe-stars');
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          let n = 0;
+          for (let i = 3; i < d.length; i += 4) if (d[i] > 40) n += 1;
+          return n;
+        });
+        t.data('litStarPixels', lit);
+        if (lit < 800) throw new Error(`the sky shows almost nothing (${lit} lit pixels)`);
+        // The pick-list: open it, see many names, narrow it by typing, pick one.
+        await p.locator('[data-testid="home-search"]').click();
+        await p.waitForSelector('.picklist:not([hidden]) .picklist-row', { timeout: 5000 });
+        const all = await p.locator('.picklist-row').count();
+        t.data('namesInList', all);
+        if (all < 300) throw new Error(`the pick-list holds only ${all} names`);
+        await p.keyboard.type('veg');
+        await sleep(200);
+        const narrowed = await p.locator('.picklist-row').allInnerTexts();
+        t.data('narrowed', narrowed.slice(0, 5));
+        if (!narrowed.includes('Vega')) throw new Error('typing "veg" does not offer Vega');
+        await p.locator('.picklist-row', { hasText: /^Vega$/ }).click();
+        await p.waitForSelector('[data-testid="home-card"]:not([hidden])', { timeout: 5000 });
+        const card = (await p.locator('[data-testid="home-card"]').innerText()).replace(/\s+/g, ' ');
+        t.data('card', card);
+        if (!/Vega/.test(card)) throw new Error(`the card does not name the picked star: "${card}"`);
+        await p.screenshot({ path: path.join(screens, `${prefix}home.png`) }).catch(() => {});
+        // Dragging the sky moves it; clicking the button opens the star.
+        const before = await p.evaluate(() => document.querySelector('.skyglobe-stars').toDataURL().length);
+        await sleep(1600);
+        await p.mouse.move(640, 400);
+        await p.mouse.down();
+        await p.mouse.move(420, 330, { steps: 6 });
+        await p.mouse.up();
+        await sleep(500);
+        const after = await p.evaluate(() => document.querySelector('.skyglobe-stars').toDataURL().length);
+        if (before === after) t.note('dragging did not visibly change the sky picture');
+        await p.locator('[data-testid="home-open"]').click();
+        await p.waitForFunction(() => document.documentElement.dataset.screen === 'console', null, { timeout: 15000 });
+        await waitFor(() => new URL(p.url()).searchParams.has('ra'), { timeoutMs: 8000, what: 'the star\'s position in the URL' });
+        const q = new URL(p.url()).searchParams;
+        t.data('opened', { ra: q.get('ra'), dec: q.get('dec'), name: q.get('name') });
+        if (q.get('name') !== 'Vega' || Math.abs(Number(q.get('ra')) - 279.23) > 0.05 || Math.abs(Number(q.get('dec')) - 38.78) > 0.05) throw new Error(`opening Vega led to ${p.url()}`);
+        // And back to the sky with the Sky button.
+        await p.locator('[data-testid="btn-sky"]').click();
+        await p.waitForSelector('[data-testid="home"]', { state: 'visible', timeout: 8000 });
+        // A phone.
+        await p.setViewportSize({ width: 390, height: 844 });
+        await sleep(600);
+        const phone = await overflowReport(p, 390);
+        t.data('phone', phone);
+        if (phone.overflow) throw new Error(`the sky start page is ${Math.max(phone.scrollWidth, phone.innerWidth)}px wide on a 390px screen (sticking out: ${phone.offenders.map((o) => `${o.el} x ${o.left}..${o.right}`).slice(0, 4).join('; ') || 'unknown'})`);
+        await p.screenshot({ path: path.join(screens, `${prefix}home-mobile.png`) }).catch(() => {});
+        const errs = pw.since(0).filter((e) => !/irsa\.ipac\.caltech\.edu|ERR_FAILED/.test(e.text));
+        if (errs.length) t.data('pageErrors', errs.slice(0, 6).map((e) => `${e.kind}: ${e.text.split('\n')[0]}`));
+        t.data('screenshots', [`docs/screens/${prefix}home.png`, `docs/screens/${prefix}home-mobile.png`]);
       } finally {
         await ctx.close();
       }

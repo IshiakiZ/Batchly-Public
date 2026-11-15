@@ -13,56 +13,65 @@ import { h, clear } from './layout.js';
 export const SIMPLE_VIEW_INFO = Object.freeze([
   {
     id: 'passes',
-    label: 'The sky',
-    hint: 'One frame per visit by the telescope, months apart. Press play and watch for anything that moves or changes.',
+    label: 'Photos',
+    hint: 'One photo per visit, months apart',
   },
   {
     id: 'residual',
     label: 'What changed',
-    hint: 'Everything that stayed the same is subtracted. Whatever is left moved or changed brightness.',
+    hint: 'Only what moved or changed is left',
   },
 ]);
 
-/** Plain-language descriptions of the built-in targets: what it is, and what to look for. */
+/** Plain-language descriptions of the built-in targets: a few words, what it is, and what to look for. */
 export const PLAIN_TARGETS = Object.freeze({
   barnard: {
+    short: 'The fastest-moving star in the sky.',
     what: 'A small red star six light-years away. It crosses our sky faster than any other star.',
     look: 'Press play and watch the star in the middle step upward while every other star holds still.',
-    found: 'On the real pictures it moves 11.9 arcseconds a year. The star catalogue says 10.4, inside our margin of error.',
+    found: 'On the real photos it moves 11.9 arcseconds a year. Astronomers list 10.4, inside our margin of error.',
   },
   'eps-indi-b': {
-    what: 'Two failed stars (brown dwarfs) orbiting each other 12 light-years away, too close together to tell apart here.',
-    look: 'Press play: the faint dot in the middle drifts between visits. Click it to see the dip that methane gas cuts in its light.',
-    found: 'On the real pictures it drifts 4.5 arcseconds a year (published: 4.6), and methane removes 60 % of its light at one colour.',
+    short: 'Two faint failed stars, drifting.',
+    what: 'Two failed stars circling each other 12 light-years away, too close together to tell apart here.',
+    look: 'Press play: the faint dot in the middle drifts between visits.',
+    found: 'On the real photos it drifts 4.5 arcseconds a year (published: 4.6), and methane gas blocks 60 % of its light at one colour.',
   },
   wise0855: {
-    what: 'The coldest known brown dwarf, colder than ice, 7.4 light-years away. It is almost too faint for this telescope.',
-    look: 'It glows only in the reddest infrared and moves quickly. Look for a faint dot that changes place between visits.',
-    found: 'It is there on the real pictures, moving 8.0 arcseconds a year. The published value is 8.2.',
+    short: 'The coldest failed star we know.',
+    what: 'A failed star colder than ice, 7.4 light-years away. It is almost too faint for this telescope.',
+    look: 'It gives off only a faint warm glow, and it moves quickly. Look for a faint dot that changes place between visits.',
+    found: 'It shows up on the real photos, moving 8.0 arcseconds a year. The published value is 8.2.',
   },
   'rw-aur': {
+    short: 'A young star that flickers.',
     what: 'A young star, 530 light-years away, that is still pulling in gas. It brightens and fades without warning.',
     look: 'Nothing moves here. Switch to “What changed” and one star lights up because its brightness changed.',
-    found: 'On the real pictures it brightened by 40 % between Sep 2025 and Mar 2026.',
+    found: 'On the real photos it got 40 % brighter between Sep 2025 and Mar 2026.',
   },
   'r-dra': {
-    what: 'An old red giant star that swells and shrinks, getting brighter and fainter about every eight months.',
+    short: 'A giant star that pulses.',
+    what: 'An old, swollen red star that grows and shrinks, getting brighter and fainter about every eight months.',
     look: 'Nothing moves here. Switch to “What changed” to see the one star whose brightness changed.',
-    found: 'On the real pictures it faded by 28 % between Mar and Apr 2026.',
+    found: 'On the real photos it faded by 28 % between Mar and Apr 2026.',
   },
   proxima: {
+    short: 'The nearest star to the Sun.',
     what: 'The closest star to the Sun, 4.2 light-years away.',
     look: 'Press play and watch it move against the stars behind it.',
   },
   luhman16: {
-    what: 'The nearest brown dwarfs to the Sun: a pair 6.5 light-years away, found only in 2013.',
+    short: 'The nearest failed stars.',
+    what: 'The nearest failed stars to the Sun: a pair 6.5 light-years away, found only in 2013.',
     look: 'Press play and watch the pair move between visits.',
   },
   teegarden: {
+    short: 'A dim star that moves fast.',
     what: 'A dim red star 12.5 light-years away that nobody noticed until 2003, even though it moves quickly.',
     look: 'Press play and watch it move against the stars behind it.',
   },
   m101: {
+    short: 'A quiet spiral galaxy.',
     what: 'The Pinwheel Galaxy, a spiral of stars 21 million light-years away.',
     look: 'Nothing here should move or change. This is what a quiet patch of sky looks like.',
   },
@@ -72,7 +81,7 @@ export const PLAIN_TARGETS = Object.freeze({
 export function plainTarget(target) {
   const plain = target && PLAIN_TARGETS[target.id];
   if (!plain) return target;
-  return { ...target, blurb: plain.what, why: plain.look, found: plain.found || target.found };
+  return { ...target, short: plain.short, blurb: plain.what, why: plain.look, found: plain.found || target.found };
 }
 
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
@@ -86,9 +95,9 @@ function betweenText(c) {
 /** How sure the search is, in a word. `score` is the candidate's significance in sigma. */
 export function strengthWord(score) {
   if (!isNum(score)) return '';
-  if (score >= 10) return 'Strong signal';
-  if (score >= 6) return 'Clear signal';
-  return 'Weak signal';
+  if (score >= 10) return 'We are very sure';
+  if (score >= 6) return 'We are fairly sure';
+  return 'We are not so sure';
 }
 
 /**
@@ -111,7 +120,7 @@ export function plainCandidate(c) {
       out.title = 'A bright star changed';
       out.detail = 'Its glare is not the same on every visit.';
     }
-    if (c.turned) out.caution = 'Treat this one with care: the two visits were half a year apart, with the telescope turned round, and that alone can change how a very bright star looks.';
+    if (c.turned) out.caution = 'Take this one with care: the telescope was turned the other way round on the second visit, and that alone can change how a very bright star looks.';
     return out;
   }
   if (c.kind === 'moved') {
@@ -151,7 +160,7 @@ export function plainSetAside(list) {
 export function plainMotion(verdict) {
   const v = verdict || {};
   const table = /catalogue says/i.test(v.text || '');
-  const book = table ? 'its published motion' : 'what the Gaia star catalogue lists for it';
+  const book = table ? 'what astronomers have published for it' : 'what the star charts say for it';
   switch (v.kind) {
     case 'agree':
       return v.weak
@@ -159,14 +168,14 @@ export function plainMotion(verdict) {
         : { answer: 'Yes', tone: 'yes', gloss: `It changes place from visit to visit, and its speed matches ${book}.` };
     case 'disagree':
       return /No motion detected/i.test(v.text || '')
-        ? { answer: 'Not that we can see', tone: 'maybe', gloss: 'A catalogue says it should have moved enough to notice, yet it looks still. Something here does not add up.' }
-        : { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, but not the way the catalogue says the star here should. It may be a different object.' };
+        ? { answer: 'Not that we can see', tone: 'maybe', gloss: 'The star charts say it should have moved enough to notice, yet it looks still. Something here does not add up.' }
+        : { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, but not the way the star charts say the star here should. It may be something else.' };
     case 'unexplained':
-      return { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, and no catalogued star at this spot explains that.' };
+      return { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, and no known star at this spot explains that.' };
     case 'measured':
       return { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit.' };
     case 'static':
-      return { answer: 'No', tone: 'no', gloss: 'It is in the same place on every visit, as far as these pictures can tell.' };
+      return { answer: 'No', tone: 'no', gloss: 'It is in the same place on every visit, as far as these photos can tell.' };
     default:
       return { answer: 'Can’t tell yet', tone: 'none', gloss: 'Movement needs at least two visits to this spot, months apart.' };
   }
@@ -188,13 +197,13 @@ export function plainBrightness(verdict) {
     case 'possible':
       return { answer: 'Maybe', tone: 'maybe', gloss: 'There is a hint of a change, but not enough to be sure.' };
     case 'steady':
-      return { answer: 'No', tone: 'no', gloss: 'It is as bright on every visit, within what these pictures can measure.' };
+      return { answer: 'No', tone: 'no', gloss: 'It is as bright on every visit, as far as these photos can tell.' };
     case 'single':
       return { answer: 'Can’t tell yet', tone: 'none', gloss: 'The telescope has visited this spot only once so far, so there is nothing to compare with.' };
     case 'noisy':
       return { answer: 'Can’t tell', tone: 'none', gloss: 'It is too faint here to say whether its brightness changed.' };
     default:
-      return { answer: 'Can’t tell yet', tone: 'none', gloss: 'There are no brightness measurements for this spot yet.' };
+      return { answer: 'Can’t tell yet', tone: 'none', gloss: 'There is nothing to compare for this spot yet.' };
   }
 }
 
@@ -216,11 +225,11 @@ export function plainVisits(passes) {
   const labels = [];
   for (const p of list) if (p.label && !labels.includes(p.label)) labels.push(p.label);
   const when = labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` : labels[0] || '';
-  return `${n} picture${n === 1 ? '' : 's'} from ${list.length} visit${list.length === 1 ? '' : 's'} by the SPHEREx telescope${when ? `: ${when}` : ''}.`;
+  return `${n} photo${n === 1 ? '' : 's'} from ${list.length} visit${list.length === 1 ? '' : 's'} by NASA’s SPHEREx space telescope${when ? `: ${when}` : ''}.`;
 }
 
 /**
- * createSimpleView({ bar, host, lib, plots, findTarget, verdicts, onView, onPickCandidate, onClear, onAdvanced })
+ * createSimpleView({ bar, host, plots, findTarget, verdicts, onView, onPickCandidate, onClear })
  *   bar, host   the two empty containers from index.html (#simplebar and #simple)
  *   plots       { createSpectrumPlot? }
  *   verdicts    { motionVerdict?, lightCurveVerdict? } (either may be missing)
@@ -234,28 +243,24 @@ export function createSimpleView({
   onView = () => {},
   onPickCandidate = () => {},
   onClear = () => {},
-  onAdvanced = () => {},
 } = {}) {
   // ---- the two-way switch above the picture ----------------------------------------------------
   const viewButtons = new Map();
   const seg = h('div', { class: 'seg simple-seg', role: 'radiogroup', 'aria-label': 'What to show' });
   for (const info of SIMPLE_VIEW_INFO) {
-    const btn = h('button', { type: 'button', class: 'seg-btn', role: 'radio', 'aria-checked': 'false', 'data-view': info.id, onclick: () => onView(info.id) }, info.label);
+    const btn = h('button', { type: 'button', class: 'seg-btn', role: 'radio', 'aria-checked': 'false', 'data-view': info.id, title: info.hint, onclick: () => onView(info.id) }, info.label);
     viewButtons.set(info.id, btn);
     seg.append(btn);
   }
-  const hint = h('p', { class: 'simple-hint', 'aria-live': 'polite' });
-  if (bar) clear(bar).append(seg, hint);
+  if (bar) clear(bar).append(seg);
 
   function setView(view) {
-    let shown = SIMPLE_VIEW_INFO.find((v) => v.id === view) || null;
+    const shown = SIMPLE_VIEW_INFO.some((v) => v.id === view);
     for (const [id, btn] of viewButtons) {
       const on = id === view;
       btn.setAttribute('aria-checked', String(on));
       btn.tabIndex = on || (!shown && id === SIMPLE_VIEW_INFO[0].id) ? 0 : -1;
     }
-    if (!shown) shown = SIMPLE_VIEW_INFO[0];
-    hint.textContent = shown.hint;
   }
   function setViewDisabled(view, reason) {
     const btn = viewButtons.get(view);
@@ -274,12 +279,20 @@ export function createSimpleView({
     viewButtons.get(next).focus();
   });
 
-  // ---- "You are looking at" --------------------------------------------------------------------
+  /** A closed drop-down: a few words to click, the explanation inside. */
+  function more(label, ...children) {
+    const body = h('div', { class: 'simple-more-body' }, ...children);
+    return { el: h('details', { class: 'simple-more' }, h('summary', null, label), body), body };
+  }
+
+  // ---- the place -------------------------------------------------------------------------------
   const fieldName = h('h2', { class: 'simple-name' });
+  const fieldShort = h('p', { class: 'simple-line' });
   const fieldWhat = h('p', { class: 'simple-text' });
-  const fieldLook = h('p', { class: 'simple-look' });
-  const fieldVisits = h('p', { class: 'simple-fine' });
-  const fieldCard = h('section', { class: 'simple-card simple-field' }, h('p', { class: 'simple-eyebrow' }, 'You are looking at'), fieldName, fieldWhat, fieldLook, fieldVisits);
+  const fieldLook = h('p', { class: 'simple-text' });
+  const fieldVisits = h('p', { class: 'simple-text' });
+  const fieldMore = more('About this place', fieldWhat, fieldLook, fieldVisits);
+  const fieldCard = h('section', { class: 'simple-card simple-field' }, fieldName, fieldShort, fieldMore.el);
 
   let field = { name: '', coord: '' };
   let visits = { loading: true, passes: [], error: '' };
@@ -287,57 +300,42 @@ export function createSimpleView({
   function renderField() {
     const known = field.name && typeof findTarget === 'function' ? findTarget(field.name) : null;
     const plain = known && PLAIN_TARGETS[known.id] ? PLAIN_TARGETS[known.id] : null;
-    clear(fieldName).append(field.name || 'This patch of sky');
-    if (plain) {
-      fieldWhat.textContent = plain.what;
-      fieldLook.textContent = plain.look;
-    } else if (known && known.blurb) {
-      fieldWhat.textContent = known.blurb;
-      fieldLook.textContent = '';
-    } else {
-      fieldWhat.textContent = field.coord ? `A small square of sky centred on ${field.coord}.` : 'A small square of sky.';
-      fieldLook.textContent = 'Press play to flip between the telescope’s visits, then see what changed.';
-    }
-    fieldLook.hidden = !fieldLook.textContent;
+    clear(fieldName).append(field.name || 'A patch of sky');
+    fieldShort.textContent = plain ? plain.short : '';
+    fieldShort.hidden = !plain;
+    fieldWhat.textContent = plain ? plain.what : '';
+    fieldWhat.hidden = !plain;
+    fieldLook.textContent = plain ? plain.look : '';
+    fieldLook.hidden = !plain;
     if (visits.error) fieldVisits.textContent = visits.error;
-    else if (visits.loading) fieldVisits.textContent = 'Fetching the telescope’s pictures of this spot…';
-    else fieldVisits.textContent = plainVisits(visits.passes) || 'The telescope has no pictures of this spot yet.';
+    else if (visits.loading) fieldVisits.textContent = 'Getting the photos…';
+    else fieldVisits.textContent = plainVisits(visits.passes) || 'The telescope has no photos of this spot yet.';
   }
 
-  // ---- "What changed here" ---------------------------------------------------------------------
+  // ---- what changed ----------------------------------------------------------------------------
   const changeBody = h('div', { class: 'simple-changes' });
-  const changeFine = h('p', { class: 'simple-fine' });
-  const changeCard = h('section', { class: 'simple-card' }, h('h3', { class: 'simple-title' }, 'What changed here'), changeBody, changeFine);
+  const changeCard = h('section', { class: 'simple-card' }, h('h3', { class: 'simple-title' }, 'What changed'), changeBody);
 
   let cands = { status: 'idle', list: [], active: -1 };
 
   function renderChanges() {
     clear(changeBody);
-    changeFine.textContent = '';
     const { status, list, active } = cands;
     if (status === 'working' || status === 'idle') {
-      changeBody.append(
-        h('p', { class: 'simple-wait' }, status === 'working' ? 'Comparing every visit, pixel by pixel…' : 'Once the pictures are in, Tombaugh compares the visits and lists anything that moved or changed brightness.'),
-      );
+      changeBody.append(h('p', { class: 'simple-wait' }, status === 'working' ? 'Comparing the photos…' : 'Getting the photos…'));
       return;
     }
     if (status === 'unavailable') {
-      changeBody.append(h('p', { class: 'simple-wait' }, 'There are not enough pictures of this spot yet to compare one visit with another.'));
+      changeBody.append(h('p', { class: 'simple-wait' }, 'Not enough photos to compare yet.'));
       return;
     }
-    const aside = plainSetAside(list);
     if (!list.length) {
-      changeBody.append(
-        h('p', { class: 'simple-answer' }, 'Nothing.'),
-        h('p', { class: 'simple-text' }, 'Every star in this patch stayed where it was and kept its brightness, as far as these pictures can tell.'),
-      );
-      changeFine.textContent = aside;
+      changeBody.append(h('p', { class: 'simple-answer' }, 'Nothing changed here.'));
       return;
     }
     const ol = h('ol', { class: 'simple-list' });
     list.forEach((c, i) => {
       const p = plainCandidate(c);
-      const sigma = isNum(c.score) ? `${c.score.toFixed(1)} sigma` : '';
       ol.append(
         h(
           'li',
@@ -348,68 +346,43 @@ export function createSimpleView({
               type: 'button',
               class: 'simple-change',
               'aria-current': i === active ? 'true' : null,
-              'aria-label': `${i + 1}. ${p.title}. ${p.detail} ${p.strength}. Show it.`,
+              'aria-label': `${i + 1}. ${p.title}. Show it.`,
               onclick: () => onPickCandidate(c, i),
             },
             h('span', { class: 'cand-n' }, String(i + 1)),
-            h(
-              'span',
-              { class: 'simple-change-main' },
-              h('span', { class: 'simple-change-title' }, p.title),
-              h('span', { class: 'simple-change-detail' }, p.detail),
-              p.caution ? h('span', { class: 'simple-change-caution' }, p.caution) : null,
-              h('span', { class: 'simple-change-strength' }, p.strength, sigma ? h('span', { class: 'num' }, ` (${sigma})`) : null),
-            ),
+            h('span', { class: 'simple-change-title' }, p.title),
           ),
         ),
       );
     });
     changeBody.append(ol);
-    changeFine.textContent = `Click one to circle it in the picture. These are places worth a look, not discoveries.${aside ? ` ${aside}` : ''}`;
   }
 
-  // ---- "What you clicked" ----------------------------------------------------------------------
-  const pickTitle = h('h3', { class: 'simple-title' }, 'Click any star');
+  // ---- the thing you clicked -------------------------------------------------------------------
+  const pickTitle = h('h3', { class: 'simple-title' }, 'Click a star to check it');
   const pickBody = h('div', { class: 'simple-pick' });
-  const specHost = h('div', { class: 'plot-host simple-plot' });
-  const specNote = h('p', { class: 'simple-fine' }, 'Each dot is one picture, taken in a different infrared colour. The shape of this curve tells astronomers what the object is made of.');
-  const specBlock = h('div', { class: 'simple-spec' }, h('p', { class: 'simple-q' }, 'Its light, colour by colour'), specHost, specNote);
-  specBlock.hidden = true;
+  const pickDetail = h('div', { class: 'simple-detail' });
+  const pickMore = more('Why', pickDetail);
+  pickMore.el.hidden = true;
   const btnClear = h('button', { type: 'button', class: 'btn btn-small btn-quiet', onclick: () => onClear() }, 'Clear');
   btnClear.hidden = true;
-  const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, specBlock);
-
-  let spectrumPlot = null;
-  if (typeof plots.createSpectrumPlot === 'function') {
-    try {
-      spectrumPlot = plots.createSpectrumPlot(specHost);
-    } catch (err) {
-      console.warn('[tombaugh] simple view: spectrum plot failed to mount', err);
-      spectrumPlot = null;
-    }
-  }
+  const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el);
 
   let selection = null;
-  let hasSpectrum = false;
 
-  function question(q, a) {
-    return h(
-      'div',
-      { class: 'simple-qa' },
-      h('p', { class: 'simple-q' }, q),
-      h('p', { class: `simple-answer is-${a.tone}` }, a.answer),
-      h('p', { class: 'simple-text' }, a.gloss),
-      a.exact ? h('p', { class: 'simple-fine' }, a.exact) : null,
-    );
+  /** One question and its answer on a single line. */
+  function answerRow(q, a) {
+    return h('div', { class: 'simple-row' }, h('span', { class: 'simple-row-q' }, q), h('span', { class: `simple-answer is-${a.tone}` }, a.answer));
   }
 
   function renderPick() {
     clear(pickBody);
+    clear(pickDetail);
     btnClear.hidden = !selection;
-    specBlock.hidden = !(selection && hasSpectrum && spectrumPlot);
+    pickMore.el.hidden = !selection;
+    pickBody.hidden = !selection;
     if (!selection) {
-      pickTitle.textContent = 'Click any star';
-      pickBody.append(h('p', { class: 'simple-text' }, 'Click a star in the picture to find out whether it is moving, whether its brightness changed, and what its light looks like.'));
+      pickTitle.textContent = 'Click a star to check it';
       return;
     }
     const sel = selection;
@@ -429,24 +402,27 @@ export function createSimpleView({
     const motion = plainMotion(mv);
     const bright = plainBrightness(lv);
     if (sel.saturated) {
-      // The detector overflowed on this star: say so rather than trust a measurement of it.
-      bright.gloss = `${bright.gloss} This star is so bright that it overflows the detector, so take its brightness with caution.`;
+      // The camera overflowed on this star: say so rather than trust a measurement of it.
+      bright.gloss = `${bright.gloss} This star is too bright for the camera, so its brightness is less certain.`;
     }
-    pickBody.append(
-      question('Is it moving?', { ...motion, exact: mv.kind === 'few' ? '' : mv.text }),
-      question('Did its brightness change?', { ...bright, exact: ['empty', 'single'].includes(lv.kind) ? '' : lv.text }),
-    );
+    pickBody.append(answerRow('Moving?', motion), answerRow('Brightness changed?', bright));
+    // A pick from the list: why the search listed it.
+    const m = /^c(\d+)$/.exec(String(sel.key || ''));
+    const cand = m ? cands.list[Number(m[1])] : null;
+    if (cand) {
+      const p = plainCandidate(cand);
+      pickDetail.append(h('p', { class: 'simple-text' }, `${p.detail}${p.strength ? ` ${p.strength}.` : ''}`), p.caution ? h('p', { class: 'simple-text' }, p.caution) : null);
+    }
+    pickDetail.append(h('p', { class: 'simple-text' }, motion.gloss), h('p', { class: 'simple-text' }, bright.gloss));
   }
 
-  // ---- footer ----------------------------------------------------------------------------------
-  const foot = h(
-    'section',
-    { class: 'simple-card simple-foot' },
-    h('p', { class: 'simple-text' }, 'This is the simple view. Advanced mode adds every view, all six detectors, the plots behind these answers and the measuring tools.'),
-    h('button', { type: 'button', class: 'btn btn-small', onclick: () => onAdvanced() }, 'Open Advanced mode'),
-  );
+  // ---- data credit -----------------------------------------------------------------------------
+  // The full citation block (the same one Advanced mode shows) is moved in here by the page.
+  const credit = more('Where the photos come from');
+  credit.el.classList.add('simple-credit');
+  const creditCard = h('section', { class: 'simple-card' }, credit.el);
 
-  if (host) clear(host).append(fieldCard, changeCard, pickCard, foot);
+  if (host) clear(host).append(fieldCard, changeCard, pickCard, creditCard);
   setView('passes');
   renderField();
   renderChanges();
@@ -455,6 +431,8 @@ export function createSimpleView({
   return {
     setView,
     setViewDisabled,
+    /** Where the page puts the citation block while Simple mode is showing. */
+    creditBody: credit.body,
 
     /** { name, coord } of the field now open. */
     setField({ name = '', coord = '' } = {}) {
@@ -472,6 +450,7 @@ export function createSimpleView({
     setCandidates({ status = 'idle', list = [], active = -1 } = {}) {
       cands = { status, list: Array.isArray(list) ? list : [], active };
       renderChanges();
+      if (selection) renderPick();
     },
 
     /**
@@ -482,16 +461,6 @@ export function createSimpleView({
     setSelection(sel) {
       const fresh = !!sel && (!selection || selection.key !== sel.key);
       selection = sel || null;
-      if (!selection) {
-        hasSpectrum = false;
-        if (spectrumPlot) {
-          try {
-            spectrumPlot.clear();
-          } catch {
-            // ignore
-          }
-        }
-      }
       renderPick();
       // A new pick: bring its answers into view (they sit below the list of changes).
       if (fresh && host && host.offsetParent !== null && typeof pickCard.scrollIntoView === 'function') {
@@ -503,17 +472,7 @@ export function createSimpleView({
       }
     },
 
-    /** The same object panels.setSpectrum takes (only the measured points are drawn here). */
-    setSpectrum({ points = [], binned = [], lens = null, title = '' } = {}) {
-      hasSpectrum = Array.isArray(points) && points.length > 0;
-      if (spectrumPlot && hasSpectrum) {
-        try {
-          spectrumPlot.setData({ points, binned, lens: lens || undefined, title });
-        } catch (err) {
-          console.warn('[tombaugh] simple view: spectrum plot', err);
-        }
-      }
-      specBlock.hidden = !(selection && hasSpectrum && spectrumPlot);
-    },
+    /** Simple mode does not draw the spectrum (Advanced does); kept so the page can call it. */
+    setSpectrum() {},
   };
 }

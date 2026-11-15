@@ -57,10 +57,10 @@ test('the plain numbers match the measured results on the target cards', () => {
 });
 
 test('strengthWord', () => {
-  assert.equal(strengthWord(31.3), 'Strong signal');
-  assert.equal(strengthWord(10), 'Strong signal');
-  assert.equal(strengthWord(7.4), 'Clear signal');
-  assert.equal(strengthWord(5.2), 'Weak signal');
+  assert.equal(strengthWord(31.3), 'We are very sure');
+  assert.equal(strengthWord(10), 'We are very sure');
+  assert.equal(strengthWord(7.4), 'We are fairly sure');
+  assert.equal(strengthWord(5.2), 'We are not so sure');
   assert.equal(strengthWord(NaN), '');
   assert.equal(strengthWord(undefined), '');
 });
@@ -70,11 +70,11 @@ test('plainCandidate: movers, brightness changes and saturated stars', () => {
   const up = plainCandidate({ kind: 'varies', score: 8, net: { onSource: true, frac: 0.4, sigma: 11, label: 'Mar 2026' } });
   assert.equal(up.title, 'Something got brighter');
   assert.equal(up.detail, 'Its light rose by about 40 % in Mar 2026.');
-  assert.equal(up.strength, 'Clear signal');
+  assert.equal(up.strength, 'We are fairly sure');
   const down = plainCandidate({ kind: 'varies', score: 5.5, net: { onSource: true, frac: -0.072, sigma: 6 } });
   assert.equal(down.title, 'Something got fainter');
   assert.equal(down.detail, 'Its light fell by about 7.2 %.');
-  assert.equal(down.strength, 'Weak signal');
+  assert.equal(down.strength, 'We are not so sure');
   // A net-light figure that is not on the source is not quoted.
   assert.equal(plainCandidate({ kind: 'varies', net: { onSource: false, frac: 0.4 } }).title, 'Something changed brightness');
   assert.equal(plainCandidate({ kind: 'other' }).title, 'Something changed');
@@ -87,7 +87,7 @@ test('plainCandidate: movers, brightness changes and saturated stars', () => {
   const turned = plainCandidate({ kind: 'varies', saturated: true, brighter: true, between: ['Sep 2025', 'Mar 2026'], turned: true, score: 19.2 });
   assert.equal(turned.title, 'A bright star got brighter');
   assert.match(turned.detail, /between Sep 2025 and Mar 2026/);
-  assert.match(turned.caution, /half a year apart/);
+  assert.match(turned.caution, /turned the other way round/);
   assert.equal(plainCandidate({ saturated: true, brighter: false }).title, 'A bright star got fainter');
   assert.equal(plainCandidate({ saturated: true }).title, 'A bright star changed');
 });
@@ -105,11 +105,11 @@ test('plainMotion follows the real motion verdict, kind by kind', () => {
   const agree = run({ pmra: -1037, pmdec: 11855, total: 11900, errTotal: 2400 }, { pmra: -802, pmdec: 10362, total: 10393 });
   assert.equal(agree.answer, 'Yes');
   assert.equal(agree.tone, 'yes');
-  assert.match(agree.gloss, /Gaia star catalogue/);
+  assert.match(agree.gloss, /star charts/);
   // A catalogue row instead of Gaia is named as such.
   const table = run({ pmra: 3700, pmdec: -2600, total: 4510, errTotal: 650 }, { pmra: 3960, pmdec: -2540, total: 4700, source: 'catalogue' });
   assert.equal(table.answer, 'Yes');
-  assert.match(table.gloss, /published motion/);
+  assert.match(table.gloss, /astronomers have published/);
   // Short of a detection, but as catalogued: probably.
   const weak = run({ pmra: -2000, pmdec: 700, total: 2120, errTotal: 760 }, { pmra: -2760, pmdec: 360, total: 2780 });
   assert.equal(weak.answer, 'Probably');
@@ -121,11 +121,11 @@ test('plainMotion follows the real motion verdict, kind by kind', () => {
   // Moves, no catalogue star.
   const odd = run({ pmra: 5000, pmdec: 0, total: 5000, errTotal: 400 }, null);
   assert.equal(odd.answer, 'Yes');
-  assert.match(odd.gloss, /no catalogued star/);
+  assert.match(odd.gloss, /no known star/);
   // Moves, and not as the catalogue says.
   const differ = run({ pmra: 5000, pmdec: 0, total: 5000, errTotal: 300 }, { pmra: 0, pmdec: 100, total: 100 });
   assert.equal(differ.answer, 'Yes');
-  assert.match(differ.gloss, /different object/);
+  assert.match(differ.gloss, /something else/);
   // Should have moved and did not.
   const missing = run({ pmra: 10, pmdec: 10, total: 14, errTotal: 300 }, { pmra: 9000, pmdec: 0, total: 9000 });
   assert.equal(missing.answer, 'Not that we can see');
@@ -165,12 +165,12 @@ test('plainBrightness follows the real light-curve verdict, kind by kind', () =>
 test('plainVisits', () => {
   assert.equal(plainVisits([]), '');
   assert.equal(plainVisits(null), '');
-  assert.equal(plainVisits([{ label: 'Jun 2025', total: 14 }]), '14 pictures from 1 visit by the SPHEREx telescope: Jun 2025.');
+  assert.equal(plainVisits([{ label: 'Jun 2025', total: 14 }]), '14 photos from 1 visit by NASA’s SPHEREx space telescope: Jun 2025.');
   assert.equal(
     plainVisits([{ label: 'Jun 2025', total: 14 }, { label: 'Dec 2025', total: 14 }, { label: 'Jun 2026', total: 14 }]),
-    '42 pictures from 3 visits by the SPHEREx telescope: Jun 2025, Dec 2025 and Jun 2026.',
+    '42 photos from 3 visits by NASA’s SPHEREx space telescope: Jun 2025, Dec 2025 and Jun 2026.',
   );
-  assert.equal(plainVisits([{ label: 'Jun 2025', total: 1 }]), '1 picture from 1 visit by the SPHEREx telescope: Jun 2025.');
+  assert.equal(plainVisits([{ label: 'Jun 2025', total: 1 }]), '1 photo from 1 visit by NASA’s SPHEREx space telescope: Jun 2025.');
 });
 
 test('plainLabel', () => {

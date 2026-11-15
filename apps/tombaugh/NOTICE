@@ -33,6 +33,43 @@ there are no npm dependencies and no CDN imports. All code in the
 repository was generated for this project.
 
 
+THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
+
+web/src/sky/stardata.js (bright stars, star names and constellation
+figures for the sky view) is derived from data files of d3-celestial
+(https://github.com/ofrohn/d3-celestial), which take their positions from
+the Hipparcos catalogue (ESA 1997). They are used under the BSD 3-Clause
+licence:
+
+  Copyright (c) 2015, Olaf Frohn
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+  1. Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+  3. Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+  IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+  PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
 DATA AND SERVICES
 
 Tombaugh does not redistribute a data set. It retrieves data on request
@@ -51,6 +88,18 @@ SPHEREx
   This research has made use of the NASA/IPAC Infrared Science Archive,
   which is funded by the National Aeronautics and Space Administration
   and operated by the California Institute of Technology.
+
+Sky pictures on the start page
+  The whole-sky picture is the SPHEREx DR1 all-sky data cube
+  (ivo://IPAC/P/SPHEREx/DR1/cube; NASA/SPHEREx; SPHEREx Science Data
+  Center, Caltech/IPAC), loaded as image tiles from IRSA.
+  Zoomed in, the sharper pictures are the 2MASS colour mosaic built by
+  CDS, loaded from IRSA. This publication makes use of data products from
+  the Two Micron All Sky Survey, which is a joint project of the
+  University of Massachusetts and the Infrared Processing and Analysis
+  Center/California Institute of Technology, funded by the National
+  Aeronautics and Space Administration and the National Science
+  Foundation.
 
 Gaia
   Gaia Data Release 3 source positions, proper motions and parallaxes.

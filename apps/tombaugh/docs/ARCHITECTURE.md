@@ -79,7 +79,8 @@ Plain ES modules, loaded directly in development and inlined into one HTML file 
 | `src/render/` | Canvas viewer (north up, east left), colour maps, overlays |
 | `src/plots/` | Spectrum, light curve and motion meter in SVG |
 | `src/fog/` | HEALPix (nested, nside 32) and the all-sky Mollweide map |
-| `src/ui/` | Landing page, Simple mode (`simple.js`: plain-language rewording of the same verdicts), explainers, shortcuts, animation helpers |
+| `src/ui/` | Landing page, Simple mode (`home.js`: the whole-sky start page; `picklist.js`: the list of names under a search box; `simple.js`: plain-language rewording of the same verdicts), explainers, shortcuts, animation helpers |
+| `src/sky/` | The 360-degree sky (`globe.js`: WebGL picture tiles under a 2D star layer; `healpix.js`: where each HiPS tile sits on the sphere; `stardata.js`: generated bright-star list). The picture tiles are plain images loaded straight from IRSA's HiPS service; nothing is sent there |
 | `src/plugins/` | Self-contained extras, each loaded with one line and skipped if it fails (see below and [CONTRACT-PLUGINS.md](../CONTRACT-PLUGINS.md)) |
 | `src/local/` | Browser-side data modes: a simulated practice sky, and a direct read of the bucket by the browser. The direct mode was not verified against the real services ([DEVIATIONS.md](DEVIATIONS.md)) |
 
@@ -326,8 +327,8 @@ releases in its code.
 
 - **Development.** `node proxy/dev-server.mjs`. Synthetic backend by default;
   `TOMBAUGH_BACKEND=s3` for the public bucket, `TOMBAUGH_BACKEND=irsa` for IRSA only.
-- **Tests.** `node --test` runs the unit tests beside each module (1011 pass). `test/e2e.mjs`
-  drives the page in a browser with Playwright against the synthetic backend (13 checks pass on
+- **Tests.** `node --test` runs the unit tests beside each module (1033 pass). `test/e2e.mjs`
+  drives the page in a browser with Playwright against the synthetic backend (14 checks pass on
   the bundled page). `tools/crosscheck/` compares the code with Astropy
   ([CROSSCHECK.md](CROSSCHECK.md)).
 - **Bundle.** `node tools/build.mjs` inlines the modules, styles and markup into

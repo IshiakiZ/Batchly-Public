@@ -214,6 +214,7 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     if (on) root.dataset.embed = '1';
     else delete root.dataset.embed;
   }
+  let fullPlaceholder = null;
   /** 'simple' (the default) or 'advanced': which of the two faces of the console is showing. */
   function setMode(mode) {
     const advanced = mode === 'advanced';
@@ -222,6 +223,10 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       els.btnMode.setAttribute('aria-pressed', advanced ? 'true' : 'false');
       els.btnMode.textContent = advanced ? 'Simple' : 'Advanced';
       els.btnMode.title = advanced ? 'Back to the simple view: the picture and what changed' : 'Show every view, detector, plot and tool';
+    }
+    if (els.searchInput) {
+      if (fullPlaceholder === null) fullPlaceholder = els.searchInput.getAttribute('placeholder') || '';
+      els.searchInput.setAttribute('placeholder', advanced ? fullPlaceholder : 'A star’s name, or sky coordinates');
     }
   }
   /** The persistent "SIMULATED SKY, not real data" badge in the top bar. */

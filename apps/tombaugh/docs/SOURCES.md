@@ -23,6 +23,8 @@ or from a real request recorded in [CONTRACT.md](../CONTRACT.md).
 | N9 | IRSA SPHEREx tutorial notebooks | Read to learn the file layout, the archive query and the wavelength lookup. No code was copied | <https://caltech-ipac.github.io/irsa-tutorials/spherex/> | given |
 | N10 | "SPHEREx Explanatory Supplement", IRSA | Meaning of the layers, flag bits, units and the spectral WCS | <https://irsa.ipac.caltech.edu/data/SPHEREx/docs/SPHEREx_Expsupp.pdf> | checked 2026-11-15 |
 | N11 | IRSA copy of the Gaia DR3 source table (`gaia_dr3_source`) | Third fallback for the Gaia cone search | <https://irsa.ipac.caltech.edu/TAP/sync> | given |
+| N13 | **SPHEREx DR1 all-sky data cube**, HiPS (`ivo://IPAC/P/SPHEREx/DR1/cube`; SPHEREx Science Data Center, Caltech/IPAC; NASA/SPHEREx), served by IRSA | The picture of the whole sky on the Simple-mode start page: the overview image and tiles of orders 3 to 5, first plane of the cube, loaded as images by the browser | <https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube/> | checked 2026-11-15 |
+| N14 | **2MASS colour mosaic**, HiPS (`CDS/P/2MASS/color`, built by CDS from the Two Micron All Sky Survey), IRSA mirror | Sharper pictures on the start page when zoomed in past what the SPHEREx map resolves (tile orders 6 to 9), shown in grey | <https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color/> | checked 2026-11-15 |
 | N12 | NASA Space Apps Challenge 2026, challenge statement "Planet X and SPHEREx", and the 2026 participant guide | Requirements, test targets, submission rules | no link recorded | given |
 
 Acknowledgement: "This research has made use of the NASA/IPAC Infrared Science Archive, which is
@@ -52,6 +54,7 @@ Multilateral Agreement."
 | S1 | **CDS Sesame** name resolver | Turns an object name into coordinates | `https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV` | checked 2026-11-15 |
 | S2 | **SIMBAD** astronomical database, CDS (TAP at `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`) | Fallback for name resolution; proper motion and parallax of named objects; the catalogued objects near a clicked position ("What is this?"). The tool also links to SIMBAD | <https://simbad.cds.unistra.fr/simbad/> | checked 2026-11-15 |
 | S3 | **VizieR** TAP service, CDS, catalogue `I/355/gaiadr3` | Second fallback for the Gaia cone search | `https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync` | fallback, not checked separately |
+| S5 | **d3-celestial** data files (`stars.6.json`, `starnames.json`, `constellations.lines.json`), Olaf Frohn, BSD 3-Clause licence; positions from the Hipparcos catalogue (ESA 1997) | The 5,044 bright stars, 468 proper names and constellation figures drawn on the start page and listed in the search box. Reduced to `web/src/sky/stardata.js` by `tools/make-sky-data.mjs`; the licence text is in that file and in NOTICE. No d3-celestial code is used | <https://github.com/ofrohn/d3-celestial> | fetched 2026-11-15 |
 | S4 | **WiseView** (Backyard Worlds: Planet 9) | The model for a blink tool. Tombaugh links to it at the same coordinates for WISE epochs. No WiseView code or data is included | <http://byw.tools/wiseview> | given |
 
 A built-in table holds approximate coordinates and proper motions for the five challenge targets,
