@@ -147,34 +147,43 @@ Teegarden's Star, "Moved. Saturated star: its halo shifted south-east between Au
 brown-dwarf pair Luhman 16, "Moved" (17.3 sigma), in a crowded Galactic-plane field where 19
 patches on stars and 4 at the edge were set aside.
 
-### An entry we cannot explain
+### A second entry, and why we do not trust it
 
 The second entry in the Epsilon Indi field is "Changed brightness", 7.4 sigma, at
-RA 331.07824, Dec -56.76371, 2.4 arcmin from the brown dwarfs and outside a 4 arcmin field. What
-Tombaugh shows there:
+RA 331.07824, Dec -56.76371, 2.4 arcmin from the brown dwarfs and outside a 4 arcmin field. We
+followed it up with the tool itself:
 
-- A faint source that was brighter in May and June 2025 than in the three passes since. Relative
-  to its own average it reads about 2.0 in spring 2025 and 0.5 in both autumns on detector 6
-  (4.4 to 5.0 µm), and about 1.5 against 0.8 to 0.9 on detectors 4 and 5 (2.4 to 4.4 µm). The
-  Light curve tab calls it a fall "by a factor of 4.0 between May 2025 and Oct 2025
-  (6.4 sigma)" on detector 6.
-- It stayed bright through the whole first pass, about 40 days, so it is not an asteroid going by.
-- It did not come back in spring 2026, so it does not simply follow the telescope's orientation.
+- On detector 6 (4.4 to 5.0 µm) a faint patch is brighter in May and June 2025 than afterwards.
+  The Light curve tab calls it a fall "by a factor of 4.0 between May 2025 and Oct 2025
+  (6.4 sigma)". It stays bright through the whole first pass, about 40 days, so it is not an
+  asteroid going by.
+- It is still listed when the field is centred on the entry itself (7.5 sigma at 4 arcmin,
+  8.4 sigma at 6 arcmin), and both halves of the detector's wavelength range show it, so it is
+  not made by the framing or by which wavelengths a pass happened to sample.
+- On detector 5 alone (3.8 to 4.4 µm) the Light curve tab says "Too noisy to tell whether the
+  brightness changed."
 - "What is this?" finds nothing in SIMBAD within 12 arcsec, and the nearest Gaia star is
-  13 arcsec away.
+  13 arcsec away. The AllWISE catalogue (queried at IRSA) has no source within 13 arcsec either;
+  its two nearest, 13 arcsec to the east, have the colours of ordinary stars.
+- The mean brightness in the aperture, pass by pass, is 403 ± 42 µJy (spring 2025), 132 ± 29
+  (autumn 2025), 253 ± 53 (spring 2026, only 7 exposures) and 134 ± 27 (autumn 2026). Both
+  springs are above both autumns, the second one by 2.1 sigma, and the autumns are equal.
 
-We do not know what it is, and we do not claim it is new. We did not check the WISE or 2MASS
-catalogues. A variable galaxy nucleus or a dust-shrouded star would both fit; so might scattered
-light from Epsilon Indi A, a very bright star about 8 arcmin away. It is listed here because this is
-what the Candidates tab is for: a place to look, with the evidence one click away.
+![The Epsilon Indi field on detector 6, with the second entry marked and its light curve](real/eps-indi-second-entry.jpg)
 
-The Gaia stars loaded for that field hold no match for Luhman 16: the one nearest its position
-moves 14 milliarcsec a year. For fast named objects like this one the Motion tab therefore compares with
-the published motion in the built-in target table (SIMBAD values) and says so. Its centroid fit on
-Luhman 16 reads "Measured 3.1 ± 1.1 arcsec/yr: 2.7 sigma, short of a detection on its own. The
-catalogue says 2.79, in the same direction: consistent." The fit is weaker than the residual
-search because the pair is faint at 2 µm and the field is crowded. Where Gaia has the object
-(Barnard's Star, Epsilon Indi B), the Motion tab keeps using Gaia.
+*Real SPHEREx data, detector 6, residual view. Entry 2 is marked at the top of the field; the
+light curve on the right is the one Tombaugh draws for it.*
+
+That last pattern is the telling one. SPHEREx is turned round by half a turn every six months,
+so anything that depends on the telescope's orientation comes back each spring and goes each
+autumn: for example the lopsided image of the two stars 13 arcsec away spilling into the
+aperture, or scattered light from Epsilon Indi A, a very bright star about 8 arcmin away. The
+two springs differ by only 2.2 sigma. The likeliest reading is therefore an instrument effect
+that follows the season, not a change on the sky, and we claim nothing. For saturated stars
+Tombaugh already compares passes a year apart first for exactly this reason; it does not yet do
+so for faint patches like this one, which is why the entry is listed. It stays in this report
+because it shows the tab doing its job: it points at a place, and the evidence needed to judge
+it is one click away.
 
 ### On empty sky: the false-alarm test
 
