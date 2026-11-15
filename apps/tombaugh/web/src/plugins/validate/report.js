@@ -101,9 +101,10 @@ function motionRows(m) {
   rows.push(row(g, 'Proper motion, total', fmtValErr(me.total, me.errTotal, 'mas/yr'), {
     reference: ex ? `${fmt(ex.total, d)} mas/yr` : '', difference: df ? `${fmtSigned(df.total, d)} mas/yr` : '',
     sigma: df ? df.sigmaTotal : null,
-    note: mo.moving
+    note: (mo.moving
       ? `Motion detected at ${fmt(sig, 1)} sigma.`
-      : `No motion detected: ${fmt(sig, 1)} sigma, below the 3 sigma needed. The value is an upper bound on what could hide here.`,
+      : `No motion detected: ${fmt(sig, 1)} sigma, below the 3 sigma needed. The value is an upper bound on what could hide here.`)
+      + (mo.saturated ? ' The star saturates the detector, so each position is taken from the unsaturated light around its flagged core.' : ''),
   }));
   rows.push(row(g, 'Proper motion, east', fmtValErr(me.pmra, me.errPmra, 'mas/yr'), {
     reference: ex ? `${fmt(ex.pmra, d)} mas/yr` : '', difference: df ? `${fmtSigned(df.pmra, d)} mas/yr` : '',
@@ -157,6 +158,10 @@ function changeText(p) {
   return `${TIMES}${fmt(p.ratio, 3)} ${PM} ${fmt(p.err, 3)} (${fmt(p.significance, 1)} sigma)`;
 }
 
+function blendText(b) {
+  return `In ${b.pass} a Gaia star${isNum(b.gmag) ? ` (G ${fmt(b.gmag, 1)})` : ''} lies ${fmt(b.sepArcsec, 1)} arcsec from the target, inside the aperture, so the change is partly that star's light and is not counted as the target varying.`;
+}
+
 function variabilityRows(m) {
   const g = 'Brightness';
   const v = m.variability || {};
@@ -166,11 +171,15 @@ function variabilityRows(m) {
   const floorNote = v.floor > 0 ? ` Errors include a ${fmt(v.floor * 100, 0)} percent repeatability floor per pass.` : '';
   rows.push(row(g, 'Largest change between passes', v.varied
     ? `${changeText(top)}, ${top.from} ${ARROW} ${top.to}, D${top.det}`
-    : `none detected; largest is ${changeText(top)}`, {
+    : top.blend
+      ? `not counted: ${changeText(top)} is blended with a Gaia star`
+      : `none detected; largest is ${changeText(top)}`, {
     difference: `${fmtSigned(v.percent, Math.abs(v.percent) < 10 ? 1 : 0)} %`,
     note: v.varied
       ? `Brightness relative to the smooth spectrum, later pass over earlier pass. Method: ${v.method}.${floorNote}`
-      : `Below the 3 sigma needed to call it a change. Method: ${v.method}.${floorNote}`,
+      : top.blend
+        ? `${blendText(top.blend)} Method: ${v.method}.${floorNote}`
+        : `Below the 3 sigma needed to call it a change. Method: ${v.method}.${floorNote}`,
   }));
   for (const d of v.perDet || []) {
     if (!d.ok) {
@@ -181,6 +190,7 @@ function variabilityRows(m) {
       if (p.toIndex !== p.fromIndex + 1 && (d.pairs || []).length > 1 && p !== d.largest) continue; // consecutive passes, and the largest
       rows.push(row(g, `D${d.det}, ${p.from} ${ARROW} ${p.to}`, changeText(p), {
         difference: `${fmtSigned((p.ratio - 1) * 100, Math.abs(p.ratio - 1) < 0.1 ? 1 : 0)} %`,
+        note: p.blend ? blendText(p.blend) : '',
       }));
     }
   }

@@ -17,7 +17,7 @@
 
 import {
   propagate, centroid, fitMotion, fitMotionWithParallax, matchGaia, tangentOffset, offsetBy,
-  separationArcsec,
+  separationArcsec, maskedCoreRadius, centroidWings,
 } from '../../core/astrometry.js';
 import { gridSkyToPix, gridPixToSky } from '../../core/wcs.js';
 import { splitPasses, medianMjd, passLabel, DETECTORS } from '../../core/frames.js';
@@ -36,7 +36,7 @@ export { buildPassStacks };
 
 const CORE = {
   propagate, centroid, fitMotion, fitMotionWithParallax, matchGaia, tangentOffset, offsetBy,
-  separationArcsec, gridSkyToPix, gridPixToSky, splitPasses, medianMjd, passLabel, stackLayers,
+  separationArcsec, maskedCoreRadius, centroidWings, gridSkyToPix, gridPixToSky, splitPasses, medianMjd, passLabel, stackLayers,
   normalizeBackground, fitSkyModel, residualLayer, evalModelAt, extractSpectrum, lightCurve, mjdToIso,
   reproject,
 };
@@ -160,7 +160,12 @@ function measureMotion(env) {
     if (!isNum(x) || !isNum(y)) return null;
     let c = null;
     try {
-      c = L.centroid(stack.image, stack.mask, n, x, y, { box });
+      // A saturated star has a flagged core, which the ordinary centroid cannot use: such a
+      // source is located from the unsaturated light around the hole instead.
+      const core = typeof L.maskedCoreRadius === 'function' ? L.maskedCoreRadius(stack.image, stack.mask, n, x, y) : 0;
+      c = core > 0 && typeof L.centroidWings === 'function'
+        ? L.centroidWings(stack.image, stack.mask, n, x, y)
+        : L.centroid(stack.image, stack.mask, n, x, y, { box });
     } catch {
       c = null;
     }
@@ -213,9 +218,13 @@ function measureMotion(env) {
       pass: stack.index, label: stack.label, mjd: stack.mjd, ra, dec, x: c.x, y: c.y,
       sigma: Math.hypot(statPix * grid.scale, floorArcsec), statArcsec: statPix * grid.scale,
       snr: isNum(c.snr) ? c.snr : null, flux: isNum(c.flux) ? c.flux : null,
+      ...(c.method === 'wings' ? { method: 'wings' } : {}),
     });
   });
-  const base = { det, nPasses: stacks.length, nFound: points.length, floorArcsec, points, catalogue: catalogue || null };
+  const base = {
+    det, nPasses: stacks.length, nFound: points.length, floorArcsec, points, catalogue: catalogue || null,
+    saturated: points.some((p) => p.method === 'wings'),
+  };
   if (points.length < 2) {
     const reason = stacks.length < 2
       ? 'Only one survey pass is loaded; a motion needs two'
@@ -353,20 +362,68 @@ function passPairs(passes) {
       const ratio = b.mean / a.mean;
       const err = ratio * Math.hypot(a.err / a.mean, b.err / b.mean);
       const significance = Math.abs(b.mean - a.mean) / Math.hypot(a.err, b.err);
-      pairs.push({ from: a.label, to: b.label, fromIndex: a.index, toIndex: b.index, ratio, err, significance });
+      // A pair is blended when a background star sits in the aperture on one date and not the
+      // other, or sits at a clearly different distance: its light then differs between the two.
+      const ba = a.blend || null;
+      const bb = b.blend || null;
+      const blended = (ba || bb) && (!ba || !bb || ba.id !== bb.id || Math.abs(ba.sepArcsec - bb.sepArcsec) > 2);
+      const pair = { from: a.label, to: b.label, fromIndex: a.index, toIndex: b.index, ratio, err, significance };
+      if (blended) pair.blend = { ...(bb || ba), pass: bb ? b.label : a.label };
+      pairs.push(pair);
     }
   }
   return pairs;
 }
 
+/** The most significant pair; pairs free of a blended background star come first. */
 function largestPair(pairs) {
   let best = null;
-  for (const p of pairs) if (!best || p.significance > best.significance) best = p;
+  const clean = pairs.filter((p) => !p.blend);
+  for (const p of clean.length ? clean : pairs) if (!best || p.significance > best.significance) best = p;
+  return best;
+}
+
+/** A Gaia star closer than this to a moving target shares its photometric aperture. */
+export const BLEND_ARCSEC = 9;
+
+/**
+ * The Gaia star (other than the target itself) nearest the target on a given date, when it lies
+ * inside the aperture: a mover that drifts past a background star picks up that star's light,
+ * and the change in brightness is the star's, not the target's.
+ * -> { sepArcsec, gmag, id } | null
+ */
+export function blendAt(env, tracker, mjd) {
+  const { L, stars, catalogue, gaiaEpoch } = env;
+  if (!Array.isArray(stars) || !stars.length || typeof tracker !== 'function' || !isNum(mjd)) return null;
+  const pos = tracker(mjd);
+  if (!pos || !isNum(pos.ra) || !isNum(pos.dec)) return null;
+  const own = catalogue && catalogue.source === 'Gaia DR3' ? String(catalogue.id) : null;
+  let best = null;
+  for (const st of stars) {
+    if (!st || !isNum(st.ra) || !isNum(st.dec)) continue;
+    if (own !== null && st.id != null && String(st.id) === own) continue;
+    let at = st;
+    if (isNum(st.pmra) && isNum(st.pmdec)) {
+      try {
+        at = L.propagate({ ...st, epoch: isNum(st.epoch) ? st.epoch : gaiaEpoch, parallax: 0 }, mjd);
+      } catch {
+        at = st;
+      }
+    }
+    const sep = L.separationArcsec(pos.ra, pos.dec, at.ra, at.dec);
+    // The target's own Gaia entry, when the reference came from somewhere else: on top of it
+    // and moving with it.
+    if (catalogue && sep < 3 && isNum(st.pmra) && isNum(st.pmdec) && isNum(catalogue.pmra) && isNum(catalogue.pmdec)) {
+      const want = Math.hypot(catalogue.pmra, catalogue.pmdec);
+      if (Math.hypot(st.pmra - catalogue.pmra, st.pmdec - catalogue.pmdec) <= Math.max(100, 0.2 * want)) continue;
+    }
+    if (sep <= BLEND_ARCSEC && (!best || sep < best.sepArcsec)) best = { sepArcsec: sep, gmag: isNum(st.gmag) ? st.gmag : null, id: st.id != null ? String(st.id) : '' };
+  }
   return best;
 }
 
 /** Brightness per pass and detector from native aperture photometry and the light curve. */
-function variabilityFromPhotometry(env, pointsByDet) {
+function variabilityFromPhotometry(env, pointsByDet, tracker = null) {
   const { L } = env;
   const perDet = [];
   for (const [det, points] of [...pointsByDet.entries()].sort((a, b) => a[0] - b[0])) {
@@ -386,7 +443,9 @@ function variabilityFromPhotometry(env, pointsByDet) {
       // Aperture photometry of an undersampled PSF is not repeatable to better than about a
       // percent from pass to pass (pixel phase, roll), whatever the photon noise says.
       const err = Math.hypot(m.err, env.photFloor * Math.abs(m.mean));
-      passes.push({ index, label: L.passLabel(group), mjd: L.medianMjd(group), n: m.n, mean: m.mean, err, statErr: m.err });
+      const mjd = L.medianMjd(group);
+      const blend = tracker ? blendAt(env, tracker, mjd) : null;
+      passes.push({ index, label: L.passLabel(group), mjd, n: m.n, mean: m.mean, err, statErr: m.err, ...(blend ? { blend } : {}) });
     });
     if (passes.length < 2) {
       perDet.push({ det, ...fail(passes.length ? 'Usable photometry in one pass only' : 'No usable photometry (flagged, off the frame or undetected)'), nPoints: curve.length, passes });
@@ -433,9 +492,10 @@ function summariseVariability(perDet, method, photFloor = 0) {
     return { ...fail(reason), method, perDet };
   }
   let top = null;
-  for (const d of good) if (!top || d.largest.significance > top.significance) top = { det: d.det, ...d.largest };
+  const better = (a, b) => (!!a.blend !== !!b.blend ? !a.blend : a.significance > b.significance);
+  for (const d of good) if (!top || better(d.largest, top)) top = { det: d.det, ...d.largest };
   return {
-    ok: true, method, perDet, largest: top, varied: top.significance >= 3,
+    ok: true, method, perDet, largest: top, varied: top.significance >= 3 && !top.blend,
     percent: (top.ratio - 1) * 100, floor: photFloor,
   };
 }
@@ -799,6 +859,7 @@ export async function measureTarget(ctx = {}) {
     L, grid: ctx.grid, det, layers, stacks, frames, catalogue, target: { ...t, ...here }, tick, signal,
     floorArcsec: isNum(ctx.floorArcsec) && ctx.floorArcsec >= 0 ? ctx.floorArcsec : DEFAULT_FLOOR_ARCSEC,
     photFloor: isNum(ctx.photFloor) && ctx.photFloor >= 0 ? ctx.photFloor : DEFAULT_PHOT_FLOOR,
+    stars: starsOf(ctx.gaia), gaiaEpoch,
   };
   const cancelled = () => {
     if (signal && signal.aborted) { out.cancelled = true; return true; }
@@ -838,7 +899,7 @@ export async function measureTarget(ctx = {}) {
 
   await run('variability', () => {
     if (pointsByDet.size && typeof L.lightCurve === 'function') {
-      const v = summariseVariability(variabilityFromPhotometry(env, pointsByDet), 'native aperture photometry against a smooth spectrum', env.photFloor);
+      const v = summariseVariability(variabilityFromPhotometry(env, pointsByDet, tracker), 'native aperture photometry against a smooth spectrum', env.photFloor);
       if (v.ok) return v;
     }
     const stacksByDet = new Map();

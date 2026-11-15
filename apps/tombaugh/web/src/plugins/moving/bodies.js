@@ -22,6 +22,9 @@ const DEG = Math.PI / 180;
 export const SURVEY_START_MJD = 60770;
 
 const CH4_ICE = [
+  { wave: 0.89, label: 'CH4 ice', what: 'Methane ice, 0.89 um' },
+  { wave: 1.16, label: 'CH4 ice', what: 'Methane ice, 1.16 um' },
+  { wave: 1.38, label: 'CH4 ice', what: 'Methane ice, the bands at 1.33 and 1.40 um' },
   { wave: 1.72, label: 'CH4 ice', what: 'Methane ice, a group of bands near 1.7 um' },
   { wave: 2.3, label: 'CH4 ice', what: 'Methane ice, the strong bands at 2.2 to 2.4 um' },
   { wave: 3.3, label: 'CH4 ice', what: 'Methane ice, the deep band at 3.3 um' },
@@ -44,7 +47,7 @@ export const BODIES = [
     command: '999',
     stepHours: 12,
     blurb: 'About 34 AU away at magnitude 14.4: visible in single exposures, in a crowded star field.',
-    lookFor: 'Methane ice bands near 2.3 and 3.3 um. They are deep enough to show without stacking; the stack sharpens them.',
+    lookFor: 'Methane ice bands, the deepest near 1.7, 2.3 and 3.3 um. They are deep enough to show in single exposures; following the body across all of them draws the whole spectrum.',
     bands: CH4_ICE,
   },
   {
@@ -138,7 +141,7 @@ export const BODIES = [
     faint: true,
     blurb: 'About 89 AU away at magnitude 21.4, one of the reddest large bodies known.',
     lookFor: 'Probably nothing: it is expected to stay below the stack. An honest upper limit is the result.',
-    bands: CH4_ICE.slice(1),
+    bands: CH4_ICE.slice(4),
   },
   {
     id: 'sedna',
@@ -149,7 +152,7 @@ export const BODIES = [
     faint: true,
     blurb: 'About 83 AU away at magnitude 20.8, on an 11,000-year orbit that never comes near Neptune.',
     lookFor: 'Probably too faint. A fair test of the limit: the stack either reaches it or says how close it came.',
-    bands: CH4_ICE.slice(1),
+    bands: CH4_ICE.slice(4),
   },
   {
     id: 'chiron',

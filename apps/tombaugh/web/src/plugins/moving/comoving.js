@@ -870,6 +870,8 @@ export function movieFrames(entries, { name = 'Body', visitCount = 0, dateLabel 
       pass: e.visit >= 0 ? e.visit : 0,
       key: e.key,
       comoving: true,
+      // the wavelengths in this stack, for the shell's wavelength ruler
+      ...(Array.isArray(e.band) && e.band.length === 2 && e.band.every(isNum) ? { band: [e.band[0], e.band[1]] } : {}),
     });
   }
   return frames;

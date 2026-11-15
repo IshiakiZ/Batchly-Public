@@ -750,7 +750,14 @@ export function install(app) {
   function publishSpectrum() {
     if (!st.spectrum || typeof app.showSpectrum !== 'function') return;
     try {
-      app.showSpectrum({ points: st.spectrum.kept, binned: st.spectrum.binned, title: `${st.name}, followed across ${st.items.length} exposures` });
+      const bands = st.chosen && Array.isArray(st.chosen.bands) ? st.chosen.bands : [];
+      app.showSpectrum({
+        points: st.spectrum.kept,
+        binned: st.spectrum.binned,
+        title: `${st.name}, followed across ${st.items.length} exposures`,
+        features: bands.map((b) => ({ wave: b.wave, label: b.label, note: b.what })),
+        note: `Aperture photometry at the body's position in each exposure; ${st.spectrum.kept.length} of ${st.items.length} exposures gave a clean measurement.${bands.length ? ' The marks are the features to look for on this body.' : ''}`,
+      });
     } catch (err) {
       warn('showSpectrum failed', err);
     }
@@ -760,6 +767,9 @@ export function install(app) {
 
   async function buildView(ctx) {
     if (!st.items.length) return [];
+    // The shell clears its spectrum panel whenever a field finishes loading; this view is about
+    // the body, so its spectrum goes back up once the view is built.
+    if (st.spectrum) setTimeout(() => { if (!disposed) publishSpectrum(); }, 60);
     const grid = ctx && ctx.grid ? ctx.grid : null;
     const dims = grid && grid.n > 0 && grid.scale > 0 ? { n: grid.n, scale: grid.scale } : panelDims();
     const analysis = await analyse(dims.n, dims.scale, null, null);
@@ -784,6 +794,7 @@ export function install(app) {
             short: `${frame.short} fixed`,
             mjd: frame.mjd,
             pass: frame.pass,
+            ...(frame.band ? { band: frame.band } : {}),
             key: `${entry.key}-fixed`,
             grid: fixed.grid,
             comoving: false,
@@ -1126,7 +1137,7 @@ export function install(app) {
     // footer
     ui.foot.textContent = st.hypothetical
       ? 'Track from the parallax model in core/distance.js, seen from the centre of the Earth. SPHEREx Level 2 spectral images (IRSA).'
-      : 'Positions from JPL Horizons, seen from the centre of the Earth; SPHEREx is in low Earth orbit, which matters by less than a pixel beyond about 2 AU. SPHEREx Level 2 spectral images (IRSA).';
+      : 'Positions from JPL Horizons, seen from the centre of the Earth; SPHEREx is in low Earth orbit, which matters by less than a pixel beyond about 2 AU. SPHEREx Level 2 spectral images (IRSA). A link can start this: add ?body=pluto to the address.';
   }
 
   function renderProgress() {
@@ -1265,6 +1276,27 @@ export function install(app) {
     }
   } catch (err) {
     warn('view could not be added', err);
+  }
+
+  // ---- a link can start the whole thing: ?body=pluto ------------------------------------------
+  let startBody = '';
+  try {
+    const search = globalThis.location && typeof globalThis.location.search === 'string' ? globalThis.location.search : '';
+    startBody = String(new URLSearchParams(search).get('body') || '').trim().slice(0, 60);
+  } catch {
+    startBody = '';
+  }
+  if (startBody) {
+    const wanted = startBody.toLowerCase();
+    const entry = CATALOGUE.find((b) => b.id === wanted || String(b.name).toLowerCase() === wanted) || null;
+    setTimeout(safe(async () => {
+      if (disposed) return;
+      if (panel && typeof panel.show === 'function') panel.show();
+      await follow(entry ? { entry } : { text: startBody });
+      if (disposed || st.phase !== 'plan') return;
+      await loadExposures();
+      if (!disposed && st.phase === 'done' && st.items.length) openInViewer();
+    }), 400);
   }
 
   return {

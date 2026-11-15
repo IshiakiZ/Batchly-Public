@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fitSkyModel, predictLayer, residualLayer, evalModelAt, changeMap, residualPassStacks,
-  findCandidates, CHANGE_KINDS,
+  findCandidates, CHANGE_KINDS, saturatedCores, haloChange,
 } from './skymodel.js';
 
 const NOISE = 0.02; // MJy/sr per pixel per exposure
@@ -475,4 +475,75 @@ test('speed: 80 x 80 and 200 x 200 grids with 100 layers', (t) => {
   const big = time(200);
   t.diagnostic(`200 x 200 x 100 layers: fit ${big.fit.toFixed(1)} ms, pass residual stacks ${big.stacks.toFixed(1)} ms`);
   assert.ok(big.fit < 2500, `200 x 200 fit took ${big.fit} ms`);
+});
+
+/** A bright star with a wide halo and a flagged core of radius `rCore`, at (x0, y0). */
+function saturatedStar(layer, n, x0, y0, amp, rCore = 3, width = 5) {
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const r2 = (x - x0) ** 2 + (y - y0) ** 2;
+      layer.image[y * n + x] += amp / (1 + r2 / (width * width)) ** 1.5;
+      if (r2 <= rCore * rCore) layer.mask[y * n + x] = 1;
+    }
+  }
+}
+
+test('a saturated star that moved is one candidate, read from its halo as a whole', () => {
+  const n = 60;
+  const { layers } = makeField({
+    n,
+    stars: STARS,
+    seed: 31,
+    extra(layer, p) {
+      // 0.7 grid pixels towards +y per pass, far less than the halo is wide
+      saturatedStar(layer, n, 30.2, 38 + 0.7 * p, 40);
+    },
+  });
+  const cores = saturatedCores(layers, n);
+  assert.equal(cores.length, 1);
+  assert.ok(Math.abs(cores[0].x - 30.2) < 1 && Math.abs(cores[0].y - 38.7) < 1.2, JSON.stringify(cores[0]));
+  assert.ok(cores[0].r > 2 && cores[0].r < 4.5);
+  const model = fitSkyModel(layers);
+  const stacks = residualPassStacks(model, layers);
+  const change = haloChange(stacks, n, cores[0], 30);
+  assert.equal(change.kind, 2, JSON.stringify(change));
+  assert.ok(change.dy > 0.9 && Math.abs(change.dx) < 0.4, JSON.stringify(change));
+  const found = findCandidates(model, layers, { stacks });
+  const sat = found.filter((c) => c.saturated);
+  assert.equal(sat.length, 1);
+  assert.equal(CHANGE_KINDS[sat[0].kind], 'moved');
+  assert.ok(sat[0].peaks >= 2, `the halo left ${sat[0].peaks} patches`);
+  assert.ok(sat[0].shift && sat[0].shift.dy > 0.9);
+  // nothing else in the halo is listed on its own
+  const others = found.filter((c) => !c.saturated && Math.hypot(c.x - cores[0].x, c.y - cores[0].y) <= sat[0].rHalo);
+  assert.equal(others.length, 0, JSON.stringify(others));
+});
+
+test('a saturated star that brightened is a change in place; an unsaturated field has no cores', () => {
+  const n = 60;
+  const { layers } = makeField({
+    n,
+    stars: STARS,
+    seed: 37,
+    extra(layer, p) {
+      saturatedStar(layer, n, 30.2, 38, p === 2 ? 60 : 40);
+    },
+  });
+  const cores = saturatedCores(layers, n);
+  assert.equal(cores.length, 1);
+  const model = fitSkyModel(layers);
+  const found = findCandidates(model, layers);
+  const sat = found.filter((c) => c.saturated);
+  assert.equal(sat.length, 1);
+  assert.equal(CHANGE_KINDS[sat[0].kind], 'varies');
+  assert.equal(sat[0].brighter, true);
+  assert.equal(sat[0].shift, null);
+
+  const plain = makeField({ n: 40, stars: STARS, seed: 5 });
+  assert.deepEqual(saturatedCores(plain.layers, 40), []);
+  // a flagged edge strip and a bad column are not stars
+  for (const layer of plain.layers) {
+    for (let y = 0; y < 40; y++) { layer.mask[y * 40] = 1; layer.mask[y * 40 + 1] = 1; layer.mask[y * 40 + 20] = 1; }
+  }
+  assert.deepEqual(saturatedCores(plain.layers, 40), []);
 });

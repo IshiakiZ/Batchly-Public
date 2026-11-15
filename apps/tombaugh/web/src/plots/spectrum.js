@@ -11,6 +11,8 @@
 //   setData({ ..., colorBy })     'pass' colours per-exposure points by survey pass and adds a thin
 //                                 per-pass channel-mean line in place of the all-pass channel
 //                                 means, so spectral change shows up
+//   setData({ ..., features })    [{ wave, label, note }] marks these features for this source in
+//                                 place of the general molecular list
 //   setData({ ..., model })       model may be [{ wave, flux_uJy }], { wave: [], flux_uJy: [] }
 //                                 or a function wave_um -> flux_uJy
 //   setOptions({ units: 'flux' | 'ab', logY: boolean, features: boolean, colorBy: 'none' | 'pass' })
@@ -421,7 +423,8 @@ export function createSpectrumPlot(container, options = {}) {
   function featureRows(xs, wide) {
     const rows = [[], []];
     const placed = [];
-    for (const f of FEATURES) {
+    for (const f of state.featureList || FEATURES) {
+      if (!(f.wave >= WAVE_MIN && f.wave <= WAVE_MAX)) continue;
       const label = f.id === 'ch4' && wide ? 'CH4 / PAH' : f.label;
       const w = label.length * 6.1 + 2;
       const x = xs(f.wave);
@@ -821,6 +824,12 @@ export function createSpectrumPlot(container, options = {}) {
         .filter((p) => p && p.ok !== false && isNum(p.wave) && isNum(p.flux_uJy))
         .sort((a, b) => a.wave - b.wave);
       state.model = normalizeModel(d.model);
+      // Features to mark for this source in place of the general list (a tool that knows what
+      // the source is, such as the solar-system plugin, supplies them).
+      const own = (Array.isArray(d.features) ? d.features : [])
+        .filter((f) => f && isNum(f.wave) && typeof f.label === 'string' && f.label)
+        .map((f) => ({ id: '', label: f.label, wave: f.wave, note: String(f.note || f.what || f.label) }));
+      state.featureList = own.length ? own : null;
       state.lens = d.lens && typeof d.lens === 'object' ? d.lens : null;
       state.title = d.title ? String(d.title) : '';
       if (d.colorBy === 'pass' || d.colorBy === 'none') state.colorBy = d.colorBy;
@@ -854,6 +863,7 @@ export function createSpectrumPlot(container, options = {}) {
       state.model = [];
       state.lens = null;
       state.title = '';
+      state.featureList = null;
       state.passOf = new Map();
       state.passes = [];
       state.hasData = false;

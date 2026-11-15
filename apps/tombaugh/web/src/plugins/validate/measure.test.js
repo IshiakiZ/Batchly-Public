@@ -133,3 +133,22 @@ test('cancelling stops the measurement and says so', async () => {
   assert.equal(n.motion.ok, true);
   assert.equal(n.residuals.ok, false);
 });
+
+test('blendAt: a background star in the aperture is found, the target\'s own Gaia entry is not', async () => {
+  const { blendAt, BLEND_ARCSEC } = await import('./measure.js');
+  const L = await import('../../core/astrometry.js');
+  const arc = 1 / 3600;
+  const tracker = () => ({ ra: 10, dec: 0 });
+  const bystander = { id: '7', ra: 10, dec: 3.3 * arc, pmra: 2, pmdec: -6, gmag: 16.3, epoch: 2016 };
+  const own = { id: '1', ra: 10, dec: 0.4 * arc, pmra: -8000, pmdec: 700, epoch: 2026.3 };
+  const far = { id: '9', ra: 10, dec: 30 * arc, pmra: 0, pmdec: 0 };
+  const env = { L, stars: [far, own, bystander], catalogue: { source: 'target table', pmra: -8118, pmdec: 680 }, gaiaEpoch: 2016 };
+  const b = blendAt(env, tracker, 61160);
+  assert.ok(b && b.id === '7', JSON.stringify(b));
+  assert.ok(Math.abs(b.sepArcsec - 3.3) < 0.2 && b.gmag === 16.3 && b.sepArcsec < BLEND_ARCSEC);
+  // a field with only the target itself, or only far stars, is clean
+  assert.equal(blendAt({ ...env, stars: [far, own] }, tracker, 61160), null);
+  // the Gaia match used as the reference is never its own blend
+  assert.equal(blendAt({ ...env, stars: [bystander], catalogue: { source: 'Gaia DR3', id: '7', pmra: 2, pmdec: -6 } }, tracker, 61160), null);
+  assert.equal(blendAt({ ...env, stars: [] }, tracker, 61160), null);
+});

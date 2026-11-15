@@ -2236,9 +2236,9 @@ async function boot() {
       return Promise.resolve(app.selection());
     },
     /** Show arbitrary points in the spectrum panel (same shapes as the spectrum plot) and open it. */
-    showSpectrum({ points = [], binned = [], title = '', colorBy = undefined, note = '' } = {}) {
+    showSpectrum({ points = [], binned = [], title = '', colorBy = undefined, note = '', features = null } = {}) {
       panels.setSource(null);
-      panels.setSpectrum({ points, binned, title: title || 'Spectrum', colorBy, heading: title || 'Spectrum', note: note || `${points.length} point${points.length === 1 ? '' : 's'} supplied by a tool, not measured from a click on this image.` });
+      panels.setSpectrum({ points, binned, title: title || 'Spectrum', colorBy, features, heading: title || 'Spectrum', note: note || `${points.length} point${points.length === 1 ? '' : 's'} supplied by a tool, not measured from a click on this image.` });
       layout.selectTab('spectrum', { reveal: true });
     },
     /** An extra note for every frame caption (and so for exported images); null or '' removes it. */

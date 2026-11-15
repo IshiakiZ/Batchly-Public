@@ -774,6 +774,135 @@ function classifyBlobs(blobs, radius, minSep) {
   return blobs;
 }
 
+/**
+ * Saturated stars in the field: round patches of at least `minPix` grid pixels that are flagged
+ * (or blank) in more than `frac` of the exposures, away from the edge of the field (the detector
+ * edge is flagged as well, and is not a star).
+ * -> [{ x, y, r, npix }], largest first; r is the radius of a disc of the same area.
+ */
+export function saturatedCores(layers, n, { minPix = 9, frac = 0.5 } = {}) {
+  const npix = n * n;
+  if (!Array.isArray(layers) || !layers.length || !(n > 2)) return [];
+  const count = new Uint16Array(npix);
+  let used = 0;
+  for (const layer of layers) {
+    if (!layer || !layer.image || layer.image.length !== npix) continue;
+    used++;
+    const img = layer.image;
+    const mk = layer.mask || null;
+    for (let i = 0; i < npix; i++) if ((mk !== null && mk[i] !== 0) || img[i] - img[i] !== 0) count[i]++;
+  }
+  if (!used) return [];
+  const need = frac * used;
+  const seen = new Uint8Array(npix);
+  const queue = new Int32Array(npix);
+  const cores = [];
+  for (let start = 0; start < npix; start++) {
+    if (seen[start] !== 0 || !(count[start] > need)) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    let sx = 0, sy = 0, x0 = n, x1 = -1, y0 = n, y1 = -1;
+    let edge = false;
+    while (head < tail) {
+      const i = queue[head++];
+      const x = i % n;
+      const y = (i - x) / n;
+      sx += x; sy += y;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (x === 0 || y === 0 || x === n - 1 || y === n - 1) edge = true;
+      if (x > 0 && seen[i - 1] === 0 && count[i - 1] > need) { seen[i - 1] = 1; queue[tail++] = i - 1; }
+      if (x < n - 1 && seen[i + 1] === 0 && count[i + 1] > need) { seen[i + 1] = 1; queue[tail++] = i + 1; }
+      if (y > 0 && seen[i - n] === 0 && count[i - n] > need) { seen[i - n] = 1; queue[tail++] = i - n; }
+      if (y < n - 1 && seen[i + n] === 0 && count[i + n] > need) { seen[i + n] = 1; queue[tail++] = i + n; }
+    }
+    if (edge || tail < minPix) continue;
+    const w = x1 - x0 + 1;
+    const h = y1 - y0 + 1;
+    // Round and filled: a bad column or a scratch is neither.
+    if (Math.max(w, h) > 2.5 * Math.min(w, h) || tail < 0.45 * w * h) continue;
+    cores.push({ x: sx / tail, y: sy / tail, r: Math.sqrt(tail / Math.PI), npix: tail });
+  }
+  cores.sort((a, b) => b.npix - a.npix);
+  return cores;
+}
+
+/** How far the halo of a saturated star reaches in the residuals: ten core radii, in grid pixels. */
+function haloRadius(core, n) {
+  return Math.min(Math.max(8, 10 * core.r), 0.6 * n);
+}
+
+/**
+ * What the halo of a saturated star did between the first and the last pass, from the residual
+ * pass stacks. A star that moved leaves a dipole that flips: positive residuals on the side it
+ * moved towards in the last pass, negative there in the first. A star that brightened or faded
+ * leaves the same sign all round.
+ * -> { kind: 2 (moved) | 1 (changed in place), dx, dy (unit vector of the motion, grid pixels),
+ *      brighter (true / false for kind 1, null when unclear), dipole, monopole, from, to (the
+ *      indices of the two passes that differ most; -1 when there is no verdict) }
+ */
+export function haloChange(stacks, n, core, rHalo) {
+  const moments = (st) => {
+    let m = 0, a = 0, dx = 0, dy = 0, ar = 0, np = 0;
+    const x0 = Math.max(0, Math.floor(core.x - rHalo));
+    const x1 = Math.min(n - 1, Math.ceil(core.x + rHalo));
+    const y0 = Math.max(0, Math.floor(core.y - rHalo));
+    const y1 = Math.min(n - 1, Math.ceil(core.y + rHalo));
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const i = y * n + x;
+        const v = st.image[i];
+        if (st.mask[i] !== 0 || v - v !== 0) continue;
+        // Only residuals that stand clear of the noise: most of the halo's area is empty sky,
+        // and summing its noise would drown the pattern.
+        const ex = x - core.x;
+        const ey = y - core.y;
+        const r = Math.hypot(ex, ey);
+        if (r <= core.r || r > rHalo) continue;
+        np++;
+        if (st.snr && !(Math.abs(st.snr[i]) >= 2)) continue;
+        m += v; a += Math.abs(v); dx += v * ex; dy += v * ey; ar += Math.abs(v) * r;
+      }
+    }
+    return { m, a, dx, dy, ar, np };
+  };
+  // A pass in which nothing stands clear of the noise still counts: it says "no change here".
+  const usable = stacks.map((st, index) => ({ ...moments(st), index })).filter((q) => q.np >= 12);
+  const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0, from: -1, to: -1 };
+  if (usable.length < 2) return none;
+  // The pair of passes that differ most, as a shift and as a change of level.
+  let dip = null;
+  let mono = null;
+  for (let i = 0; i < usable.length; i++) {
+    for (let j = i + 1; j < usable.length; j++) {
+      const f = usable[i];
+      const l = usable[j];
+      if (f.ar + l.ar > 0) {
+        const ddx = l.dx - f.dx;
+        const ddy = l.dy - f.dy;
+        const value = Math.hypot(ddx, ddy) / (f.ar + l.ar);
+        if (!dip || value > dip.value) dip = { value, ddx, ddy, from: f.index, to: l.index };
+      }
+      if (f.a + l.a > 0) {
+        const value = Math.abs(l.m - f.m) / (f.a + l.a);
+        if (!mono || value > mono.value) mono = { value, brighter: l.m > f.m, from: f.index, to: l.index };
+      }
+    }
+  }
+  const dipole = dip ? dip.value : 0;
+  const monopole = mono ? mono.value : 0;
+  if (dip && dipole >= 0.3 && dipole >= monopole) {
+    const norm = Math.hypot(dip.ddx, dip.ddy);
+    return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole, monopole, from: dip.from, to: dip.to };
+  }
+  if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
+  return { ...none, dipole, monopole };
+}
+
 /** Equivalent Gaussian sigma of a chi-square value with k degrees of freedom (Wilson-Hilferty). */
 function chi2ToSigma(chi2, k) {
   const c = 2 / (9 * k);
@@ -846,8 +975,39 @@ export function changeMap(model, layers, opts = {}) {
 export function findCandidates(model, layers, opts = {}) {
   const { minSnr = 5, max = 20, radius = 4, minSep = 1.5 } = opts;
   const stacks = opts.stacks || residualPassStacks(model, layers, opts);
-  const blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
+  let blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
   const out = [];
+  // A saturated star first: everything its halo left in the residuals is one object, not a
+  // dozen. Whether it moved or changed is read from the halo as a whole.
+  const cores = opts.cores || saturatedCores(layers, model.n);
+  for (const core of cores) {
+    const rHalo = haloRadius(core, model.n);
+    const members = blobs.filter((b) => Math.hypot(b.x - core.x, b.y - core.y) <= rHalo);
+    if (!members.length) continue;
+    blobs = blobs.filter((b) => !members.includes(b));
+    const lead = members[0]; // strongest
+    const change = haloChange(stacks, model.n, core, rHalo);
+    out.push({
+      x: core.x,
+      y: core.y,
+      snr: lead.snr,
+      kind: change.kind,
+      passIndex: lead.passIndex,
+      label: stacks[lead.passIndex].label,
+      mjd: stacks[lead.passIndex].mjd,
+      px: Math.round(core.x),
+      py: Math.round(core.y),
+      npix: members.reduce((sum, b) => sum + b.npix, 0),
+      saturated: true,
+      rCore: core.r,
+      rHalo,
+      peaks: members.length,
+      shift: change.kind === 2 ? { dx: change.dx, dy: change.dy } : null,
+      brighter: change.kind === 1 ? change.brighter : null,
+      between: change.from >= 0 && change.to >= 0 ? [stacks[change.from].label, stacks[change.to].label] : null,
+    });
+  }
+  out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
   for (const b of blobs) { // already sorted by |snr|, strongest first
     if (out.length >= max) break;
     if (out.some((c) => Math.hypot(c.x - b.x, c.y - b.y) < minSep)) continue;

@@ -45,6 +45,16 @@ export function dayRange(mjd0, mjd1) {
   return `${a} to ${b}`;
 }
 
+const FOLD_KEY = 'tombaugh.fieldsum.folded';
+
+function readFolded() {
+  try {
+    return globalThis.localStorage.getItem(FOLD_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Group exposure references (all detectors) into survey passes: a new pass starts after a gap of
  * more than `gapDays`. -> [{ index, mjd0, mjd1, label, dates, total, perDet: { 1..6: refs[] } }]
@@ -162,8 +172,31 @@ export function createFieldSummary(container) {
   const coords = el(doc, 'p', 'fs-coords num');
   const head = el(doc, 'div', 'fs-head');
   const headLine = el(doc, 'div', 'fs-row');
-  headLine.append(kicker, releases);
+  // The pass strip and the wavelength ruler can be folded away to give the plots above more
+  // room on a short screen; the choice is remembered.
+  const toggle = el(doc, 'button', 'fs-toggle');
+  toggle.type = 'button';
+  const headRight = el(doc, 'span', 'fs-head-right');
+  headRight.append(releases, toggle);
+  headLine.append(kicker, headRight);
   head.append(headLine, name, coords);
+  let folded = readFolded();
+  function applyFolded() {
+    container.classList.toggle('is-folded', folded);
+    toggle.textContent = folded ? 'Show passes' : 'Hide';
+    toggle.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    toggle.title = folded ? 'Show the survey passes and the wavelength of this frame' : 'Fold the passes and the wavelength ruler away to give the plots more room';
+  }
+  toggle.addEventListener('click', () => {
+    folded = !folded;
+    try {
+      globalThis.localStorage.setItem(FOLD_KEY, folded ? '1' : '0');
+    } catch {
+      // no storage (sandboxed frame): the choice lasts for this visit only
+    }
+    applyFolded();
+  });
+  applyFolded();
 
   const passLabel = el(doc, 'span', 'fs-label', 'Passes');
   const passValue = el(doc, 'span', 'fs-value num');
@@ -229,8 +262,14 @@ export function createFieldSummary(container) {
       return;
     }
     const passes = summarizePasses(refs);
-    const mine = refs.filter((r) => r.det === info.det).length;
-    passValue.textContent = `${passes.length} pass${passes.length === 1 ? '' : 'es'} · ${refs.length} exposures · D${info.det}: ${mine}`;
+    const mineRefs = refs.filter((r) => r.det === info.det);
+    const mine = mineRefs.length;
+    // One detector often sees fewer passes than the field as a whole (in a deep field each
+    // detector covers the spot for part of the year only): say so, since the movie plays the
+    // detector's passes.
+    const minePasses = mine ? summarizePasses(mineRefs).length : 0;
+    const mineText = mine && minePasses !== passes.length ? `${mine} in ${minePasses} pass${minePasses === 1 ? '' : 'es'}` : String(mine);
+    passValue.textContent = `${passes.length} pass${passes.length === 1 ? '' : 'es'} · ${refs.length} exposures · D${info.det}: ${mineText}`;
     strip.setAttribute(
       'aria-label',
       `Exposures of this spot: ${passes.map((p) => `${p.label}, ${p.dates}, ${p.total} exposures`).join('; ')}. Detector ${info.det} has ${mine}.`,

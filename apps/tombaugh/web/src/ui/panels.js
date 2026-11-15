@@ -123,7 +123,7 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
           onclick: () => onPickCandidate(c, i),
         },
         h('span', { class: 'cand-n' }, String(i + 1)),
-        h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec))),
+        h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec)), saturatedNote(c) ? h('span', { class: 'cand-why' }, saturatedNote(c)) : null),
         h('span', { class: 'cand-score' }, Number.isFinite(c.score) ? `${c.score.toFixed(1)}σ` : ''),
       );
       list.append(btn);
@@ -141,6 +141,17 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
   const factsHead = h('p', { class: 'subhead' }, 'This field');
   const facts = h('dl', { class: 'facts' });
   clear(els.aboutBody).append(aboutText, aboutNotes, explainHost, factsHead, facts);
+
+  /** One line on a candidate that is a saturated star: what its halo did between the passes. */
+  function saturatedNote(c) {
+    if (!c || !c.saturated) return '';
+    const lumps = c.peaks > 1 ? `; ${c.peaks} residual patches belong to it` : '';
+    const when = Array.isArray(c.between) && c.between[0] && c.between[1] && c.between[0] !== c.between[1] ? `between ${c.between[0]} and ${c.between[1]}` : 'between the passes';
+    if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.`;
+    if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.`;
+    if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.`;
+    return `Saturated star: its halo changed between the passes${lumps}.`;
+  }
 
   function setSourceHeader(target, source) {
     if (!source) {
@@ -171,7 +182,7 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
       }
     },
 
-    setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null, colorBy = undefined, heading = '' } = {}) {
+    setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null, colorBy = undefined, heading = '', features = null } = {}) {
       if (heading) {
         // Points handed in by a tool rather than measured from a click: name them in the header.
         spec.head.hidden = false;
@@ -181,6 +192,7 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
         try {
           const data = { points, binned, lens: lens || undefined, title };
           if (colorBy) data.colorBy = colorBy;
+          if (Array.isArray(features) && features.length) data.features = features;
           spectrumPlot.setData(data);
         } catch (err) {
           console.warn('[tombaugh] spectrum plot', err);

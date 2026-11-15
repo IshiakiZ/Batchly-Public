@@ -272,7 +272,8 @@ export function install(app) {
     const id = star.id !== undefined && star.id !== null && /^\d{1,25}$/.test(String(star.id)) ? String(star.id) : '';
     const title = id ? `Gaia DR3 ${id}` : 'Gaia DR3 star';
     const lines = [];
-    const where = near.sepArcsec <= GAIA_MATCH_ARCSEC ? 'close enough to be this source' : 'too far to be this source';
+    const mismatch = motionMismatch(sel, near);
+    const where = near.sepArcsec > GAIA_MATCH_ARCSEC ? 'too far to be this source' : mismatch ? 'close on the sky, but not this source' : 'close enough to be this source';
     lines.push(el('p', null, el('b', { text: sepText(near.sepArcsec) }), `, ${where}`, isNum(star.gmag) ? [' · G magnitude ', el('b', { text: star.gmag.toFixed(1) })] : null));
     if (near.pmTotal !== null) {
       const perYear = formatMotion(near.pmTotal);
@@ -293,10 +294,24 @@ export function install(app) {
     } else {
       lines.push(el('p', { text: 'Gaia lists no proper motion for it.' }));
     }
+    if (mismatch) {
+      lines.push(el('p', null, 'This source was measured moving ', el('b', { text: formatMotion(mismatch.measured) }), `, ${mismatch.factor >= 10 ? Math.round(mismatch.factor / 10) * 10 : Math.round(mismatch.factor)} times what Gaia lists for that star. Gaia has no entry for the thing that moved.`));
+    }
     if (isNum(star.parallax) && star.parallax > 0.5) {
       lines.push(el('p', null, 'Parallax puts it about ', el('b', { text: `${lightYears(star.parallax)} light-years` }), ' away.'));
     }
     host.append(el('div', { class: 'tbi-gaia' }, id ? outLink(simbadIdUrl(title), title, 'tbi-name') : el('span', { class: 'tbi-name', text: title }), lines));
+  }
+
+  // The source's own measured motion against the Gaia star next to it. A clear motion (five
+  // sigma, half an arcsecond a year or more) that is at least five times what Gaia lists means
+  // the Gaia star is a bystander, however close it sits.
+  function motionMismatch(sel, near) {
+    const m = sel && sel.motion && sel.motion.measured;
+    if (!m || !isNum(m.total) || !isNum(m.errTotal) || near.pmTotal === null) return null;
+    if (m.total < 500 || m.total < 5 * m.errTotal) return null;
+    const factor = m.total / Math.max(near.pmTotal, 1);
+    return factor >= 5 ? { measured: m.total, factor } : null;
   }
 
   function drawHints(sel, near) {

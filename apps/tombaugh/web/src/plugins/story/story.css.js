@@ -112,10 +112,12 @@ export const CSS = `
 .tbs-status.is-ready { font-size: max(15px, calc(var(--tbs-u) * 2)); padding: 14px 22px; border-color: #E53C27; }
 .tbs-status.is-ready .tbs-status__bar { display: none; }
 .tbs-controls {
-  position: absolute; right: calc(var(--tbs-fx) + 12px); top: calc(var(--tbs-fy) + 12px);
+  position: absolute; right: calc(var(--tbs-fx) + 6px); top: calc(var(--tbs-fy) + 6px);
   display: flex; align-items: center; gap: 10px; pointer-events: auto;
+  /* opaque, and tall enough to cover the header buttons it sits on */
+  padding: 8px 8px 8px 14px; background: #171715; border-radius: 2px;
 }
-.tbs-keys { padding: 5px 9px; background: rgba(23, 23, 21, 0.9); border-radius: 2px; font-size: 12px; color: rgba(247, 242, 231, 0.86); white-space: nowrap; }
+.tbs-keys { padding: 5px 0; border-radius: 2px; font-size: 12px; color: rgba(247, 242, 231, 0.86); white-space: nowrap; }
 .tbs-stop {
   appearance: none; height: 32px; padding: 0 14px; background: #171715; color: #F7F2E7; border: 1px solid rgba(247, 242, 231, 0.6);
   border-radius: 2px; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; white-space: nowrap;

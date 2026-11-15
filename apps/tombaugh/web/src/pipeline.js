@@ -642,6 +642,7 @@ function peaksOf(score, n, { threshold = 5, max = 12, border = 2, kind = null, m
   return kept;
 }
 
+const COMPASS_8 = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const KIND_LABEL = { 0: 'changed', 1: 'varies', 2: 'moved', varies: 'varies', moved: 'moved', variable: 'varies', mover: 'moved' };
 
 /**
@@ -680,8 +681,22 @@ export function findChangeCandidates(lib, model, layers, grid, { max = 12 } = {}
     if (!Number.isFinite(ra) || !Number.isFinite(dec)) continue;
     const score = Math.abs(Number.isFinite(c.score) ? c.score : Number.isFinite(c.snr) ? c.snr : Number.isFinite(c.significance) ? c.significance : NaN);
     const kind = KIND_LABEL[c.kind] || 'changed';
+    // Which way a saturated star's halo shifted, as a compass word.
+    let towards = '';
+    if (c.saturated && c.shift && lib.gridPixToSky && Number.isFinite(c.shift.dx) && Number.isFinite(c.shift.dy)) {
+      try {
+        const [ra2, dec2] = lib.gridPixToSky(grid, x + 4 * c.shift.dx, y + 4 * c.shift.dy);
+        const east = (((ra2 - ra + 540) % 360) - 180) * Math.cos((dec * Math.PI) / 180);
+        const north = dec2 - dec;
+        const pa = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+        towards = COMPASS_8[Math.round(pa / 45) % 8];
+      } catch {
+        towards = '';
+      }
+    }
     out.push({
       ...c,
+      towards,
       ra,
       dec,
       x,
@@ -709,13 +724,14 @@ export function clusterCandidates(list, grid, max = 12, radiusArcsec = 30) {
     const home = groups.find((g) => g.members.some((m) => Math.hypot(m.x - c.x, m.y - c.y) <= radiusPix));
     if (home) {
       home.members.push(c);
-      if (c.kind === 'moved') home.kind = 'moved';
+      // A saturated star's verdict comes from its whole halo and is not overruled by a lump in it.
+      if (c.kind === 'moved' && !home.lead.saturated) home.kind = 'moved';
     } else groups.push({ lead: c, kind: c.kind, members: [c] });
   }
   return groups.slice(0, max).map((g) => ({
     ...g.lead,
     kind: g.kind,
-    peaks: g.members.length,
+    peaks: g.members.length + (g.lead.saturated && g.lead.peaks > 1 ? g.lead.peaks - 1 : 0),
     label: `${g.kind} · ${Number.isFinite(g.lead.score) ? g.lead.score.toFixed(1) : '?'}σ`,
   }));
 }

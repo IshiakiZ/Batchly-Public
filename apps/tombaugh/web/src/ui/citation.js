@@ -105,10 +105,12 @@ export function createCitation(container, { onCopy = () => {}, onPng = () => {} 
 
   let current = citationText({});
   text.textContent = current;
+  text.title = current;
 
   function update({ releases = [], retrieved = null, ra = null, dec = null, canPng = true } = {}) {
     current = citationText({ releases, retrieved });
     text.textContent = current;
+    text.title = current;
     png.disabled = !canPng;
     png.title = canPng ? 'Save the current frame as an image' : 'Nothing to save yet: no frame is showing';
     links.textContent = '';
