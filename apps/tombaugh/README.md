@@ -7,8 +7,8 @@ that things which move or change brightness stand out. Because SPHEREx sees a pa
 wavelength in every exposure, Tombaugh predicts what the unchanging sky should look like in each
 frame and shows what is left over.
 
-Built by team Missing Mass for the NASA Space Apps Challenge 2026, challenge "Planet X and
-SPHEREx". Not affiliated with or endorsed by NASA.
+Built by team Missing Mass (Pearce Harshbarger and Reese Harshbarger) for the NASA Space Apps
+Challenge 2026, challenge "Planet X and SPHEREx". Not affiliated with or endorsed by NASA.
 
 The name: Clyde Tombaugh found Pluto in 1930 by flipping between two photographic plates of the
 same star field in a blink comparator and watching for the dot that jumped. The search he was

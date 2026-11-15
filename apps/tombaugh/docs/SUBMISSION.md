@@ -263,8 +263,8 @@ live services on 15 November 2026.
       `https://batch-ly.com/tombaugh/index.html` in a private browser window, on a phone and on a
       laptop.
 - [ ] **Confirm team eligibility.** Teams registered at the Universal Event need two or more
-      members. If Missing Mass has one member, confirm that it is registered at a local event that
-      accepts a team of one, or add a second member before submitting.
+      members. Missing Mass has two: Pearce Harshbarger and Reese Harshbarger. Before submitting,
+      make sure Reese has registered on the Space Apps site and joined the team there.
 - [ ] **Confirm the AI disclosure is complete.** If any other AI tool was used, for example a
       synthetic voice in the video, add it to the SI field and to [AI-USE.md](AI-USE.md).
 
