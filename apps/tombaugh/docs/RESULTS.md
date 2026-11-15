@@ -128,11 +128,14 @@ catalogue input.
 | Epsilon Indi Ba,Bb | 1 | "Moved", 29.5 sigma |
 | WISE 0855-0714 | 1 | the brown dwarf, 6.3 sigma |
 | R Draconis | 1 | "Saturated star: its halo faded between May 2025 and Apr 2026; 14 residual patches belong to it." 13.1 sigma |
-| RW Aurigae | 1 | "Saturated star: its halo brightened between Sep 2025 and Mar 2026; 5 residual patches belong to it." 18.6 sigma. Four patches on neighbouring stars set aside |
+| RW Aurigae | 1 | "Saturated star: its halo brightened between Sep 2025 and Sep 2026; 5 residual patches belong to it." 18.6 sigma. Four patches on neighbouring stars set aside |
 
 Every challenge target is the only entry in its own field's list. Two more nearby objects were
-tried the same way: Teegarden's Star is one entry, "Moved, halo shifted east", 31.2 sigma; the
-Luhman 16 field, in the crowded Galactic plane, lists four.
+tried the same way, and each is again the one entry in its field: Teegarden's Star, "Moved.
+Saturated star: its halo shifted south-east between Aug 2025 and Aug 2026" (31.2 sigma; its
+catalogue motion is 5.1 arcsec a year towards the south-east), and the brown-dwarf pair
+Luhman 16, "Moved" (17.3 sigma), in a crowded Galactic-plane field where 19 patches on stars and
+4 at the edge were set aside.
 
 ### On empty sky: the false-alarm test
 
@@ -141,33 +144,44 @@ with nothing known in them. Eight positions were drawn from a fixed grid (15 deg
 15 degrees in Dec, seeded shuffle) at Galactic latitude above 45 degrees and ecliptic latitude
 below 60 degrees, plus the control field used earlier. Detector 3, 4-arcminute field.
 
-| Field (RA, Dec) | Exposures | Passes | Candidates, first run | Candidates, final | Patches set aside |
-|---|---|---|---|---|---|
-| 172.5, −7.5 | 54 | 3 | 1 (12.4 sigma) | 0 | 3 |
-| 202.5, −7.5 | 54 | 3 | 0 | 0 | 0 |
-| 7.5, −37.5 | 86 | 3 | 2 (14.3, 5.9 sigma) | 0 | 3 |
-| 322.5, −52.5 | 75 | 4 | 1 (5.1 sigma) | 0 | 1 |
-| 337.5, −22.5 | 61 | 3 | 0 | 0 | 0 |
-| 7.5, −7.5 | 55 | 3 | 0 | 0 | 0 |
-| 37.5, +7.5 | 53 | 3 | 1 (5.4 sigma) | 0 | 1 |
-| 352.5, −52.5 | 64 | 3 | 3 (11.6, 11.6, 10.3 sigma) | 0 | 5 |
-| 56.25, +34.22887 | 66 | 3 | 0 | 0 | 4 |
+| Field (RA, Dec) | Exposures | Passes | Candidates, first run | Candidates, final | Set aside: on stars | Set aside: at the edge |
+|---|---|---|---|---|---|---|
+| 172.5, −7.5 | 54 | 3 | 1 (12.4 sigma) | 0 | 1 | 2 |
+| 202.5, −7.5 | 54 | 3 | 0 | 0 | 0 | 0 |
+| 7.5, −37.5 | 86 | 3 | 2 (14.3, 5.9 sigma) | 0 | 1 | 2 |
+| 322.5, −52.5 | 75 | 4 | 1 (5.1 sigma) | 0 | 1 | 0 |
+| 337.5, −22.5 | 61 | 3 | 0 | 0 | 0 | 0 |
+| 7.5, −7.5 | 55 | 3 | 0 | 0 | 0 | 0 |
+| 37.5, +7.5 | 53 | 3 | 1 (5.4 sigma) | 0 | 1 | 0 |
+| 352.5, −52.5 | 64 | 3 | 3 (11.6, 11.6, 10.3 sigma) | 0 | 3 | 2 |
+| 56.25, +34.22887 | 66 | 3 | 0 | 0 | 4 | 0 |
 
 **First run: eight false alarms in five of eight new fields**, all labelled "changed
-brightness". Each one sat on the flank of an ordinary bright star. The cause: a fixed star never
+brightness". Most sat on the flank of an ordinary bright star; some sat where the coverage of
+one pass ends. The cause: a fixed star never
 subtracts perfectly. SPHEREx samples its image with 6-arcsecond pixels and the telescope is
 rotated by half a turn between passes, so the star's image differs a little from pass to pass.
 That leaves a bright patch on one flank and a dark one on the other, each many sigma on a bright
 star. Measured on those stars, the total light inside a 10-arcsecond disc changed by 1 to 5 %
 (at most 3.0 sigma), while single patches reached 14 sigma.
 
-**The fix** (the net-light test): a patch on a fixed source is listed only if the source's total
-light in that disc changed by 5 sigma, which for a bright star is about 9 %. The panel says how
-many patches were set aside, and a listed source says by how much its light changed.
+**The fixes.** The net-light test: a patch on a fixed source is listed only if the source's total
+light in that disc changed by 5 sigma, which for a bright star is about 9 %. The edge test: a
+patch that touches the region where its pass has no data, or the border of the image, is not
+listed, because there is nothing there to compare with (found on the M101 field, whose one
+candidate sat in a corner that one pass did not cover). The panel says how many patches were
+set aside for each reason, and a listed source says by how much its light changed.
 
 **Final run: no candidate in any of the nine fields**, and every challenge target still found.
-Two entries in the Luhman 16 field show the other side of the test: "The total light of this
-source rose by 229 % in Dec 2025 (12.9 sigma)" and "rose by 30 % (8.2 sigma)".
+
+**Saturated stars are compared a year apart.** Half a year apart the telescope is turned round,
+and the halo of a bright star, with its spikes and lopsided skirt, can look fainter or shifted
+when nothing changed. Proxima Centauri was at first listed as "faded between Jul 2025 and Feb
+2026" although it had moved west. A saturated star's verdict now comes first from passes a whole
+number of years apart, where its image is the same. With that rule Teegarden's Star reads
+"shifted south-east" (it was "east"), RW Aurigae "brightened between Sep 2025 and Sep 2026", and
+Proxima "its halo changed between the passes": its motion of 1.2 grid pixels in a year is too
+small for the halo to give a direction, and the tool no longer names one.
 
 ![An empty control field: the residual image shows patches on the stars, and the list is empty](real/control-field.jpg)
 
@@ -199,8 +213,8 @@ This is a test of the tool, not a detection. It turns "nothing was found here" i
 nothing brighter than about 110 µJy moved through this patch during these exposures.
 
 Before the saturated-star step was added, Barnard's field listed 12 false "changed brightness"
-entries, all of them pieces of one moving halo. That fix, and the net-light test above, both came
-from looking at real data.
+entries, all of them pieces of one moving halo. That fix, the net-light test, the edge test and
+the year-apart rule all came from looking at real data.
 
 ## 6. Pluto: following a body that moves
 

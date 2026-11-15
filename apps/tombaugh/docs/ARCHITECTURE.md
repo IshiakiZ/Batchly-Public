@@ -326,7 +326,7 @@ releases in its code.
 
 - **Development.** `node proxy/dev-server.mjs`. Synthetic backend by default;
   `TOMBAUGH_BACKEND=s3` for the public bucket, `TOMBAUGH_BACKEND=irsa` for IRSA only.
-- **Tests.** `node --test` runs the unit tests beside each module (995 pass). `test/e2e.mjs`
+- **Tests.** `node --test` runs the unit tests beside each module (997 pass). `test/e2e.mjs`
   drives the page in a browser with Playwright against the synthetic backend (12 checks pass on
   the bundled page). `tools/crosscheck/` compares the code with Astropy
   ([CROSSCHECK.md](CROSSCHECK.md)).

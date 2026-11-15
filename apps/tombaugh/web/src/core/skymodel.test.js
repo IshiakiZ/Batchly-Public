@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fitSkyModel, predictLayer, residualLayer, evalModelAt, changeMap, residualPassStacks,
-  findCandidates, CHANGE_KINDS, saturatedCores, haloChange, netChange,
+  findCandidates, CHANGE_KINDS, saturatedCores, haloChange, netChange, coverageEdge,
 } from './skymodel.js';
 
 const NOISE = 0.02; // MJy/sr per pixel per exposure
@@ -629,4 +629,61 @@ test('a new source where the model has none is not subject to the net-light test
   assert.equal(found.length, 1);
   assert.equal(found[0].kind, 1);
   assert.equal(found[0].net, undefined);
+});
+
+test('a patch where the coverage of one pass ends is set aside; the same patch in the open is listed', () => {
+  const n = 40;
+  // The middle pass did not cover the top-right corner; a source sits just inside its edge in
+  // that pass only (as the ragged edge of real coverage leaves), and another in the open field.
+  const { layers } = makeField({
+    n,
+    stars: STARS.slice(3),
+    seed: 73,
+    extra(layer, p) {
+      if (p !== 1) return;
+      blob(layer.image, n, 31, 9, 0.3);
+      blob(layer.image, n, 12, 30, 0.3);
+      for (let y = 0; y < 8; y++) for (let x = 32; x < n; x++) { layer.mask[y * n + x] = 1; layer.image[y * n + x] = NaN; }
+    },
+  });
+  const model = fitSkyModel(layers);
+  const stacks = residualPassStacks(model, layers);
+  const edge = coverageEdge(stacks[1], n);
+  assert.equal(edge[3 * n + 36], 1, 'the uncovered corner is edge');
+  assert.equal(edge[20 * n + 20], 0, 'the middle of the field is not');
+  const near = (list, x, y) => list.filter((c) => Math.hypot(c.x - x, c.y - y) < 2);
+  const listed = findCandidates(model, layers, { stacks });
+  assert.equal(near(listed, 31, 9).length, 0, 'the patch at the edge is not listed');
+  assert.equal(near(listed, 12, 30).length, 1, 'the patch in the open is');
+  assert.ok(listed.setAsideEdge >= 1);
+  assert.equal(near(findCandidates(model, layers, { stacks, edges: true }), 31, 9).length, 1, 'edges: true lists it');
+  // A flagged patch in the middle of the field (a saturated core, a bad pixel) is not an edge.
+  const hole = { mask: new Uint8Array(n * n) };
+  for (let y = 18; y < 22; y++) for (let x = 18; x < 22; x++) hole.mask[y * n + x] = 1;
+  assert.equal(coverageEdge(hole, n).reduce((a, v) => a + v, 0), 0);
+});
+
+test('a saturated star is judged between passes a year apart: a halo that only looks fainter half a year on does not hide its motion', () => {
+  const n = 60;
+  // The star moves 0.6 grid pixels a pass towards +x. In the middle pass, half a year on, the
+  // telescope is turned round and the skirt of the star's image is a quarter fainter.
+  const { layers } = makeField({
+    n,
+    stars: STARS,
+    seed: 43,
+    extra(layer, p) { saturatedStar(layer, n, 29 + 0.6 * p, 36, p === 1 ? 30 : 40); },
+  });
+  const cores = saturatedCores(layers, n);
+  assert.equal(cores.length, 1);
+  const model = fitSkyModel(layers);
+  const stacks = residualPassStacks(model, layers);
+  const change = haloChange(stacks, n, cores[0], 30);
+  assert.equal(change.kind, 2, JSON.stringify(change));
+  assert.deepEqual([change.from, change.to], [0, 2], 'the first and last pass, a year apart');
+  assert.ok(change.dx > 0.9 && Math.abs(change.dy) < 0.4, JSON.stringify(change));
+  // With only the first two passes there is no pair a year apart, and the old rule applies.
+  const two = layers.filter((l) => l.pass < 2);
+  const model2 = fitSkyModel(two);
+  const change2 = haloChange(residualPassStacks(model2, two), n, saturatedCores(two, n)[0], 30);
+  assert.deepEqual([change2.from, change2.to], [0, 1]);
 });

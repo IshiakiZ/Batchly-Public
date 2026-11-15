@@ -840,7 +840,8 @@ function haloRadius(core, n) {
  * What the halo of a saturated star did between the first and the last pass, from the residual
  * pass stacks. A star that moved leaves a dipole that flips: positive residuals on the side it
  * moved towards in the last pass, negative there in the first. A star that brightened or faded
- * leaves the same sign all round.
+ * leaves the same sign all round. Pairs of passes a whole number of years apart are judged
+ * first (same orientation of the telescope); other pairs only if those give no verdict.
  * -> { kind: 2 (moved) | 1 (changed in place), dx, dy (unit vector of the motion, grid pixels),
  *      brighter (true / false for kind 1, null when unclear), dipole, monopole, from, to (the
  *      indices of the two passes that differ most; -1 when there is no verdict) }
@@ -874,33 +875,94 @@ export function haloChange(stacks, n, core, rHalo) {
   const usable = stacks.map((st, index) => ({ ...moments(st), index })).filter((q) => q.np >= 12);
   const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0, from: -1, to: -1 };
   if (usable.length < 2) return none;
-  // The pair of passes that differ most, as a shift and as a change of level.
-  let dip = null;
-  let mono = null;
-  for (let i = 0; i < usable.length; i++) {
-    for (let j = i + 1; j < usable.length; j++) {
-      const f = usable[i];
-      const l = usable[j];
-      if (f.ar + l.ar > 0) {
-        const ddx = l.dx - f.dx;
-        const ddy = l.dy - f.dy;
-        const value = Math.hypot(ddx, ddy) / (f.ar + l.ar);
-        if (!dip || value > dip.value) dip = { value, ddx, ddy, from: f.index, to: l.index };
+  // The pair of passes that differ most, as a shift and as a change of level. Passes a whole
+  // number of years apart are compared first: the telescope then has the same orientation, so the
+  // star's own image (its spikes and lopsided skirt) is the same in both and cancels. Half a year
+  // apart the image is turned round, and a halo can look fainter or shifted when nothing changed.
+  const sameSeason = (a, b) => {
+    const dt = Math.abs(stacks[a].mjd - stacks[b].mjd);
+    if (!(dt > 200)) return false;
+    const years = Math.round(dt / 365.25);
+    return years >= 1 && Math.abs(dt - years * 365.25) <= 60;
+  };
+  const verdict = (allow) => {
+    let dip = null;
+    let mono = null;
+    for (let i = 0; i < usable.length; i++) {
+      for (let j = i + 1; j < usable.length; j++) {
+        const f = usable[i];
+        const l = usable[j];
+        if (!allow(f.index, l.index)) continue;
+        if (f.ar + l.ar > 0) {
+          const ddx = l.dx - f.dx;
+          const ddy = l.dy - f.dy;
+          const value = Math.hypot(ddx, ddy) / (f.ar + l.ar);
+          if (!dip || value > dip.value) dip = { value, ddx, ddy, from: f.index, to: l.index };
+        }
+        if (f.a + l.a > 0) {
+          const value = Math.abs(l.m - f.m) / (f.a + l.a);
+          if (!mono || value > mono.value) mono = { value, brighter: l.m > f.m, from: f.index, to: l.index };
+        }
       }
-      if (f.a + l.a > 0) {
-        const value = Math.abs(l.m - f.m) / (f.a + l.a);
-        if (!mono || value > mono.value) mono = { value, brighter: l.m > f.m, from: f.index, to: l.index };
+    }
+    const dipole = dip ? dip.value : 0;
+    const monopole = mono ? mono.value : 0;
+    if (dip && dipole >= 0.3 && dipole >= monopole) {
+      const norm = Math.hypot(dip.ddx, dip.ddy);
+      return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole, monopole, from: dip.from, to: dip.to };
+    }
+    if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
+    return { ...none, dipole, monopole };
+  };
+  const yearly = verdict(sameSeason);
+  if (yearly.from >= 0) return yearly;
+  return verdict(() => true);
+}
+
+/**
+ * Where a pass has no data out to the border of the grid: the pixels of its residual stack that
+ * are flagged and connected (4-neighbours) to the border through flagged pixels. The corners of
+ * a field that the detector did not cover in that pass are such a region; a saturated core or a
+ * bad pixel in the middle of the field is not.
+ * -> Uint8Array(n * n), 1 where the pass ends.
+ */
+export function coverageEdge(stack, n) {
+  const npix = n * n;
+  const edge = new Uint8Array(npix);
+  const mk = stack.mask;
+  const queue = new Int32Array(npix);
+  let tail = 0;
+  const push = (i) => { if (edge[i] === 0 && mk[i] !== 0) { edge[i] = 1; queue[tail++] = i; } };
+  for (let k = 0; k < n; k++) { push(k); push((n - 1) * n + k); push(k * n); push(k * n + n - 1); }
+  for (let head = 0; head < tail; head++) {
+    const i = queue[head];
+    const x = i % n;
+    if (x > 0) push(i - 1);
+    if (x < n - 1) push(i + 1);
+    if (i >= n) push(i - n);
+    if (i < npix - n) push(i + n);
+  }
+  return edge;
+}
+
+/** Is a blob at the edge of the data: on the border of the grid, or touching where its pass ends? */
+function atCoverageEdge(blob, edge, n, reach = 2) {
+  const pixels = blob.pixels && blob.pixels.length ? blob.pixels : [Math.round(blob.y) * n + Math.round(blob.x)];
+  for (const i of pixels) {
+    const x = i % n;
+    const y = (i - x) / n;
+    if (x < 1 || y < 1 || x > n - 2 || y > n - 2) return true;
+    for (let dy = -reach; dy <= reach; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= n) continue;
+      for (let dx = -reach; dx <= reach; dx++) {
+        const xx = x + dx;
+        if (xx < 0 || xx >= n) continue;
+        if (edge[yy * n + xx] !== 0) return true;
       }
     }
   }
-  const dipole = dip ? dip.value : 0;
-  const monopole = mono ? mono.value : 0;
-  if (dip && dipole >= 0.3 && dipole >= monopole) {
-    const norm = Math.hypot(dip.ddx, dip.ddy);
-    return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole, monopole, from: dip.from, to: dip.to };
-  }
-  if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
-  return { ...none, dipole, monopole };
+  return false;
 }
 
 /**
@@ -1073,11 +1135,16 @@ export function changeMap(model, layers, opts = {}) {
  * returned array has a property `setAside`: how many blobs were dropped for that reason.
  * `starLobes: true` lists them anyway.
  *
+ * A blob at the edge of the data (on the border of the grid, or touching the region where its
+ * pass has no coverage, see coverageEdge) is not listed either: where the coverage of one pass
+ * ends, the model has nothing to compare with. The array's `setAsideEdge` counts those;
+ * `edges: true` lists them anyway.
+ *
  * Options: minSnr (default 5), minNet (default 5), max (default 20), radius, minSep, stacks (as
- * for changeMap), starLobes (default false).
+ * for changeMap), starLobes (default false), edges (default false).
  */
 export function findCandidates(model, layers, opts = {}) {
-  const { minSnr = 5, minNet = 5, max = 20, radius = 4, minSep = 1.5, starLobes = false } = opts;
+  const { minSnr = 5, minNet = 5, max = 20, radius = 4, minSep = 1.5, starLobes = false, edges = false } = opts;
   const stacks = opts.stacks || residualPassStacks(model, layers, opts);
   let blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
   const out = [];
@@ -1113,9 +1180,15 @@ export function findCandidates(model, layers, opts = {}) {
   }
   out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
   let setAside = 0;
+  let setAsideEdge = 0;
+  const edgeOf = new Map(); // pass index -> coverageEdge of its stack
   for (const b of blobs) { // already sorted by |snr|, strongest first
     if (out.length >= max) break;
     if (out.some((c) => Math.hypot(c.x - b.x, c.y - b.y) < minSep)) continue;
+    if (!edges) {
+      if (!edgeOf.has(b.passIndex)) edgeOf.set(b.passIndex, coverageEdge(stacks[b.passIndex], model.n));
+      if (atCoverageEdge(b, edgeOf.get(b.passIndex), model.n)) { setAsideEdge++; continue; }
+    }
     let net = null;
     if (b.kind === 1) {
       net = netChange(model, stacks, b);
@@ -1139,5 +1212,6 @@ export function findCandidates(model, layers, opts = {}) {
     });
   }
   out.setAside = setAside;
+  out.setAsideEdge = setAsideEdge;
   return out;
 }

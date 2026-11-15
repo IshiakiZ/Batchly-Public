@@ -146,8 +146,11 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
   /** What the search set aside: the patches every bright fixed star leaves. '' when none. */
   function setAsideNote(list) {
     const k = list && Number.isFinite(list.setAside) ? list.setAside : 0;
-    if (!(k > 0)) return '';
-    return `${k} leftover patch${k === 1 ? '' : 'es'} on bright fixed stars ${k === 1 ? 'was' : 'were'} set aside: the star's total light did not change, only its image did.`;
+    const e = list && Number.isFinite(list.setAsideEdge) ? list.setAsideEdge : 0;
+    const parts = [];
+    if (k > 0) parts.push(`${k} leftover patch${k === 1 ? '' : 'es'} on bright fixed stars ${k === 1 ? 'was' : 'were'} set aside: the star's total light did not change, only its image did.`);
+    if (e > 0) parts.push(`${e} patch${e === 1 ? '' : 'es'} at the edge of the data ${e === 1 ? 'was' : 'were'} set aside: where one pass ends there is nothing to compare with.`);
+    return parts.join(' ');
   }
 
   /** One line on why a candidate is listed: a saturated star's halo, or a source whose total light changed. */

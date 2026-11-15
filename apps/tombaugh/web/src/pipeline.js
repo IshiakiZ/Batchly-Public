@@ -711,6 +711,8 @@ export function findChangeCandidates(lib, model, layers, grid, { max = 12 } = {}
   const list = clusterCandidates(out, grid, max);
   // How many residual patches on bright fixed stars the search set aside (core findCandidates).
   list.setAside = Number.isFinite(raw.setAside) ? raw.setAside : 0;
+  // ... and at the edge of the data, where the coverage of one pass ends.
+  list.setAsideEdge = Number.isFinite(raw.setAsideEdge) ? raw.setAsideEdge : 0;
   return list;
 }
 

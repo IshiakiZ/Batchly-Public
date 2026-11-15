@@ -304,6 +304,23 @@ that is a change of about 9 %. On the control stars the net change was 1 to 5 % 
 listed, and the panel reports how many patches were set aside. A patch with no source under it (a
 new object, a mover in one pass) is not subject to the test.
 
+**The edge of the data.** Where the coverage of one pass ends inside the field, the model has
+nothing to compare that pass with, and the residual there is not a change. A patch that touches
+the region where its pass has no data out to the border of the image, or the border itself, is
+set aside and counted. A flagged region in the middle of the field (a saturated core, a bad
+pixel) is not an edge. Found on the M101 field, whose one candidate sat in a corner that one
+pass did not cover.
+
+**Saturated stars are compared a year apart.** SPHEREx returns to a position every six months
+with the telescope turned round by half a turn. The halo of a bright star is not symmetric (it
+has spikes and a lopsided skirt), so half a year apart it can look fainter or shifted when
+nothing changed. A whole number of years apart the orientation is the same and the star's own
+image cancels. The verdict on a saturated star (moved, brightened, faded) is therefore taken
+first from pairs of passes within 60 days of a whole number of years apart, and from other
+pairs only if those give none. On real data this changed Teegarden's Star from "shifted east"
+to "shifted south-east" (its catalogue direction), and stopped Proxima Centauri from being
+listed as "faded" when it had moved.
+
 ![Residual view of Barnard's Star: one candidate, labelled Moved](real/barnard-residual-one-mover.jpg)
 
 *Real SPHEREx data, detector 3. The blue and red halves are the residual of a star that moved
@@ -519,7 +536,7 @@ These were done on real files or are enforced by tests that run without network 
 | TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight tests are the Astropy comparison and the offsets from Gaia below |
 | Pixel solid angle: 1 MJy/sr over a 6.15 arcsec pixel = 889 microJy | Arithmetic, checked |
 | Parallax worked number: 2 AU at 500 AU = 13.75 arcmin | Arithmetic, checked |
-| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 995 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
+| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 997 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
 | The same inputs given to this code and to Astropy (FITS reading, world coordinates, wavelength lookup, frame format, RICE decompression, ephemeris and motion, reprojection) | 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)) |
 
 ### Checks on real data

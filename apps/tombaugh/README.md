@@ -62,7 +62,7 @@ included (Gaia DR3 for the star; published values for the two brown dwarfs).
 | ![Motion of Barnard's Star measured from three passes, beside Gaia's value](docs/real/barnard-motion.jpg) | ![Validation tab after measuring the five challenge targets](docs/real/validation.jpg) |
 | Motion tab: "Measured 12 ± 2 arcsec/yr; Gaia says 10.4. Agreement within 0.6 sigma." | Validation tab: "Measured 5 of 5 targets. All 34 comparisons agree within 3 sigma." |
 | ![An empty control field: patches on the stars in the residual image, and an empty candidate list](docs/real/control-field.jpg) | ![Recovery curve of bodies planted in real frames, against brightness](docs/real/injection-limit.jpg) |
-| An empty control field. "Nothing stands out. 5 leftover patches on bright fixed stars were set aside." | Injection test on an empty field: half of the bodies planted at 500 AU are recovered at 51 µJy. |
+| An empty control field. "Nothing stands out. 3 leftover patches on bright fixed stars were set aside." | Injection test on an empty field: half of the bodies planted at 500 AU are recovered at 51 µJy. |
 
 ## Try it
 
@@ -295,7 +295,7 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 995 unit tests; they do not touch the network
+# 997 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file
