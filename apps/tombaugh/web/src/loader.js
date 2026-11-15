@@ -113,9 +113,13 @@ export function createLoader({
     throw lastError;
   }
 
-  function searchCached(entry, ra, dec, isCurrent, signal) {
+  function searchCached(entry, ra, dec) {
     if (!entry.searchPromise) {
-      const promise = withRetries(() => api.search(ra, dec, { signal }), isCurrent, 1);
+      // Deliberately not tied to cancel(): the search belongs to the target, not to one load.
+      // If it were cancelled with the load that started it, a second load of the same target
+      // (the user switches detector while the search is still out) would be handed the dying
+      // promise and stop without a word, leaving "Finding exposures" on screen for good.
+      const promise = withRetries(() => api.search(ra, dec, {}), () => true, 1);
       entry.searchPromise = promise;
       promise.catch(() => {
         if (entry.searchPromise === promise) entry.searchPromise = null;
@@ -139,7 +143,7 @@ export function createLoader({
     const entry = entryFor(ra, dec);
     let search;
     try {
-      search = await searchCached(entry, ra, dec, isCurrent, signal);
+      search = await searchCached(entry, ra, dec);
     } catch (err) {
       if (isCancelled(err)) throw cancelledError();
       throw err;

@@ -30,7 +30,7 @@ const FLAGGED = new Set(['unknown-mover', 'cold-atmosphere', 'variable', 'moving
 export const TEXT = Object.freeze({
   idle: 'Click a source in the image. This panel then lists what the catalogues know at that spot, and what its SPHEREx spectrum, brightness and motion suggest.',
   loading: 'Asking SIMBAD what is catalogued here',
-  empty: `Nothing catalogued within ${RADIUS_ARCSEC} arcsec. If it moves or varies, that is interesting.`,
+  empty: `Nothing catalogued within ${RADIUS_ARCSEC} arcsec, and no catalogued fast mover has a track through here. If it moves or varies, that is interesting.`,
   noGaiaLoaded: 'No Gaia stars are loaded for this field yet.',
   noHints: 'Not enough has been measured here to suggest anything. Brighter sources and more loaded frames give the measurements something to work with.',
   hintsHeading: 'What the SPHEREx data suggest',
@@ -156,11 +156,20 @@ function objectItem(o) {
   if (isNum(o.kmag)) mags.push(`K ${o.kmag.toFixed(1)}`);
   if (mags.length) facts.push(el('span', null, 'Magnitude ', el('b', { text: mags.join(', ') })));
   const others = Array.isArray(o.ids) ? o.ids.filter((id) => typeof id === 'string' && id && id !== name).slice(0, 3) : [];
+  // A fast mover found by its track: the catalogue lists it where it used to be.
+  const mv = o.mover && typeof o.mover === 'object' && isNum(o.mover.catalogueSepArcsec) ? o.mover : null;
+  let moverLine = null;
+  if (mv) {
+    const far = mv.catalogueSepArcsec >= 90 ? `${(mv.catalogueSepArcsec / 60).toFixed(1)} arcmin` : `${mv.catalogueSepArcsec.toFixed(0)} arcsec`;
+    const since = isNum(mv.epoch) ? ` since about ${Math.round(mv.epoch)}` : '';
+    moverLine = el('div', { class: 'tbi-facts' }, el('span', null, 'The catalogue lists it ', el('b', { text: far }), ` from here, where it used to be. Its proper motion has carried it to this spot${since}.`));
+  }
   return el(
     'li',
     { class: 'tbi-obj' },
-    el('div', { class: 'tbi-obj-top' }, outLink(o.url, name, 'tbi-name'), el('span', { class: 'tbi-sep', text: sepText(o.sepArcsec) })),
+    el('div', { class: 'tbi-obj-top' }, outLink(o.url, name, 'tbi-name'), el('span', { class: 'tbi-sep', text: mv ? 'on its track' : sepText(o.sepArcsec) })),
     el('div', { class: 'tbi-type', text: typeof o.typeLabel === 'string' && o.typeLabel ? o.typeLabel : 'catalogued object' }),
+    moverLine,
     facts.length ? el('div', { class: 'tbi-facts' }, facts) : null,
     others.length ? el('div', { class: 'tbi-aka', text: `Also ${others.join(', ')}` }) : null,
   );

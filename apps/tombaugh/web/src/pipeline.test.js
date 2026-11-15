@@ -463,8 +463,87 @@ test('measureMotion follows a source from pass to pass and compares it with Gaia
   assert.equal(out.gaia.star, star);
   assert.equal(out.gaia.total, 18000);
 
-  assert.deepEqual(measureMotion({}, layers, GRID, ra, dec), { track: [], measured: null, gaia: null });
+  assert.deepEqual(measureMotion({}, layers, GRID, ra, dec), { track: [], measured: null, gaia: null, saturated: false });
   const noFit = measureMotion(gridLib, layers.slice(0, 3), GRID, ra, dec);
   assert.equal(noFit.track.length, 1);
   assert.equal(noFit.measured, null, 'one pass gives a position but no motion');
+});
+
+test('compareWithGaia: a mover next to a slow Gaia star is a different object', async () => {
+  const { compareWithGaia, photometryTrack } = await import('./pipeline.js');
+  const astro = await import('./core/astrometry.js');
+  // WISE 0855 as measured on real SPHEREx data beside a G = 16.3 star (Nov 2025 to Apr 2026).
+  const mover = {
+    measured: { pmra: -8357, pmdec: 2580, total: 8747, errPmra: 420, errPmdec: 420, ra0: 133.7593, dec0: -7.242, mjd0: 61077 },
+    gaia: { pmra: -6.19, pmdec: 1.93, total: 6.48, star: { ra: 133.758183, dec: -7.241156, pmra: -6.19, pmdec: 1.93 } },
+    track: [{ mjd: 60996.3, ra: 133.759803, dec: -7.242169 }, { mjd: 61157.9, ra: 133.758767, dec: -7.241852 }],
+  };
+  assert.equal(compareWithGaia(mover).verdict, 'different');
+  // Epsilon Indi B: measured 4.7 +- 0.6 arcsec/yr at PA 128, Gaia 4.684 at PA 122: the same star.
+  const same = {
+    measured: { pmra: 3704, pmdec: -2894, total: 4700, errPmra: 430, errPmdec: 430, ra0: 331.09, dec0: -56.8, mjd0: 61000 },
+    gaia: { pmra: 3972, pmdec: -2482, total: 4684, star: { ra: 331.0767, dec: -56.7933, pmra: 3972, pmdec: -2482, parallax: 270.7 } },
+    track: [],
+  };
+  assert.equal(compareWithGaia(same).verdict, 'consistent');
+  // A quiet star whose two-pass fit wobbles by a few tenths of an arcsecond is still that star.
+  assert.equal(compareWithGaia({ measured: { pmra: 400, pmdec: -300, errPmra: 100, errPmdec: 100 }, gaia: { pmra: 5, pmdec: -3, total: 6 } }).verdict, 'consistent');
+  assert.equal(compareWithGaia({ measured: null, gaia: { pmra: 5, pmdec: -3, total: 6 } }).verdict, 'unmeasured');
+  assert.equal(compareWithGaia({ measured: { pmra: 1, pmdec: 1 }, gaia: null }).verdict, 'none');
+  assert.equal(compareWithGaia(null).verdict, 'none');
+
+  // The aperture follows the fitted line for the mover...
+  const fit = photometryTrack(astro, mover, 'different');
+  assert.equal(fit.kind, 'fit');
+  const a = fit.track(60996.3), b = fit.track(61157.9);
+  const moved = astro.separationArcsec(a.ra, a.dec, b.ra, b.dec);
+  assert.ok(Math.abs(moved - 8.747 * (161.6 / 365.25)) < 0.05, `moved ${moved} arcsec in 161.6 days`);
+  assert.ok(b.ra < a.ra, 'westward');
+  // ...and Gaia's own track for a fast star that is that star...
+  const g = photometryTrack(astro, same, 'consistent');
+  assert.equal(g.kind, 'gaia');
+  const p0 = g.track(60800), p1 = g.track(60800 + 365.25);
+  const yr = astro.separationArcsec(p0.ra, p0.dec, p1.ra, p1.dec);
+  assert.ok(Math.abs(yr - 4.684) < 0.05, `one year of Gaia motion: ${yr}`);
+  // ...and stays put for everything slow.
+  assert.equal(photometryTrack(astro, { measured: null, gaia: { pmra: 5, pmdec: -3, total: 6, star: {} } }, 'unmeasured'), null);
+  assert.equal(photometryTrack(astro, null, 'none'), null);
+});
+
+test('fillMaskedForDisplay closes enclosed holes and leaves uncovered sky empty', async () => {
+  const { fillMaskedForDisplay } = await import('./pipeline.js');
+  const n = 40;
+  const image = new Float32Array(n * n);
+  const mask = new Uint8Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) image[y * n + x] = 1 + 50 * Math.exp(-((x - 20) ** 2 + (y - 20) ** 2) / 18);
+  // A saturated core (radius 3) and a single cosmic-ray pixel.
+  let core = 0;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (Math.hypot(x - 20, y - 20) <= 3) { mask[y * n + x] = 1; image[y * n + x] = NaN; core++; }
+  mask[5 * n + 30] = 1;
+  // A strip the detector never covered, along one edge.
+  for (let y = 0; y < n; y++) for (let x = 0; x < 3; x++) { mask[y * n + x] = 1; image[y * n + x] = NaN; }
+  const before = Float32Array.from(image);
+
+  const out = fillMaskedForDisplay(image, mask, n);
+  assert.equal(out.filled, core + 1);
+  assert.deepEqual(image, before, 'the input is not touched');
+  // The core is a plateau at about the level of its rim: bright, finite, not above the rim.
+  const rim = image[20 * n + 24];
+  for (let y = 17; y <= 23; y++) for (let x = 17; x <= 23; x++) {
+    const v = out.image[y * n + x];
+    assert.ok(Number.isFinite(v));
+    // Just outside the hole the star is between 21.6 (r = 4) and 29.7 (r = 3.2).
+    if (Math.hypot(x - 20, y - 20) <= 3) assert.ok(v > 0.8 * rim && v < 31, `core pixel ${v}`);
+  }
+  assert.equal(out.mask[20 * n + 20], 0);
+  assert.ok(Math.abs(out.image[5 * n + 30] - 1) < 0.05, 'the lone pixel takes the sky around it');
+  // The edge strip stays missing.
+  assert.equal(out.mask[10 * n + 1], 1);
+  assert.ok(Number.isNaN(out.image[10 * n + 1]));
+  // Nothing to do: null.
+  assert.equal(fillMaskedForDisplay(new Float32Array(16).fill(1), null, 4), null);
+  // A hole bigger than the limit is left alone.
+  const big = new Uint8Array(n * n);
+  for (let y = 5; y < 35; y++) for (let x = 5; x < 35; x++) big[y * n + x] = 1;
+  assert.equal(fillMaskedForDisplay(before.map((v) => (Number.isFinite(v) ? v : 1)), big, n), null);
 });

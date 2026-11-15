@@ -345,6 +345,154 @@ export function centroid(image, mask, n, x0, y0, opts = {}) {
 }
 
 /**
+ * Radius, in pixels, of the masked blob that contains (x0, y0): rings one pixel wide are walked
+ * outward until two in a row are less than a quarter masked. 0 when the centre is not masked.
+ * This is what a saturated star looks like once the pipeline's flags have been applied.
+ */
+export function maskedCoreRadius(image, mask, n, x0, y0, rMax = 16) {
+  if (!image || !(n > 0) || !isNum(x0) || !isNum(y0)) return 0;
+  const ny = Math.floor(image.length / n);
+  const lim = rMax + 2;
+  const bad = new Float64Array(lim + 1);
+  const all = new Float64Array(lim + 1);
+  for (let y = Math.max(0, Math.floor(y0 - lim)); y <= Math.min(ny - 1, Math.ceil(y0 + lim)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - lim)); x <= Math.min(n - 1, Math.ceil(x0 + lim)); x++) {
+      const k = Math.round(Math.hypot(x - x0, y - y0));
+      if (k > lim) continue;
+      const i = y * n + x;
+      all[k] += 1;
+      if ((mask && mask[i]) || !Number.isFinite(image[i])) bad[k] += 1;
+    }
+  }
+  const frac = (k) => (all[k] > 0 ? bad[k] / all[k] : 0);
+  if (frac(0) < 0.5 && frac(1) < 0.5) return 0;
+  for (let k = 1; k <= rMax; k++) {
+    if (frac(k) < 0.25 && frac(k + 1) < 0.25) return k - 0.5;
+  }
+  return rMax;
+}
+
+/**
+ * Position of a source whose core is masked (a saturated star), from its unsaturated wings.
+ *
+ * Method: the same Gaussian-windowed first moment as centroid(), with a window wide enough to
+ * reach past the masked core (sigma = core radius + 2 pixels by default), and with one extra
+ * rule: a pixel counts only if the pixel opposite it, mirrored through the current centre, is
+ * usable too. The set of pixels used is then point-symmetric about the centre, so a hole of any
+ * shape cannot pull the answer to one side: for a profile that is symmetric about its true
+ * centre the only fixed point is that centre. Steps are damped, and damped further whenever
+ * the step reverses, so the iteration settles for steep and shallow wings alike.
+ *
+ * Returns the same fields as centroid(), plus method: 'wings' and rCore (the masked radius,
+ * pixels). ok is false when the centre is not masked (use centroid() instead), when the wings
+ * are too faint (windowed signal-to-noise below minSnr, default 8), or when the centre walks
+ * more than rCore + 3 pixels from the first guess.
+ * Errors: noise propagation of the windowed moment, with a floor of 0.15 pixel per axis because
+ * the mirrored pixel set changes in steps as the centre moves.
+ */
+export function centroidWings(image, mask, n, x0, y0, opts = {}) {
+  const out = {
+    x: x0, y: y0, flux: NaN, ok: false, snr: 0, background: NaN, noise: NaN,
+    xErr: NaN, yErr: NaN, fluxErr: NaN, peak: NaN, iterations: 0, validFrac: 0,
+    method: 'wings', rCore: 0,
+  };
+  if (!image || !(n > 0) || !isNum(x0) || !isNum(y0)) return out;
+  const ny = Math.floor(image.length / n);
+  const rCore = maskedCoreRadius(image, mask, n, x0, y0, isNum(opts.rMax) ? opts.rMax : 16);
+  out.rCore = rCore;
+  if (!(rCore > 0)) return out;
+  const sigma = isNum(opts.sigma) && opts.sigma > 0 ? opts.sigma : Math.max(2.5, rCore + 2);
+  const minSnr = isNum(opts.minSnr) ? opts.minSnr : 8;
+  const R = Math.ceil(rCore + 2.5 * sigma);
+  const inv2s2 = 1 / (2 * sigma * sigma);
+  const usable = (xx, yy) => {
+    if (xx < 0 || yy < 0 || xx >= n || yy >= ny) return false;
+    const i = yy * n + xx;
+    return !(mask && mask[i]) && Number.isFinite(image[i]);
+  };
+
+  // Background and noise from a ring beyond the window (its faint wings are still in there,
+  // equally on all sides, so they cost a little signal and no bias).
+  const sky = [];
+  for (let yy = Math.floor(y0 - R - 5); yy <= Math.ceil(y0 + R + 5); yy++) {
+    for (let xx = Math.floor(x0 - R - 5); xx <= Math.ceil(x0 + R + 5); xx++) {
+      const r = Math.hypot(xx - x0, yy - y0);
+      if (r <= R || r > R + 5 || !usable(xx, yy)) continue;
+      sky.push(image[yy * n + xx]);
+    }
+  }
+  if (sky.length < 12) {
+    // The window reaches the edge of the image: fall back to the faintest fifth inside it.
+    for (let yy = Math.floor(y0 - R); yy <= Math.ceil(y0 + R); yy++) {
+      for (let xx = Math.floor(x0 - R); xx <= Math.ceil(x0 + R); xx++) if (usable(xx, yy)) sky.push(image[yy * n + xx]);
+    }
+    sky.sort((a, b) => a - b);
+    sky.length = Math.max(1, Math.floor(sky.length / 5));
+  }
+  const bg = medianOf(sky);
+  const noise = 1.4826 * medianOf(sky.map((v) => Math.abs(v - bg)));
+  out.background = bg;
+  out.noise = noise;
+
+  let x = x0, y = y0;
+  let damp = 0.7;
+  let px = 0, py = 0;
+  let sw = 0, sw2 = 0, gx = 0, gy = 0, vx = 0, vy = 0, used = 0, total = 0;
+  const is2 = 1 / (sigma * sigma);
+  const maxIter = isNum(opts.maxIter) ? opts.maxIter : 60;
+  const tol = isNum(opts.tol) ? opts.tol : 0.02;
+  const recent = [];
+  let converged = false;
+  for (let it = 0; it < maxIter; it++) {
+    sw = 0; sw2 = 0; gx = 0; gy = 0; vx = 0; vy = 0; used = 0; total = 0;
+    let sx = 0, sy = 0;
+    for (let yy = Math.floor(y - R); yy <= Math.ceil(y + R); yy++) {
+      for (let xx = Math.floor(x - R); xx <= Math.ceil(x + R); xx++) {
+        const dx = xx - x, dy = yy - y;
+        const r2 = dx * dx + dy * dy;
+        if (r2 > R * R) continue;
+        total++;
+        if (!usable(xx, yy) || !usable(Math.round(2 * x - xx), Math.round(2 * y - yy))) continue;
+        used++;
+        const d = image[yy * n + xx] - bg;
+        const w = Math.exp(-r2 * inv2s2);
+        sw += w * d; sx += w * d * dx; sy += w * d * dy; sw2 += w * w;
+        gx += w * d * (1 - dx * dx * is2); gy += w * d * (1 - dy * dy * is2);
+        vx += w * w * dx * dx; vy += w * w * dy * dy;
+      }
+    }
+    out.iterations = it + 1;
+    if (!(sw > 0) || used < 12) return out;
+    let ddx = damp * sx / sw, ddy = damp * sy / sw;
+    const step = Math.hypot(ddx, ddy);
+    if (step > 1) { ddx /= step; ddy /= step; }
+    if (ddx * px + ddy * py < 0) damp = Math.max(0.1, damp * 0.5);
+    px = ddx; py = ddy;
+    x += ddx; y += ddy;
+    if (Math.hypot(x - x0, y - y0) > rCore + 3) return out;
+    recent.push([x, y, step]);
+    if (recent.length > 8) recent.shift();
+    if (step < tol) { converged = true; break; }
+  }
+  if (!converged && recent.length === 8 && recent.every((r) => r[2] < 0.15)) {
+    // The mirrored pixel set changes in steps, so the centre can hop between two close values
+    // for ever: take the middle of the last hops.
+    x = recent.reduce((a, r) => a + r[0], 0) / recent.length;
+    y = recent.reduce((a, r) => a + r[1], 0) / recent.length;
+    converged = true;
+  }
+  out.validFrac = total > 0 ? used / total : 0;
+  out.snr = noise > 0 ? sw / (noise * Math.sqrt(sw2)) : (sw > 0 ? Infinity : 0);
+  const ex = Math.abs(gx) > 0 ? (noise * Math.sqrt(vx)) / Math.abs(gx) : NaN;
+  const ey = Math.abs(gy) > 0 ? (noise * Math.sqrt(vy)) / Math.abs(gy) : NaN;
+  out.xErr = Math.hypot(isNum(ex) ? Math.min(ex, 2) : 0.5, 0.15);
+  out.yErr = Math.hypot(isNum(ey) ? Math.min(ey, 2) : 0.5, 0.15);
+  if (!converged || !(out.snr >= minSnr)) return out;
+  out.x = x; out.y = y; out.ok = true;
+  return out;
+}
+
+/**
  * Rule-of-thumb 1-sigma centroid error per axis, in pixels, for a Gaussian PSF in
  * background-limited noise: the Cramer-Rao bound sigma_x = sqrt(2) * sigma_psf / SNR
  * = 0.60 * FWHM / SNR (King 1983, PASP 95, 163; Condon 1997, PASP 109, 166), with SNR the

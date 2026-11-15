@@ -28,7 +28,7 @@ export const FALLBACK_TARGETS = Object.freeze([
     blurb: 'A brown dwarf at about 250 K',
     ra: 133.795129,
     dec: -7.245147,
-    epoch: 2014.3,
+    epoch: 2010.35,
     pmra: -8118,
     pmdec: 680,
     parallax: 439.0,

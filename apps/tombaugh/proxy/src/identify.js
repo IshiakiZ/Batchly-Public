@@ -291,6 +291,88 @@ export function buildIdentifyQuery(ra, dec, radiusDeg, { extended = false, top =
   );
 }
 
+/** Fast movers are looked for this far from the position (degrees): 6 arcmin. */
+export const MOVER_SEARCH_RADIUS = 0.1;
+/** ... and count as fast above this proper motion (mas/yr). */
+export const MOVER_MIN_PM = 300;
+/** A click this close to a fast mover's track (arcsec) is taken to be on it. */
+export const MOVER_TOLERANCE_ARCSEC = 15;
+
+/**
+ * The ADQL for catalogued fast movers around a position. A star that moves several arcseconds
+ * a year is nowhere near its catalogue coordinates by now (Barnard's Star: 4.6 arcmin since
+ * 2000), so a small cone around where it is today finds nothing. This asks for every object
+ * within `radiusDeg` whose proper motion exceeds `minPm`; matchMovers() then keeps the ones
+ * whose track passes through the position.
+ */
+export function buildMoversQuery(ra, dec, { radiusDeg = MOVER_SEARCH_RADIUS, minPm = MOVER_MIN_PM, top = 60 } = {}) {
+  checkPosition(ra, dec);
+  const r = fixed(Math.max(0.01, Math.min(0.5, Number(radiusDeg) || MOVER_SEARCH_RADIUS)), 6);
+  const a = fixed(ra, 7);
+  const d = fixed(dec, 7);
+  const n = Math.max(1, Math.min(200, Math.floor(top) || 60));
+  const pm2 = Math.round(Math.max(1, Number(minPm) || MOVER_MIN_PM) ** 2);
+  return (
+    `SELECT TOP ${n} main_id, otype, ra, dec, pmra, pmdec, plx_value, sp_type, ` +
+    `DISTANCE(POINT('ICRS', ra, dec), POINT('ICRS', ${a}, ${d})) AS dist ` +
+    'FROM basic ' +
+    `WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${a}, ${d}, ${r})) = 1 ` +
+    `AND pmra * pmra + pmdec * pmdec > ${pm2} ` +
+    'ORDER BY dist'
+  );
+}
+
+/**
+ * Of a list of catalogued fast movers, those whose track passes through (ra, dec).
+ *
+ * The catalogue position of a mover is where it was at some earlier date, and that date is
+ * not always the same: most stars are listed at epoch 2000, but a brown dwarf found by WISE
+ * may be listed where WISE saw it in 2010. So instead of carrying each object to one assumed
+ * date, the whole path from the catalogue position along the proper motion is considered, for
+ * up to (current year - 1990) years, and the object matches when the position lies within
+ * `tolArcsec` of that path. Small-angle geometry: fine over the few arcminutes involved.
+ *
+ * Each match is returned with sepArcsec = its distance from the path, and
+ *   mover: { catalogueSepArcsec, pm (mas/yr), years (of motion from the catalogue position to
+ *            the point of the path nearest the position), epoch (current year - years) }.
+ */
+export function matchMovers(objects, ra, dec, { year = new Date().getUTCFullYear() + 0.5, tolArcsec = MOVER_TOLERANCE_ARCSEC } = {}) {
+  const out = [];
+  const maxYears = Math.max(1, year - 1990);
+  const cosd = Math.cos((dec * Math.PI) / 180);
+  for (const o of objects || []) {
+    if (!o || !Number.isFinite(o.pmra) || !Number.isFinite(o.pmdec) || !Number.isFinite(o.ra) || !Number.isFinite(o.dec)) continue;
+    const pm = Math.hypot(o.pmra, o.pmdec);
+    if (!(pm >= 1)) continue;
+    let dRa = ra - o.ra;
+    if (dRa > 180) dRa -= 360;
+    if (dRa < -180) dRa += 360;
+    const dE = dRa * cosd * 3600;
+    const dN = (dec - o.dec) * 3600;
+    const ux = o.pmra / pm;
+    const uy = o.pmdec / pm;
+    const along = dE * ux + dN * uy;
+    const perp = Math.abs(dE * uy - dN * ux);
+    const length = (pm / 1000) * maxYears;
+    const clamped = Math.max(0, Math.min(length, along));
+    const dist = Math.hypot(perp, along - clamped);
+    if (dist > tolArcsec) continue;
+    const years = clamped / (pm / 1000);
+    out.push({
+      ...o,
+      sepArcsec: Math.round(dist * 100) / 100,
+      mover: {
+        catalogueSepArcsec: Math.round(Math.hypot(dE, dN) * 10) / 10,
+        pm: Math.round(pm * 10) / 10,
+        years: Math.round(years * 10) / 10,
+        epoch: Math.round((year - years) * 10) / 10,
+      },
+    });
+  }
+  out.sort((p, q) => p.sepArcsec - q.sepArcsec);
+  return out;
+}
+
 /**
  * CSV to rows of strings. Handles quoted fields, doubled quotes, commas and line breaks inside
  * quotes, CRLF or LF, a byte-order mark, and skips blank lines. Never throws.
@@ -591,12 +673,14 @@ function queryRefused(err) {
  * one is sent once. Rejects with UpstreamError: status 400 (bad input, not retryable),
  * 502 (SIMBAD failed) or 504 (timeout); `retryable` says whether trying again can help.
  */
-export async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.fetch, timeoutMs = 8000, extended = true } = {}) {
+export async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.fetch, timeoutMs = 8000, extended = true, movers = true, year = NaN } = {}) {
   checkPosition(ra, dec);
   if (typeof fetchImpl !== 'function') {
     throw new UpstreamError('No fetch implementation is available', { kind: 'network', retryable: false });
   }
   const radius = clampRadius(radiusDeg);
+  // Asked at the same time as the cone, so the answer is not held up by it.
+  const moversPromise = movers ? simbadCsv(buildMoversQuery(ra, dec), fetchImpl, timeoutMs).catch(() => null) : null;
   let text = null;
   let usedExtended = false;
   if (extended) {
@@ -613,7 +697,27 @@ export async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.
   // SIMBAD's CIRCLE is exact, but keep the promise of the radius on our side as well.
   const limit = radius * 3600 * 1.001 + 0.01;
   const objects = parseIdentifyCsv(text, ra, dec).filter((o) => o.sepArcsec === null || o.sepArcsec <= limit);
-  return { objects, source: 'simbad' };
+  // Fast movers whose catalogue position is arcminutes away but whose track passes through
+  // here. Extra information: a failure of this second question never fails the first.
+  const moversText = moversPromise ? await moversPromise : null;
+  if (moversText) {
+    try {
+      const found = matchMovers(parseIdentifyCsv(moversText, ra, dec), ra, dec, Number.isFinite(year) ? { year } : {});
+      const known = new Set(objects.map((o) => o.name));
+      for (const m of found) {
+        if (known.has(m.name)) {
+          const same = objects.find((o) => o.name === m.name);
+          if (same) same.mover = m.mover;
+        } else {
+          objects.push(m);
+        }
+      }
+      objects.sort((p, q) => (p.sepArcsec ?? Infinity) - (q.sepArcsec ?? Infinity));
+    } catch {
+      // the plain cone answer stands
+    }
+  }
+  return { objects: objects.slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
 }
 
 const SYNTHETIC_KINDS = {

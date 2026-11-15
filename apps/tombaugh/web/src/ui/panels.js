@@ -68,14 +68,16 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
   // ---- Light curve ---------------------------------------------------------------------------
   const lc = sourceHeader();
   const lcHost = h('div', { class: 'plot-host' });
-  const lcNote = h('p', { class: 'panel-note' }, 'Brightness over time, relative to the source’s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.');
+  const LC_NOTE = 'Brightness over time, relative to the source’s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
+  const lcNote = h('p', { class: 'panel-note' }, LC_NOTE);
   clear(els.lightcurveBody).append(lc.head, lcHost, lcNote);
   const lightPlot = mountPlot(lcHost, plots.createLightCurvePlot, 'Light curve', 'The light-curve plot is not available in this build.');
 
   // ---- Motion --------------------------------------------------------------------------------
   const mo = sourceHeader();
   const moHost = h('div', { class: 'plot-host is-short' });
-  const moNote = h('p', { class: 'panel-note' }, 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.');
+  const MO_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+  const moNote = h('p', { class: 'panel-note' }, MO_NOTE);
   clear(els.motionBody).append(mo.head, moHost, moNote);
   const motionMeter = mountPlot(moHost, plots.createMotionMeter, 'Motion', 'The motion meter is not available in this build.');
 
@@ -203,6 +205,7 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
         }
       }
       if (note) lcNote.textContent = note;
+      else lcNote.textContent = LC_NOTE;
     },
 
     setMotion({ measured = null, gaia = null, track = [], title = '', note = '' } = {}) {
@@ -215,6 +218,7 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
         }
       }
       if (note) moNote.textContent = note;
+      else moNote.textContent = MO_NOTE;
     },
 
     /** status: 'idle' | 'working' | 'ready' | 'unavailable' */

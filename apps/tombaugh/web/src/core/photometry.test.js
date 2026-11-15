@@ -25,6 +25,7 @@ export async function resolve(specifier, context, nextResolve) {
 
 const {
   aperturePhot, extractSpectrum, binSpectrum, lightCurve, fitSpectrumModel, fluxToABmag,
+  saturationRadius, wingPhot, wingPoints,
   MJYSR_TO_UJY_PER_PIX, PHOT_BAD_MASK, PHOT_BAD_BITS,
 } = await import('./photometry.js');
 const { channelOf, channelRange } = await import('./frames.js');
@@ -311,6 +312,77 @@ test('lightCurve: brightness changes show despite every point being a different 
   assert.ok(curve.every((c) => c.flux_uJy > 0));
   assert.deepEqual(lightCurve([]), []);
   assert.deepEqual(lightCurve([{ flux_uJy: 5, err_uJy: 1, wave: 2, mjd: 1, det: 3, ok: true }]), [], 'one point: no model');
+});
+
+/** A bright star with real-looking wings whose core the pipeline has flagged as saturated. */
+function saturatedFrame({ x0, y0, flux, wave0, mjd, seed, rCore = 2.2 }) {
+  // Core plus a broad halo holding 12% of the light, so there is something to measure outside.
+  const core = makeFrame({ nx: 45, ny: 45, x0, y0, flux: 0.88 * flux, seed, wave0, mjd, noise: 0.01 });
+  const halo = makeFrame({ nx: 45, ny: 45, x0, y0, flux: 0.12 * flux, sigma: 3.2, seed: seed + 500, wave0, mjd, noise: 0 });
+  for (let i = 0; i < core.image.length; i++) core.image[i] += halo.image[i] - SKY - ZODI;
+  for (let y = 0; y < core.ny; y++) {
+    for (let x = 0; x < core.nx; x++) {
+      if (Math.hypot(x - x0, y - y0) > rCore) continue;
+      const i = y * core.nx + x;
+      core.flags[i] = (1 << 0) | (1 << 2) | (1 << 26) | (1 << 21);
+      core.image[i] = 14 + 3 * Math.sin(i); // what a saturated ramp leaves behind: not the star
+    }
+  }
+  return core;
+}
+
+test('a saturated star: the flagged core is found and the wings carry its light curve', () => {
+  const [x0, y0] = [22.3, 21.6];
+  const frames = [];
+  const truth = [];
+  for (let k = 0; k < 60; k++) {
+    const mjd = 60800 + k * 8;
+    const vary = 1 + 0.4 * Math.sin((2 * Math.PI * (mjd - 60800)) / 245); // a Mira-like swing
+    const wave0 = 1.63 * Math.pow(2.41 / 1.63, (k * 0.618) % 1);
+    const colour = Math.pow(wave0 / 2, -1.2);
+    truth.push({ mjd, vary });
+    frames.push(saturatedFrame({ x0: x0 + 0.3 * Math.sin(k), y0: y0 + 0.3 * Math.cos(k * 1.7), flux: 4000 * colour * vary, wave0, mjd, seed: 100 + k }));
+  }
+  // The frames are dithered: each has its own WCS zero point so the star stays at one sky position.
+  const [ra, dec] = skyOf(x0, y0);
+  frames.forEach((f, k) => {
+    f.wcs = { ra0: RA0 - 0.3 * Math.sin(k) * PIX_DEG, dec0: DEC0 - 0.3 * Math.cos(k * 1.7) * PIX_DEG };
+  });
+
+  const r = saturationRadius(frames[0], x0 + 0.3 * Math.sin(0), y0 + 0.3 * Math.cos(0));
+  assert.ok(r >= 1.5 && r <= 3.5, `core radius ${r}`);
+  assert.equal(saturationRadius(makeFrame({}), 20.3, 19.6), 0, 'a clean star has no core');
+
+  const pts = extractSpectrum(frames, ra, dec, { wcsFactory });
+  assert.equal(pts.length, 60);
+  assert.ok(pts.every((p) => p.flagged && p.sat && p.wingOk), 'every core is flagged, every ring is usable');
+  assert.ok(pts.every((p) => p.wingR1 === pts[0].wingR1 && p.wingR2 === pts[0].wingR2), 'one ring for all frames');
+  assert.ok(pts[0].wingR1 >= 2.5 && pts[0].wingR1 <= 4.5, `ring starts at ${pts[0].wingR1}`);
+  assert.equal(binSpectrum(pts).length, 0, 'no absolute spectrum from a saturated core');
+
+  const lc = lightCurve(pts);
+  assert.equal(lc.length, 60);
+  assert.ok(lc.every((p) => p.method === 'wings'));
+  // The ratio follows the injected variation (up to one overall factor).
+  const scale = lc.reduce((a, p, k) => a + p.ratio / truth[k].vary, 0) / lc.length;
+  let worst = 0;
+  lc.forEach((p, k) => { worst = Math.max(worst, Math.abs(p.ratio / scale / truth[k].vary - 1)); });
+  assert.ok(worst < 0.08, `largest departure from the injected light curve: ${worst}`);
+  const swing = Math.max(...lc.map((p) => p.ratio)) / Math.min(...lc.map((p) => p.ratio));
+  assert.ok(swing > 1.9 && swing < 2.8, `peak to trough ${swing} (injected 2.33)`);
+
+  // An unsaturated source is left alone, and a few cosmic-ray hits do not make it "saturated".
+  const clean = [];
+  for (let k = 0; k < 20; k++) clean.push(makeFrame({ seed: 300 + k, wave0: 1.7 + 0.03 * k, mjd: 60800 + k }));
+  for (let k = 0; k < 4; k++) clean[k].flags[20 * 41 + 20] = 1;
+  const cp = extractSpectrum(clean, ...skyOf(20.3, 19.6), { wcsFactory });
+  assert.ok(cp.every((p) => !p.sat));
+  assert.equal(wingPoints(cp), null);
+  assert.ok(lightCurve(cp).every((p) => p.method === 'aperture'));
+
+  const w = wingPhot(frames[0], ra, dec, 3.5, 6, { wcsFactory });
+  assert.ok(w.ok && w.flux_uJy > 0 && w.err_uJy > 0 && w.good > 0.95);
+  assert.equal(wingPhot(frames[0], ...skyOf(1, 1), 3.5, 6, { wcsFactory }).ok, false, 'ring off the frame');
 });
 
 test('fluxToABmag', () => {

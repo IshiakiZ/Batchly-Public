@@ -56,8 +56,13 @@ export const TARGETS = [
   {
     id: 'wise0855',
     name: 'WISE 0855-0714',
-    // Position from the challenge statement, 08h55m10.831s -07d14m42.53s, taken as epoch 2014.3.
-    ra: 133.795129, dec: -7.245147, epoch: 2014.3,
+    // Position from the challenge statement, 08h55m10.831s -07d14m42.53s. These are the
+    // coordinates in the object's WISE designation (J085510.83-071442.5), so they are where
+    // WISE saw it in its first pass over this field, May 2010 (epoch 2010.35), not where it was
+    // when the discovery was published in 2014. Checked against the sky: carried forward from
+    // 2010.35 with the proper motion below, the position lands 0.2 arcsec from the source
+    // SPHEREx sees at 4.4 to 5.0 um in November 2025; from 2014.3 it would miss by 31 arcsec.
+    ra: 133.795129, dec: -7.245147, epoch: 2010.35,
     pmra: -8118, pmdec: 680, parallax: 439,
     det: 6, fov: 4,
     kind: 'cold', challenge: true,

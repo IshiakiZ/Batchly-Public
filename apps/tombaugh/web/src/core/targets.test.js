@@ -42,7 +42,7 @@ test('TARGETS: values match the brief', () => {
   // 08h55m10.831s -07d14m42.53s
   assert.ok(Math.abs(w.ra - (8 + 55 / 60 + 10.831 / 3600) * 15) < 1e-6);
   assert.ok(Math.abs(w.dec - -(7 + 14 / 60 + 42.53 / 3600)) < 1e-6);
-  assert.deepEqual([w.epoch, w.pmra, w.pmdec, w.parallax, w.det, w.fov], [2014.3, -8118, 680, 439, 6, 4]);
+  assert.deepEqual([w.epoch, w.pmra, w.pmdec, w.parallax, w.det, w.fov], [2010.35, -8118, 680, 439, 6, 4]);
   const e = byId('eps-indi-b');
   assert.deepEqual([e.ra, e.dec, e.pmra, e.pmdec, e.parallax, e.det, e.fov], [331.0438, -56.7827, 3960.9, -2539.2, 274.8, 6, 6]);
   assert.deepEqual([byId('rw-aur').det, byId('rw-aur').fov, byId('r-dra').det, byId('r-dra').fov], [2, 4, 3, 4]);
@@ -68,15 +68,20 @@ test('positionNow uses propagate: movers move, the galaxy does not', () => {
   const pp = positionNow(b, mjd);
   const shift = separationArcsec(p.ra, p.dec, pp.ra, pp.dec);
   assert.ok(shift > 0.01 && shift < 0.56, `parallax shift ${shift}`);
-  // WISE 0855 from 2014.3 to 2026.5: 12.2 yr at 8.146 arcsec/yr = 99.4 arcsec, nearly due west
+  // WISE 0855 from 2010.35 (the WISE epoch of its designation) to 2026.5: 16.15 yr at
+  // 8.146 arcsec/yr = 131.6 arcsec, nearly due west
   const w = byId('wise0855');
   const pw = positionNow(w, mjd, { parallax: false });
-  assert.ok(Math.abs(separationArcsec(w.ra, w.dec, pw.ra, pw.dec) - 99.4) < 0.2);
+  assert.ok(Math.abs(separationArcsec(w.ra, w.dec, pw.ra, pw.dec) - 131.6) < 0.2);
+  // Checked against real SPHEREx data: the 4.4-5.0 um source was measured at
+  // (133.759803, -7.242169) on MJD 60996.3 (17 Nov 2025). The table must land on it.
+  const seen = positionNow(w, 60996.3);
+  assert.ok(separationArcsec(seen.ra, seen.dec, 133.759803, -7.242169) < 1.0, `predicted vs seen: ${separationArcsec(seen.ra, seen.dec, 133.759803, -7.242169)} arcsec`);
   const pa = positionAngle(w.ra, w.dec, pw.ra, pw.dec);
   assert.ok(Math.abs(pa - 274.8) < 0.5, `PA ${pa}`);
   assert.ok(pw.ra < w.ra, 'west is decreasing RA');
   // at its own epoch a target is where the table says
-  const at = positionNow(w, mjdFromYear(2014.3), { parallax: false });
+  const at = positionNow(w, mjdFromYear(w.epoch), { parallax: false });
   assert.ok(separationArcsec(w.ra, w.dec, at.ra, at.dec) < 1e-6);
   // M101 and R Dra stay put
   for (const id of ['m101', 'r-dra']) {

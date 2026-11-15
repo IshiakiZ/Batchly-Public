@@ -22,6 +22,7 @@ import {
   parseIdentifyCsv,
   separationArcsec,
   simbadUrl,
+  buildMoversQuery, matchMovers, MOVER_MIN_PM,
 } from './identify.js';
 
 // Barnard's star and two neighbours, as SIMBAD writes CSV: strings quoted, empty cells bare.
@@ -202,7 +203,7 @@ test('parseIdentifyCsv tolerates odd rows and refuses non-tables', () => {
 
 test('identifyCone posts ADQL to SIMBAD and returns objects nearest first', async () => {
   const fetchImpl = fakeFetch(response(EXTENDED_CSV));
-  const out = await identifyCone(RA, DEC, 0.01, { fetchImpl });
+  const out = await identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl });
   assert.equal(out.source, 'simbad');
   assert.deepEqual(out.objects.map((o) => o.name), ["Barnard's star", '[KW97] 46-22']);
   assert.equal(fetchImpl.calls.length, 1);
@@ -221,7 +222,7 @@ test('identifyCone posts ADQL to SIMBAD and returns objects nearest first', asyn
 test('identifyCone falls back to the plain query when SIMBAD refuses the joins', async () => {
   for (const refusal of [response(VOTABLE_ERROR, { status: 400, contentType: 'text/xml' }), response(VOTABLE_ERROR, { contentType: 'text/xml' })]) {
     const fetchImpl = fakeFetch(refusal, response(BASIC_CSV));
-    const out = await identifyCone(RA, DEC, 0.01, { fetchImpl });
+    const out = await identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl });
     assert.equal(fetchImpl.calls.length, 2);
     assert.match(fetchImpl.calls[0].query, /allfluxes/);
     assert.equal(fetchImpl.calls[1].query, buildIdentifyQuery(RA, DEC, 0.01));
@@ -233,17 +234,17 @@ test('identifyCone falls back to the plain query when SIMBAD refuses the joins',
   }
   // extended: false goes straight to the contract's query.
   const direct = fakeFetch(response(BASIC_CSV));
-  await identifyCone(RA, DEC, 0.01, { fetchImpl: direct, extended: false });
+  await identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: direct, extended: false });
   assert.equal(direct.calls.length, 1);
   assert.equal(direct.calls[0].query, buildIdentifyQuery(RA, DEC, 0.01));
 });
 
 test('identifyCone returns an empty list for empty sky and honours the radius', async () => {
   const empty = fakeFetch(response('main_id,otype,ra,dec,pmra,pmdec,plx_value,sp_type,dist,vmag,kmag,ids\n'));
-  assert.deepEqual(await identifyCone(10, 20, undefined, { fetchImpl: empty }), { objects: [], source: 'simbad' });
+  assert.deepEqual(await identifyCone(10, 20, undefined, { movers: false, fetchImpl: empty }), { objects: [], source: 'simbad' });
   assert.match(empty.calls[0].query, /CIRCLE\('ICRS', 10, 20, 0\.003333\)/);
   // A service that ignores the cone is still cut to it: only the first two are within 12 arcsec.
-  const out = await identifyCone(RA, DEC, 12 / 3600, { fetchImpl: fakeFetch(response(BASIC_CSV)) });
+  const out = await identifyCone(RA, DEC, 12 / 3600, { movers: false, fetchImpl: fakeFetch(response(BASIC_CSV)) });
   assert.deepEqual(out.objects.map((o) => o.name), ["Barnard's star", '2MASS J17574849+0441405']);
 });
 
@@ -261,7 +262,7 @@ test('identifyCone reports clear errors with a retryable flag', async () => {
     throw new Error('should not be called');
   });
   for (const [ra, dec] of [[NaN, 1], [400, 1], [1, -100], ['1', 1], [undefined, undefined]]) {
-    await fails(identifyCone(ra, dec, 0.01, { fetchImpl: never }), (err) => {
+    await fails(identifyCone(ra, dec, 0.01, { movers: false, fetchImpl: never }), (err) => {
       assert.equal(err.status, 400);
       assert.equal(err.retryable, false);
     });
@@ -269,7 +270,7 @@ test('identifyCone reports clear errors with a retryable flag', async () => {
   assert.equal(never.calls.length, 0);
   // Upstream 5xx: retryable; Strasbourg and then the CfA mirror are tried once each.
   const down = fakeFetch(response('<html><head><title>502 Proxy Error</title></head></html>', { status: 502, contentType: 'text/html' }));
-  await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: down }), (err) => {
+  await fails(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: down }), (err) => {
     assert.equal(err.status, 502);
     assert.equal(err.retryable, true);
     assert.match(err.message, /SIMBAD answered HTTP 502: 502 Proxy Error/);
@@ -278,7 +279,7 @@ test('identifyCone reports clear errors with a retryable flag', async () => {
   resetSimbadBreaker();
   // Refused twice: not retryable.
   const refused = fakeFetch(response(VOTABLE_ERROR, { status: 400, contentType: 'text/xml' }));
-  await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: refused }), (err) => {
+  await fails(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: refused }), (err) => {
     assert.equal(err.status, 502);
     assert.equal(err.retryable, false);
     assert.match(err.message, /unknown table/);
@@ -288,16 +289,16 @@ test('identifyCone reports clear errors with a retryable flag', async () => {
   const offline = fakeFetch(() => {
     throw new TypeError('fetch failed');
   });
-  await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: offline }), (err) => {
+  await fails(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: offline }), (err) => {
     assert.equal(err.status, 502);
     assert.equal(err.retryable, true);
     assert.match(err.message, /SIMBAD request failed: fetch failed/);
   });
   // Garbage twice.
-  await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: fakeFetch(response('hello')) }), (err) => {
+  await fails(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: fakeFetch(response('hello')) }), (err) => {
     assert.equal(err.kind, 'parse');
   });
-  await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: null }), (err) => assert.equal(err.retryable, false));
+  await fails(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: null }), (err) => assert.equal(err.retryable, false));
 });
 
 test('identifyCone times out, aborts the request and says so', async () => {
@@ -310,7 +311,7 @@ test('identifyCone times out, aborts the request and says so', async () => {
       });
     });
   const t0 = Date.now();
-  await assert.rejects(identifyCone(RA, DEC, 0.01, { fetchImpl: hanging, timeoutMs: 30 }), (err) => {
+  await assert.rejects(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: hanging, timeoutMs: 30 }), (err) => {
     assert.equal(err.name, 'UpstreamError');
     assert.equal(err.kind, 'timeout');
     assert.equal(err.status, 504);
@@ -322,9 +323,9 @@ test('identifyCone times out, aborts the request and says so', async () => {
   assert.ok(Date.now() - t0 < 2000);
   // A fetch that ignores the signal, and a body that never arrives, are bounded too.
   const deaf = () => new Promise(() => {});
-  await assert.rejects(identifyCone(RA, DEC, 0.01, { fetchImpl: deaf, timeoutMs: 20 }), /did not answer/);
+  await assert.rejects(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: deaf, timeoutMs: 20 }), /did not answer/);
   const slowBody = async () => ({ ok: true, status: 200, text: () => new Promise(() => {}) });
-  await assert.rejects(identifyCone(RA, DEC, 0.01, { fetchImpl: slowBody, timeoutMs: 20 }), /did not answer/);
+  await assert.rejects(identifyCone(RA, DEC, 0.01, { movers: false, fetchImpl: slowBody, timeoutMs: 20 }), /did not answer/);
 });
 
 test('identifyFromSynthetic answers from a fake sky and hides what no catalogue knows', () => {
@@ -357,4 +358,71 @@ test('identifyFromSynthetic answers from a fake sky and hides what no catalogue 
   assert.equal(out.objects[0].url, null);
   assert.deepEqual(identifyFromSynthetic(null, 100, 20, 0.01), { objects: [], source: 'synthetic' });
   assert.deepEqual(identifyFromSynthetic({ sourcesAt() { throw new Error('x'); } }, 100, 20, 0.01).objects, []);
+});
+
+
+// ---- fast movers --------------------------------------------------------------------------------
+
+test('buildMoversQuery asks for fast movers in a wide cone', () => {
+  const q = buildMoversQuery(133.7598, -7.2422);
+  assert.match(q, /^SELECT TOP 60 main_id, otype, ra, dec, pmra, pmdec, plx_value, sp_type, /);
+  assert.match(q, /CIRCLE\('ICRS', 133\.7598, -7\.2422, 0\.1\)\) = 1 AND pmra \* pmra \+ pmdec \* pmdec > 90000 ORDER BY dist$/);
+  assert.equal(MOVER_MIN_PM, 300);
+  assert.throws(() => buildMoversQuery(400, 0), /ra/i);
+});
+
+test('matchMovers: the track of a fast mover passes through the clicked position', () => {
+  // WISE 0855-0714 as SIMBAD lists it (where WISE saw it in 2010), and where SPHEREx saw it in
+  // November 2025, 127 arcsec to the west.
+  const w0855 = { name: 'WISE J085510.83-071442.5', ra: 133.795129, dec: -7.245147, pmra: -8118, pmdec: 680 };
+  // Barnard's Star at epoch 2000, and where it was in August 2025 (266 arcsec north).
+  const barnard = { name: "Barnard's star", ra: 269.452075, dec: 4.693391, pmra: -802.8, pmdec: 10362.5 };
+  // A fast star whose track misses the position, and one going the other way.
+  const miss = { name: 'miss', ra: 133.77, dec: -7.26, pmra: 600, pmdec: 0 };
+  const away = { name: 'away', ra: 133.7598 - 0.02, dec: -7.2422, pmra: -3000, pmdec: 0 };
+  const slow = { name: 'slow', ra: 133.7598, dec: -7.2422, pmra: 0, pmdec: 0 };
+
+  const hits = matchMovers([w0855, barnard, miss, away, slow], 133.759803, -7.242169, { year: 2026.9 });
+  assert.deepEqual(hits.map((o) => o.name), ['WISE J085510.83-071442.5']);
+  const h = hits[0];
+  assert.ok(h.sepArcsec < 1.5, `distance from the track: ${h.sepArcsec}`);
+  assert.ok(Math.abs(h.mover.catalogueSepArcsec - 126.6) < 1.5, `catalogue position is ${h.mover.catalogueSepArcsec} arcsec away`);
+  assert.ok(Math.abs(h.mover.years - 15.5) < 0.3, `years of motion: ${h.mover.years}`);
+  assert.ok(Math.abs(h.mover.epoch - 2011.4) < 0.4, `implied catalogue date: ${h.mover.epoch}`);
+  assert.ok(Math.abs(h.mover.pm - 8146.4) < 1);
+
+  const b = matchMovers([w0855, barnard], 269.44597, 4.76711, { year: 2026.9 });
+  assert.deepEqual(b.map((o) => o.name), ["Barnard's star"]);
+  assert.ok(Math.abs(b[0].mover.years - 25.6) < 0.4, `Barnard: ${b[0].mover.years} years from 2000`);
+  // Not on the track: beyond where the star can have got to since 1990, or off to the side.
+  assert.deepEqual(matchMovers([barnard], 269.44, 4.9), []);
+  assert.deepEqual(matchMovers([barnard], 269.46, 4.76711, { year: 2026.9 }), []);
+  assert.deepEqual(matchMovers(null, 1, 2), []);
+});
+
+test('identifyCone adds a fast mover that the small cone cannot see', async () => {
+  const MOVERS_CSV = 'main_id,otype,ra,dec,pmra,pmdec,plx_value,sp_type,dist\n'
+    + 'WISE J085510.83-071442.5,BD*,133.795129,-7.245147,-8118,680,439,Y4,0.0352\n'
+    + 'LP 1-2,PM*,133.80,-7.30,400,-300,20,M3,0.07\n';
+  const EMPTY = 'main_id,otype,ra,dec,pmra,pmdec,plx_value,sp_type,dist,vmag,kmag,ids\n';
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const query = new URLSearchParams(init.body).get('QUERY');
+    calls.push(query);
+    const body = /pmra \* pmra/.test(query) ? MOVERS_CSV : EMPTY;
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/csv' } });
+  };
+  const out = await identifyCone(133.759803, -7.242169, 12 / 3600, { fetchImpl, year: 2026.9 });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(out.objects.map((o) => o.name), ['WISE J085510.83-071442.5']);
+  assert.ok(out.objects[0].mover.catalogueSepArcsec > 120);
+  assert.equal(out.objects[0].typeLabel.length > 0, true);
+
+  // The second question failing leaves the first answer standing.
+  const flaky = async (url, init) => {
+    const query = new URLSearchParams(init.body).get('QUERY');
+    if (/pmra \* pmra/.test(query)) return new Response('boom', { status: 500 });
+    return new Response(EMPTY, { status: 200, headers: { 'content-type': 'text/csv' } });
+  };
+  assert.deepEqual(await identifyCone(133.759803, -7.242169, 12 / 3600, { fetchImpl: flaky }), { objects: [], source: 'simbad' });
 });

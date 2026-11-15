@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  propagate, centroid, centroidError, fitMotion, fitMotionWithParallax, matchGaia,
+  propagate, centroid, centroidWings, maskedCoreRadius, centroidError, fitMotion, fitMotionWithParallax, matchGaia,
   matchGaiaDetailed, separationArcsec, positionAngle, offsetBy, tangentOffset,
   yearFromMjd, mjdFromYear, GAIA_DR3_EPOCH,
 } from './astrometry.js';
@@ -239,6 +239,54 @@ test('centroid: weak signal, masked box, bad pixels and neighbours', () => {
   const pair = gaussianImage(n, [{ x: 20.3, y: 19.6, amp: 40, sigma: 1.04 }, { x: 26.3, y: 19.6, amp: 80, sigma: 1.04 }], 1, rng, 3);
   const cp = centroid(pair, null, n, 20, 20);
   assert.ok(cp.ok && Math.hypot(cp.x - 20.3, cp.y - 19.6) < 0.1, `with neighbour: ${cp.x}, ${cp.y}`);
+});
+
+test('centroidWings: a saturated star is located from its wings, whatever the shape of the hole', () => {
+  const n = 61;
+  const rng = makeRng(77);
+  let worst = 0;
+  for (let trial = 0; trial < 24; trial++) {
+    const tx = 30 + (rng.uniform() - 0.5) * 2;
+    const ty = 30 + (rng.uniform() - 0.5) * 2;
+    // Core plus power-law-like wings (two wide Gaussians), on a sloping-free background.
+    const img = gaussianImage(n, [
+      { x: tx, y: ty, amp: 4000, sigma: 1.1 },
+      { x: tx, y: ty, amp: 60, sigma: 3.5 },
+      { x: tx, y: ty, amp: 6, sigma: 8 },
+    ], 0.05, rng, 0.2);
+    const mask = new Uint8Array(n * n);
+    // The flagged core: a ragged blob, off-centre, with a bleed column on one side.
+    const cx = tx + 0.4, cy = ty - 0.3, rc = 3 + (trial % 3);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const inBlob = Math.hypot(x - cx, y - cy) < rc || (Math.abs(x - Math.round(tx)) < 1 && y > ty && y < ty + rc + 3);
+        if (inBlob) { mask[y * n + x] = 1; img[y * n + x] = NaN; }
+      }
+    }
+    const rCore = maskedCoreRadius(img, mask, n, tx, ty);
+    assert.ok(rCore >= rc - 1.5 && rCore <= rc + 3.5, `core radius ${rCore} for a blob of ${rc}`);
+    const guessX = tx + (rng.uniform() - 0.5) * 3;
+    const guessY = ty + (rng.uniform() - 0.5) * 3;
+    const c = centroidWings(img, mask, n, guessX, guessY);
+    assert.equal(c.ok, true, `trial ${trial}: ${JSON.stringify({ snr: c.snr, it: c.iterations })}`);
+    assert.equal(c.method, 'wings');
+    worst = Math.max(worst, Math.hypot(c.x - tx, c.y - ty));
+    assert.ok(c.xErr >= 0.15 && c.yErr >= 0.15);
+    // The ordinary centroid has no business here: it fails or lands on a wing.
+    const plain = centroid(img, mask, n, guessX, guessY);
+    assert.ok(!plain.ok || Math.hypot(plain.x - tx, plain.y - ty) > 0.5);
+  }
+  assert.ok(worst < 0.3, `worst error ${worst} px`);
+
+  // Not masked at the centre: say so and leave it to centroid().
+  const clean = gaussianImage(n, [{ x: 30, y: 30, amp: 100, sigma: 1.2 }], 0.05, rng);
+  assert.equal(maskedCoreRadius(clean, null, n, 30, 30), 0);
+  assert.equal(centroidWings(clean, null, n, 30, 30).ok, false);
+  // A masked hole in empty sky has no wings to measure.
+  const empty = gaussianImage(n, [], 0.05, rng);
+  const hole = new Uint8Array(n * n);
+  for (let y = 27; y <= 33; y++) for (let x = 27; x <= 33; x++) hole[y * n + x] = 1;
+  assert.equal(centroidWings(empty, hole, n, 30, 30).ok, false);
 });
 
 test('centroidError: 0.6 FWHM / SNR with a floor', () => {

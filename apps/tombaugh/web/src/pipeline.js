@@ -1185,9 +1185,9 @@ export function gaiaGhosts(lib, stars, frame, grid, { max = 80, measure = true, 
 // ---------------------------------------------------------------------------------------------
 
 /** Spectrum and light curve at a sky position from the native frames of all loaded detectors. */
-export function measureSpectrum(lib, frames, ra, dec) {
+export function measureSpectrum(lib, frames, ra, dec, opts = {}) {
   if (!lib.extractSpectrum) return { points: [], binned: [], curve: [], ok: false };
-  const points = lib.extractSpectrum(frames, ra, dec, {}) || [];
+  const points = lib.extractSpectrum(frames, ra, dec, opts && typeof opts.track === 'function' ? { track: opts.track } : {}) || [];
   let binned = [];
   let curve = [];
   try {
@@ -1204,11 +1204,70 @@ export function measureSpectrum(lib, frames, ra, dec) {
 }
 
 /**
+ * Is the source that was followed from pass to pass the catalogue star next to it?
+ *   'none'        no Gaia star with a proper motion nearby
+ *   'unmeasured'  no motion could be measured (one pass, or the source was lost)
+ *   'consistent'  the measured motion agrees with the star's within 3 sigma
+ *   'different'   it does not, by more than 0.5 arcsec a year as well: a mover that Gaia does
+ *                 not list, seen next to (or blended with) a star that Gaia does list
+ * The error used is the fit's own, with a floor of 0.3 arcsec/yr for what the fit does not
+ * know about (frame registration, blending with neighbours).
+ * -> { verdict, diff, err } with diff and err in mas/yr (NaN when not applicable).
+ */
+export function compareWithGaia(motion) {
+  const m = motion && motion.measured;
+  const g = motion && motion.gaia;
+  if (!g || g.total === null || !Number.isFinite(g.pmra) || !Number.isFinite(g.pmdec)) return { verdict: 'none', diff: NaN, err: NaN };
+  if (!m || !Number.isFinite(m.pmra) || !Number.isFinite(m.pmdec)) return { verdict: 'unmeasured', diff: NaN, err: NaN };
+  const diff = Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec);
+  const fitErr = Math.hypot(Number.isFinite(m.errPmra) ? m.errPmra : 0, Number.isFinite(m.errPmdec) ? m.errPmdec : 0);
+  const err = Math.max(300, fitErr);
+  return { verdict: diff > 3 * err && diff > 500 ? 'different' : 'consistent', diff, err };
+}
+
+/**
+ * Where to point the photometry aperture at each date, for a source that moves enough to
+ * leave it: the Gaia star's own track when the source is that star and moves at least
+ * 0.3 arcsec a year, the fitted straight line when the source is a mover Gaia does not list.
+ * -> { track: (mjd) => { ra, dec }, kind: 'gaia' | 'fit' } or null (aperture stays put).
+ */
+export function photometryTrack(lib, motion, verdict) {
+  if (!motion) return null;
+  const m = motion.measured;
+  if (verdict === 'different' && m && Number.isFinite(m.ra0) && Number.isFinite(m.mjd0) && lib.offsetBy) {
+    return {
+      kind: 'fit',
+      track: (mjd) => {
+        const t = (mjd - m.mjd0) / 365.25;
+        return lib.offsetBy(m.ra0, m.dec0, (m.pmra / 1000) * t, (m.pmdec / 1000) * t);
+      },
+    };
+  }
+  const g = motion.gaia;
+  if (verdict !== 'different' && g && g.star && g.total >= 300 && lib.propagate) {
+    const star = g.star;
+    const src = { ra: star.ra, dec: star.dec, pmra: star.pmra || 0, pmdec: star.pmdec || 0, parallax: star.parallax || 0, epoch: star.epoch ?? 2016.0 };
+    return {
+      kind: 'gaia',
+      track: (mjd) => {
+        try {
+          const pos = lib.propagate(src, mjd);
+          return { ra: pos.ra, dec: pos.dec };
+        } catch {
+          return null;
+        }
+      },
+    };
+  }
+  return null;
+}
+
+/**
  * Follow a source through the per-pass stacks, starting near (ra, dec), and fit its motion.
  * -> { track: [{ mjd, ra, dec, w }], measured: fitMotion result | null, gaia: { pmra, pmdec, total, star } | null }
  */
 export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd = null, tolArcsec = 8 } = {}) {
-  const result = { track: [], measured: null, gaia: null };
+  const result = { track: [], measured: null, gaia: null, saturated: false };
   if (!lib.centroid || !lib.gridSkyToPix || !lib.gridPixToSky || !layers || !layers.length) return result;
   const passes = describePasses(lib, normalizeLayers(lib, layers));
   if (!passes.length) return result;
@@ -1230,9 +1289,17 @@ export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd
   const [x0, y0] = lib.gridSkyToPix(grid, ra, dec);
   const found = new Array(passes.length).fill(null);
   const locate = (i, x, y) => {
+    const near = (c) => c && c.ok && Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x - x, c.y - y) < 6;
     try {
+      // A saturated star has a masked core: the ordinary centroid would settle on one side of
+      // the hole, so such a source is located from its wings instead.
+      const core = lib.maskedCoreRadius ? lib.maskedCoreRadius(stacks[i].image, stacks[i].mask, n, x, y) : 0;
+      if (core > 0 && lib.centroidWings) {
+        const w = lib.centroidWings(stacks[i].image, stacks[i].mask, n, x, y);
+        return near(w) ? w : null;
+      }
       const c = lib.centroid(stacks[i].image, stacks[i].mask, n, x, y, { box: 5 });
-      if (c && c.ok && Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x - x, c.y - y) < 6) return c;
+      if (near(c)) return c;
     } catch {
       // ignore
     }
@@ -1254,7 +1321,12 @@ export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd
     const [r, d] = lib.gridPixToSky(grid, found[i].x, found[i].y);
     const errPix = Math.hypot(Number.isFinite(found[i].xErr) ? found[i].xErr : 0.15, Number.isFinite(found[i].yErr) ? found[i].yErr : 0.15) / Math.SQRT2;
     const sigma = Math.max(0.15, errPix * grid.scale); // arcsec, with a floor for undersampling
-    result.track.push({ mjd: p.mjd, ra: r, dec: d, sigma, err_arcsec: sigma, w: 1 / (sigma * sigma), snr: found[i].snr });
+    const point = { mjd: p.mjd, ra: r, dec: d, sigma, err_arcsec: sigma, w: 1 / (sigma * sigma), snr: found[i].snr };
+    if (found[i].method === 'wings') {
+      point.method = 'wings';
+      result.saturated = true;
+    }
+    result.track.push(point);
   });
   if (result.track.length >= 2 && lib.fitMotion) {
     try {
@@ -1280,4 +1352,98 @@ export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd
     }
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Display only: closing the holes that flagged pixels leave in bright stars
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A copy of an image in which small enclosed holes (masked or non-finite pixels: a saturated
+ * star core, a cosmic-ray hit) are filled from their rims, for DISPLAY ONLY. Measurements keep
+ * using the original image and mask.
+ *
+ * A hole is filled when it does not touch the edge of the image and covers at most `maxFrac`
+ * of it (default 3%), so the sky a detector never covered stays empty. Filling works inward
+ * ring by ring: a pixel takes the mean of its already-known neighbours, which gives a
+ * saturated star a flat top at the level of its rim instead of a hatched patch.
+ *
+ * -> { image, mask, filled } where mask marks only what is still missing and `filled` counts
+ *    the pixels filled, or null when there was nothing to fill.
+ */
+export function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.03 } = {}) {
+  if (!image || !(n > 0)) return null;
+  const ny = Math.floor(image.length / n);
+  const total = n * ny;
+  const missing = new Uint8Array(total);
+  let any = 0;
+  for (let i = 0; i < total; i++) {
+    if ((mask && mask[i]) || !Number.isFinite(image[i])) {
+      missing[i] = 1;
+      any++;
+    }
+  }
+  if (!any) return null;
+  const label = new Int32Array(total); // 0 = not visited
+  const stack = new Int32Array(total);
+  const out = new Float32Array(image);
+  const still = new Uint8Array(missing);
+  const limit = Math.max(1, Math.floor(maxFrac * total));
+  let filled = 0;
+  let next = 0;
+  for (let start = 0; start < total; start++) {
+    if (!missing[start] || label[start]) continue;
+    next += 1;
+    // Flood fill one hole (4-connected), remembering its pixels.
+    let top = 0;
+    stack[top++] = start;
+    label[start] = next;
+    const members = [];
+    let touchesEdge = false;
+    while (top > 0) {
+      const i = stack[--top];
+      members.push(i);
+      const x = i % n;
+      const y = (i - x) / n;
+      if (x === 0 || y === 0 || x === n - 1 || y === ny - 1) touchesEdge = true;
+      if (x > 0 && missing[i - 1] && !label[i - 1]) { label[i - 1] = next; stack[top++] = i - 1; }
+      if (x < n - 1 && missing[i + 1] && !label[i + 1]) { label[i + 1] = next; stack[top++] = i + 1; }
+      if (y > 0 && missing[i - n] && !label[i - n]) { label[i - n] = next; stack[top++] = i - n; }
+      if (y < ny - 1 && missing[i + n] && !label[i + n]) { label[i + n] = next; stack[top++] = i + n; }
+    }
+    if (touchesEdge || members.length > limit) continue;
+    // Fill inward, one ring at a time.
+    let todo = members;
+    for (let round = 0; round < 64 && todo.length; round++) {
+      const values = [];
+      const later = [];
+      for (const i of todo) {
+        const x = i % n;
+        const y = (i - x) / n;
+        let sum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const xx = x + dx, yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= n || yy >= ny) continue;
+            const j = yy * n + xx;
+            if (still[j]) continue;
+            sum += out[j];
+            count++;
+          }
+        }
+        if (count) values.push([i, sum / count]);
+        else later.push(i);
+      }
+      if (!values.length) break;
+      for (const [i, v] of values) {
+        out[i] = v;
+        still[i] = 0;
+        filled++;
+      }
+      todo = later;
+    }
+  }
+  if (!filled) return null;
+  return { image: out, mask: still, filled };
 }

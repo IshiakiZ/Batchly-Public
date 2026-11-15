@@ -218,6 +218,148 @@ export function aperturePhot(frame, ra, dec, opts = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Saturated stars: photometry from the unsaturated wings
+// ---------------------------------------------------------------------------------------------
+//
+// A star brighter than roughly 8th magnitude saturates SPHEREx: the pipeline flags its core
+// (TRANSIENT, SUR_ERROR, NONLINEAR, BLOOM...) and the core values mean nothing. The light a few
+// pixels out is still measured correctly, and for a point source it is a fixed fraction of the
+// star's flux at a given wavelength. So the mean surface brightness in a ring just outside the
+// flagged core follows the star's brightness. The fraction itself is not calibrated here (it
+// depends on the PSF wings and on wavelength), so wing fluxes are RELATIVE: good for a light
+// curve, where each point is divided by a smooth fit of the same source's wing fluxes against
+// wavelength, not for an absolute spectrum.
+
+/**
+ * Radius (native pixels) of the flagged core around (x0, y0): rings one pixel wide are walked
+ * outward until two in a row have fewer than a quarter of their pixels bad. 0 when the centre
+ * is clean. Capped at `rMax`.
+ */
+export function saturationRadius(frame, x0, y0, { badMask = PHOT_BAD_MASK, rMax = 12 } = {}) {
+  if (!frame || !frame.flags || !Number.isFinite(x0) || !Number.isFinite(y0)) return 0;
+  const { nx, ny, flags, image } = frame;
+  const bad = new Float64Array(rMax + 3);
+  const all = new Float64Array(rMax + 3);
+  const lim = rMax + 2;
+  for (let y = Math.max(0, Math.floor(y0 - lim)); y <= Math.min(ny - 1, Math.ceil(y0 + lim)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - lim)); x <= Math.min(nx - 1, Math.ceil(x0 + lim)); x++) {
+      const k = Math.round(Math.hypot(x - x0, y - y0));
+      if (k > lim) continue;
+      const i = y * nx + x;
+      all[k] += 1;
+      if ((flags[i] & badMask) !== 0 || !Number.isFinite(image[i])) bad[k] += 1;
+    }
+  }
+  const frac = (k) => (all[k] > 0 ? bad[k] / all[k] : 0);
+  if (frac(0) < 0.5 && frac(1) < 0.5) return 0;
+  for (let k = 1; k <= rMax; k++) {
+    if (frac(k) < 0.25 && frac(k + 1) < 0.25) return k - 0.5;
+  }
+  return rMax;
+}
+
+/**
+ * Background-subtracted mean surface brightness in the ring r1..r2 (native pixels) around a sky
+ * position, times the ring's area: a flux in microjansky that is proportional to the flux of a
+ * saturated point source at the centre (see above). Bad and missing pixels are left out and the
+ * mean is taken over the rest, so the ring need not be complete; `ok` is false when less than
+ * `minGood` (default 0.6) of the ring's area is usable or the ring leaves the frame.
+ * The background is the clipped median of the good pixels in bgIn..bgOut.
+ * Returns { flux_uJy, err_uJy, ok, good (fraction of the ring used), bg, x, y }.
+ */
+export function wingPhot(frame, ra, dec, r1, r2, opts = {}) {
+  const { badMask = PHOT_BAD_MASK, subtractZodi = true, wcsFactory = makeWcs, minGood = 0.6 } = opts;
+  const bgIn = Number.isFinite(opts.bgIn) ? opts.bgIn : r2 + 2.5;
+  const bgOut = Number.isFinite(opts.bgOut) ? opts.bgOut : bgIn + 3;
+  const none = { flux_uJy: NaN, err_uJy: NaN, ok: false, good: 0, bg: NaN, x: NaN, y: NaN };
+  if (!frame || !frame.image || !(frame.nx > 0) || !(frame.ny > 0) || !(r2 > r1) || !(r1 >= 0)) return none;
+  const { nx, ny, image } = frame;
+  const variance = frame.variance || null;
+  const zodi = subtractZodi ? frame.zodi || null : null;
+  const flags = frame.flags || null;
+  let x0 = NaN;
+  let y0 = NaN;
+  try {
+    [x0, y0] = wcsFactory(frame.wcs).skyToPix(ra, dec);
+  } catch {
+    return none;
+  }
+  if (!Number.isFinite(x0) || !Number.isFinite(y0)) return none;
+  if (x0 - r2 < -0.5 || y0 - r2 < -0.5 || x0 + r2 > nx - 0.5 || y0 + r2 > ny - 0.5) return { ...none, x: x0, y: y0 };
+
+  // Background: clipped median of the good pixels further out (the part of it on the frame).
+  const vals = [];
+  for (let y = Math.max(0, Math.floor(y0 - bgOut)); y <= Math.min(ny - 1, Math.ceil(y0 + bgOut)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - bgOut)); x <= Math.min(nx - 1, Math.ceil(x0 + bgOut)); x++) {
+      const r2c = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+      if (r2c < bgIn * bgIn || r2c >= bgOut * bgOut) continue;
+      const i = y * nx + x;
+      if (flags && (flags[i] & badMask) !== 0) continue;
+      const v = image[i] - (zodi ? zodi[i] : 0);
+      if (Number.isFinite(v)) vals.push(v);
+    }
+  }
+  let bg = 0;
+  let bgSigma = 0;
+  let nBg = vals.length;
+  if (nBg >= 8) {
+    const a = Float64Array.from(vals);
+    const buf = new Float64Array(nBg);
+    for (let round = 0; round < 4; round++) {
+      for (let j = 0; j < nBg; j++) buf[j] = a[j];
+      bg = medianInPlace(buf, nBg);
+      for (let j = 0; j < nBg; j++) buf[j] = Math.abs(a[j] - bg);
+      bgSigma = MAD_TO_SIGMA * medianInPlace(buf, nBg);
+      let kept = 0;
+      for (let j = 0; j < nBg; j++) if (Math.abs(a[j] - bg) <= 3 * bgSigma) a[kept++] = a[j];
+      if (kept === nBg || kept < 8) break;
+      nBg = kept;
+    }
+  } else {
+    nBg = 0;
+  }
+
+  // Ring: area-weighted mean of the good pixels.
+  let sw = 0, swv = 0, swAll = 0, varSum = 0;
+  const a2 = r1 * r1, b2 = r2 * r2;
+  for (let y = Math.floor(y0 - r2); y <= Math.ceil(y0 + r2); y++) {
+    for (let x = Math.floor(x0 - r2); x <= Math.ceil(x0 + r2); x++) {
+      let inside = 0;
+      for (let sy = 0; sy < SUB; sy++) {
+        const dy = y + (sy + 0.5) / SUB - 0.5 - y0;
+        for (let sx = 0; sx < SUB; sx++) {
+          const dx = x + (sx + 0.5) / SUB - 0.5 - x0;
+          const q = dx * dx + dy * dy;
+          if (q >= a2 && q <= b2) inside++;
+        }
+      }
+      if (!inside) continue;
+      const f = inside / (SUB * SUB);
+      swAll += f;
+      if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+      const i = y * nx + x;
+      if (flags && (flags[i] & badMask) !== 0) continue;
+      const v = image[i] - (zodi ? zodi[i] : 0);
+      if (!Number.isFinite(v)) continue;
+      sw += f;
+      swv += f * v;
+      const pv = variance ? variance[i] : NaN;
+      varSum += f * f * (pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
+    }
+  }
+  const good = swAll > 0 ? sw / swAll : 0;
+  if (!(sw > 0) || good < minGood) return { ...none, good, bg, x: x0, y: y0 };
+  const area = Math.PI * (b2 - a2);
+  const mean = swv / sw - bg;
+  const errMean = Math.sqrt(varSum / (sw * sw) + (nBg > 0 ? (Math.PI / 2) * bgSigma * bgSigma / nBg : 0));
+  return {
+    flux_uJy: mean * area * MJYSR_TO_UJY_PER_PIX,
+    err_uJy: errMean * area * MJYSR_TO_UJY_PER_PIX,
+    ok: true, good, bg, x: x0, y: y0,
+  };
+}
+
 /**
  * Spectrum of one sky position: aperture photometry on every native frame, sorted by
  * wavelength. Frames on which the aperture falls off the array are left out (set
@@ -228,6 +370,7 @@ export function aperturePhot(frame, ra, dec, opts = {}) {
  */
 export function extractSpectrum(frames, ra, dec, opts = {}) {
   const points = [];
+  const used = [];
   for (const frame of frames || []) {
     if (!frame) continue;
     let r = ra;
@@ -237,10 +380,47 @@ export function extractSpectrum(frames, ra, dec, opts = {}) {
       if (pos && Number.isFinite(pos.ra) && Number.isFinite(pos.dec)) { r = pos.ra; d = pos.dec; }
     }
     const p = aperturePhot(frame, r, d, opts);
-    if (p.ok || opts.keepFailed) points.push(p);
+    if (p.ok || opts.keepFailed) {
+      points.push(p);
+      used.push({ frame, ra: r, dec: d, p });
+    }
   }
+  if (opts.wings !== false) addWings(used, opts);
   points.sort((a, b) => (Number.isFinite(a.wave) ? a.wave : Infinity) - (Number.isFinite(b.wave) ? b.wave : Infinity));
   return points;
+}
+
+/**
+ * When at least half of a source's measurements have a flagged core that is a real saturated
+ * blob (not a stray cosmic ray), measure every frame again in one common ring just outside the
+ * largest typical core and attach the result to the points:
+ *   p.sat = true, p.rSat (this frame's core radius), p.wing_uJy, p.wingErr_uJy, p.wingOk,
+ *   p.wingR1, p.wingR2 (the ring, native pixels; the same for all points of the source).
+ * One ring for all frames matters: the fraction of the star's light in the ring then changes
+ * only smoothly with wavelength, which lightCurve() divides out.
+ */
+function addWings(used, opts) {
+  const ok = used.filter((u) => u.p.ok);
+  if (ok.length < 3) return;
+  const radii = [];
+  for (const u of ok) {
+    u.rSat = u.p.flagged ? saturationRadius(u.frame, u.p.x, u.p.y, opts) : 0;
+    if (u.rSat >= 1) radii.push(u.rSat);
+  }
+  if (radii.length < 3 || radii.length < 0.5 * ok.length) return;
+  radii.sort((a, b) => a - b);
+  const rCore = radii[Math.min(radii.length - 1, Math.floor(0.85 * radii.length))];
+  const r1 = rCore + 1;
+  const r2 = r1 + 2.5;
+  for (const u of ok) {
+    const w = wingPhot(u.frame, u.ra, u.dec, r1, r2, opts);
+    // A frame whose own core reaches into the ring is not comparable with the others.
+    const clean = w.ok && u.rSat <= r1 - 0.5;
+    Object.assign(u.p, {
+      sat: true, rSat: u.rSat, wingR1: r1, wingR2: r2,
+      wing_uJy: w.flux_uJy, wingErr_uJy: w.err_uJy, wingOk: clean && Number.isFinite(w.flux_uJy) && w.err_uJy > 0,
+    });
+  }
 }
 
 function usablePoint(p) {
@@ -438,20 +618,41 @@ export function fitSpectrumModel(points) {
  * meaningless for an undetected source).
  */
 export function lightCurve(points) {
-  const model = fitSpectrumModel(points);
+  let pts = points || [];
+  let method = 'aperture';
+  const wings = wingPoints(pts);
+  if (wings) {
+    pts = wings;
+    method = 'wings';
+  }
+  const model = fitSpectrumModel(pts);
   const out = [];
-  for (const p of points || []) {
+  for (const p of pts) {
     if (!usablePoint(p)) continue;
     const det = pointDet(p);
     const m = model.evaluate(p.wave, det);
     if (!(m > 0) || !Number.isFinite(m)) continue;
     out.push({
       mjd: p.mjd, ratio: p.flux_uJy / m, err: p.err_uJy / m, wave: p.wave, det,
-      flux_uJy: p.flux_uJy, model_uJy: m,
+      flux_uJy: p.flux_uJy, model_uJy: m, method,
     });
   }
   out.sort((a, b) => a.mjd - b.mjd);
   return out;
+}
+
+/**
+ * For a saturated source (points carrying wing fluxes from extractSpectrum), the points to use
+ * for relative work: each point's wing flux in place of its aperture flux. null when the
+ * source is not saturated, or the wings give fewer usable points than the cores do.
+ */
+export function wingPoints(points) {
+  const all = points || [];
+  const wing = all.filter((p) => p && p.sat && p.wingOk);
+  if (wing.length < 5) return null;
+  const core = all.filter((p) => usablePoint(p));
+  if (core.length >= wing.length) return null;
+  return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, method: 'wings' }));
 }
 
 /** AB magnitude of a flux density in microjansky (NaN for zero or negative flux). */

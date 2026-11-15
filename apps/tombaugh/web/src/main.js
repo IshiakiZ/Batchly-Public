@@ -345,7 +345,7 @@ async function boot() {
       return {
         kicker: 'Step 1 of 2 · search',
         title: 'Finding exposures of this spot',
-        text: 'Asking the IRSA archive which SPHEREx exposures cover this position. The archive is slow: this takes about 20 seconds, sometimes longer. Nothing is frozen.',
+        text: 'Looking this position up in an index of every public SPHEREx exposure. This usually takes two or three seconds; if the index is out of reach the archive itself is asked, which can take half a minute.',
       };
     }
     if (L.phase === 'model') {
@@ -661,6 +661,10 @@ async function boot() {
     if (search && search.complete === false) notes.push('The exposure index is still being built; more frames may appear later.');
     const thin = thinningNote();
     if (thin) notes.push(`Crowded field: ${thin} of detector D${store.get().det}, spread evenly over the passes.`);
+    const frame = player.frame();
+    if (frame && frame.image && !frame.diverging && displayOf(frame).filled) {
+      notes.push('A star in this field is bright enough to saturate the detector. Its flagged core is filled in from its rim so it looks like a star; switch on Flagged pixels to see which pixels those are. Measurements never use them.');
+    }
     return notes;
   }
 
@@ -1069,6 +1073,30 @@ async function boot() {
     return null;
   }
 
+  /**
+   * What to draw for a frame: the image itself, or, where bright stars have flagged cores, a
+   * copy with those small holes filled from their rims (display only; `frame.image` and
+   * `frame.mask` stay as they are for every measurement). Two-sided frames are left alone: a
+   * hole in a difference image is honest.
+   */
+  function displayOf(frame) {
+    if (frame.diverging || !pipeline.fillMaskedForDisplay || !session.grid) return { image: frame.image, mask: frame.mask || null, filled: 0 };
+    // The cache lives on the function so that nothing here depends on declaration order.
+    const displayCache = displayOf.cache || (displayOf.cache = new WeakMap());
+    let shown = displayCache.get(frame);
+    if (!shown) {
+      let fill = null;
+      try {
+        fill = pipeline.fillMaskedForDisplay(frame.image, frame.mask || null, session.grid.n);
+      } catch (err) {
+        console.warn('[tombaugh] display fill', err);
+      }
+      shown = fill || { image: frame.image, mask: frame.mask || null, filled: 0 };
+      displayCache.set(frame, shown);
+    }
+    return shown;
+  }
+
   function renderFrame(frame) {
     if (!frame) return;
     const s = store.get();
@@ -1077,9 +1105,10 @@ async function boot() {
       const rgba = frame.rgb || frame.rgba ? rgbaOf(frame) : null;
       if (rgba) viewer.setRgb(rgba);
       else if (frame.image) {
+        const shown = displayOf(frame);
         viewer.setImage({
-          image: frame.image,
-          mask: frame.mask || undefined,
+          image: shown.image,
+          mask: shown.mask || undefined,
           range: frame.range || undefined,
           // Two-sided frames stay linear so that zero is neutral and noise is not amplified.
           stretch: frame.diverging ? 'linear' : s.stretch,
@@ -1321,6 +1350,10 @@ async function boot() {
     if (!pts.length) note = 'No exposure covers this position cleanly. Try a source nearer the middle of the field.';
     else if (missing.length) note = `Detectors loaded: ${loaded.map((d) => `D${d}`).join(', ')}. One point per exposure; each exposure sees the source at a different wavelength.`;
     else note = 'All six detectors loaded: 0.75 to 5.0 micrometres. One point per exposure.';
+    const nSat = pts.filter((p) => p && p.sat && p.flagged).length;
+    if (nSat && nSat >= 0.5 * pts.length) note = `This star saturates the detector in ${nSat} of ${pts.length} exposures: the open circles there are not its true brightness (see Light curve for how it is followed instead). ${note}`;
+    if (sel.followed === 'gaia') note += ' The aperture follows the star along its Gaia proper motion.';
+    else if (sel.followed === 'fit') note += ' The aperture follows the source along its measured motion.';
     panels.setSpectrum({ points: pts, binned: sel.binned || [], title, lens, note, more });
   }
 
@@ -1328,20 +1361,7 @@ async function boot() {
     const sel = session.selection;
     if (!sel) return;
     const data = currentData();
-    try {
-      const spec = timed('measureSpectrum', () => pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec));
-      sel.spectrum = spec.points;
-      sel.binned = spec.binned;
-      sel.lightCurve = spec.curve;
-    } catch (err) {
-      console.warn('[tombaugh] photometry failed', err);
-      sel.spectrum = [];
-      sel.binned = [];
-      sel.lightCurve = [];
-    }
-    const title = sel.label || 'Clicked source';
-    refreshSpectrumMore(false);
-    panels.setLightCurve({ points: sel.lightCurve, title });
+    // Motion first: a source that moves has to be followed by the photometry aperture too.
     sel.motion = null;
     if (data && data.layers.length && !data.partial) {
       try {
@@ -1357,14 +1377,79 @@ async function boot() {
       }
     }
     const m = sel.motion;
+    const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
+    sel.identity = verdict.verdict;
+    if (verdict.verdict === 'different' && (!sel.label || sel.label === 'Gaia star')) {
+      // The click landed on a Gaia circle, but what was followed from pass to pass is not that star.
+      sel.label = 'Moving source';
+      if (m.track.length) {
+        sel.ra = m.track[0].ra;
+        sel.dec = m.track[0].dec;
+      }
+      panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
+    }
+    const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
+    sel.followed = follow ? follow.kind : null;
+    try {
+      const spec = timed('measureSpectrum', () => pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec, follow ? { track: follow.track } : {}));
+      sel.spectrum = spec.points;
+      sel.binned = spec.binned;
+      sel.lightCurve = spec.curve;
+    } catch (err) {
+      console.warn('[tombaugh] photometry failed', err);
+      sel.spectrum = [];
+      sel.binned = [];
+      sel.lightCurve = [];
+    }
+    const title = sel.label || 'Clicked source';
+    refreshSpectrumMore(false);
+    panels.setLightCurve({ points: sel.lightCurve, title, note: lightCurveNote(sel) });
     panels.setMotion({
       measured: m ? m.measured : null,
       gaia: m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
       track: m ? m.track : [],
       title,
+      note: motionNote(sel, verdict),
     });
     updateOverlays();
     emit('select', { ...sel });
+  }
+
+  const LIGHTCURVE_NOTE = 'Brightness over time, relative to the source\u2019s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
+  const MOTION_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+
+  function lightCurveNote(sel) {
+    const lc = sel.lightCurve || [];
+    const wing = (sel.spectrum || []).find((p) => p && p.sat && Number.isFinite(p.wingR1));
+    if (lc.length && lc[0].method === 'wings' && wing) {
+      return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux.`;
+    }
+    if (!lc.length && (sel.spectrum || []).length && (sel.spectrum || []).every((p) => p.flagged)) {
+      return 'Every exposure of this source has flagged pixels in the aperture (often a saturated star), and the light around it is too faint or too crowded to follow instead.';
+    }
+    if (sel.followed === 'gaia') return `${LIGHTCURVE_NOTE} The aperture follows the star along its Gaia proper motion.`;
+    if (sel.followed === 'fit') return `${LIGHTCURVE_NOTE} The aperture follows the source along its measured motion.`;
+    return LIGHTCURVE_NOTE;
+  }
+
+  function motionNote(sel, verdict) {
+    const m = sel.motion;
+    const notes = [];
+    if (verdict.verdict === 'different' && m && m.measured && m.gaia) {
+      const fmt = (mas) => (mas >= 100 ? `${(mas / 1000).toFixed(mas >= 1000 ? 1 : 2)} arcsec` : `${mas.toFixed(0)} milliarcsec`);
+      let sep = '';
+      try {
+        const star = m.gaia.star;
+        const at = lib.propagate ? lib.propagate({ ra: star.ra, dec: star.dec, pmra: star.pmra || 0, pmdec: star.pmdec || 0, parallax: star.parallax || 0, epoch: star.epoch ?? 2016.0 }, m.track[0].mjd) : star;
+        const d = lib.separationArcsec ? lib.separationArcsec(m.track[0].ra, m.track[0].dec, at.ra, at.dec) : NaN;
+        if (Number.isFinite(d)) sep = ` ${d.toFixed(1)} arcsec away`;
+      } catch {
+        sep = '';
+      }
+      notes.push(`This source moves ${fmt(m.measured.total)} a year. The nearest Gaia star${sep} moves ${fmt(m.gaia.total)} a year, so it is not the same object: Gaia has no entry for what is moving here.`);
+    }
+    if (m && m.saturated) notes.push('The star saturates the detector, so its position in each pass is taken from the unsaturated light around the flagged core.');
+    return notes.length ? `${notes.join(' ')} ${MOTION_NOTE}` : MOTION_NOTE;
   }
 
   // ---- about, citation, search line -----------------------------------------------------------
@@ -1878,7 +1963,13 @@ async function boot() {
     const c = fmtCoord(e.ra, e.dec);
     const frame = player.frame();
     let value = '';
-    if (frame && !frame.rgb && !frame.rgba) value = e.masked || e.value === null || !Number.isFinite(e.value) ? '   no data' : `   ${e.value.toFixed(Math.abs(e.value) >= 100 ? 1 : 3)} MJy/sr`;
+    if (frame && !frame.rgb && !frame.rgba) {
+      const gi = session.grid && Number.isFinite(e.x) && Number.isFinite(e.y) ? Math.round(e.y) * session.grid.n + Math.round(e.x) : -1;
+      const flaggedHere = gi >= 0 && frame.mask && frame.mask[gi];
+      if (e.masked || e.value === null || !Number.isFinite(e.value)) value = '   no data';
+      else if (flaggedHere) value = '   flagged pixel (filled in for display)';
+      else value = `   ${e.value.toFixed(Math.abs(e.value) >= 100 ? 1 : 3)} MJy/sr`;
+    }
     layout.setReadout(`${c.deg}${c.hms ? `   ${c.hms} ${c.dms}` : ''}${value}`);
   });
   viewer.on('leave', () => layout.setReadout(DEFAULT_READOUT));
