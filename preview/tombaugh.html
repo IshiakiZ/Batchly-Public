@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T09:15:54.337Z, sources sha256 0781303452777de2.
+Single-file build of 111 modules, 2026-11-15T09:24:58.797Z, sources sha256 7ee47a3d815a617b.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -2313,7 +2313,7 @@ report(total);
 return layers;
 }
 });
-__tb_define("src/pipeline.js", function (__tb_self) { __tb_export(__tb_self, { DETECTOR_RANGES: () => DETECTOR_RANGES, VIEW_INFO: () => VIEW_INFO, buildMovie: () => buildMovie, channelOfLayer: () => channelOfLayer, channelRange: () => channelRange, clusterCandidates: () => clusterCandidates, compareWithGaia: () => compareWithGaia, describePasses: () => describePasses, fillMaskedForDisplay: () => fillMaskedForDisplay, findChangeCandidates: () => findChangeCandidates, fitModel: () => fitModel, fmtDateTime: () => fmtDateTime, fmtDay: () => fmtDay, fmtDistance: () => fmtDistance, fmtMonth: () => fmtMonth, fmtWave: () => fmtWave, gaiaGhosts: () => gaiaGhosts, layerWave: () => layerWave, lensDetectors: () => lensDetectors, measureMotion: () => measureMotion, measureSpectrum: () => measureSpectrum, mjdToDate: () => mjdToDate, normalizeLayers: () => normalizeLayers, passHop: () => passHop, photometryTrack: () => photometryTrack, prepareResidual: () => prepareResidual, selectChannel: () => selectChannel, splitPasses: () => splitPasses, timelineGroups: () => timelineGroups, trackOffsets: () => trackOffsets });
+__tb_define("src/pipeline.js", function (__tb_self) { __tb_export(__tb_self, { DETECTOR_RANGES: () => DETECTOR_RANGES, VIEW_INFO: () => VIEW_INFO, buildMovie: () => buildMovie, channelOfLayer: () => channelOfLayer, channelRange: () => channelRange, clusterCandidates: () => clusterCandidates, compareWithGaia: () => compareWithGaia, describePasses: () => describePasses, fillMaskedForDisplay: () => fillMaskedForDisplay, findChangeCandidates: () => findChangeCandidates, fitModel: () => fitModel, fmtDateTime: () => fmtDateTime, fmtDay: () => fmtDay, fmtDistance: () => fmtDistance, fmtMonth: () => fmtMonth, fmtWave: () => fmtWave, gaiaGhosts: () => gaiaGhosts, knownTargetAt: () => knownTargetAt, layerWave: () => layerWave, lensDetectors: () => lensDetectors, measureMotion: () => measureMotion, measureSpectrum: () => measureSpectrum, mjdToDate: () => mjdToDate, normalizeLayers: () => normalizeLayers, passHop: () => passHop, photometryTrack: () => photometryTrack, prepareResidual: () => prepareResidual, selectChannel: () => selectChannel, splitPasses: () => splitPasses, timelineGroups: () => timelineGroups, trackOffsets: () => trackOffsets });
 const VIEW_INFO = [
 {
 id: 'passes',
@@ -3379,6 +3379,23 @@ const diff = Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec);
 const fitErr = Math.hypot(Number.isFinite(m.errPmra) ? m.errPmra : 0, Number.isFinite(m.errPmdec) ? m.errPmdec : 0);
 const err = Math.max(300, fitErr);
 return { verdict: diff > 3 * err && diff > 500 ? 'different' : 'consistent', diff, err };
+}
+function knownTargetAt(lib, ra, dec, mjd, tolArcsec = 5) {
+if (!Array.isArray(lib.TARGETS) || !lib.positionNow || !lib.separationArcsec || !Number.isFinite(mjd)) return null;
+let best = null;
+let bestSep = tolArcsec;
+for (const t of lib.TARGETS) {
+try {
+const pos = lib.positionNow(t, mjd);
+const sep = lib.separationArcsec(ra, dec, pos.ra, pos.dec);
+if (sep <= bestSep) {
+best = t;
+bestSep = sep;
+}
+} catch {
+}
+}
+return best;
 }
 function photometryTrack(lib, motion, verdict) {
 if (!motion) return null;
@@ -7050,6 +7067,15 @@ sel.dec = m.track[0].dec;
 }
 panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
 }
+if (!sel.label || ['Gaia star', 'Moving source', 'Clicked source'].includes(sel.label)) {
+const frameNow = player.frame();
+const at = m && m.track.length ? m.track[0] : { ra: sel.ra, dec: sel.dec, mjd: frameNow ? frameNow.mjd : NaN };
+const known = pipeline.knownTargetAt(lib, at.ra, at.dec, at.mjd);
+if (known) {
+sel.label = known.name;
+panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
+}
+}
 const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
 sel.followed = follow ? follow.kind : null;
 try {
@@ -9327,13 +9353,137 @@ const rCore = radii[Math.min(radii.length - 1, Math.floor(0.85 * radii.length))]
 const r1 = rCore + 1;
 const r2 = r1 + 2.5;
 for (const u of ok) {
-const w = wingPhot(u.frame, u.ra, u.dec, r1, r2, opts);
-const clean = w.ok && u.rSat <= r1 - 0.5;
+u.ring = ringSamples(u.frame, u.ra, u.dec, r1, r2, opts);
+u.amp = u.ring.ok && u.rSat <= r1 - 0.5 ? u.ring.mean : NaN;
+}
+const NB = Math.max(3, Math.round((r2 - r1) / 0.5));
+const binOf = (r) => Math.max(0, Math.min(NB - 1, Math.floor(((r - r1) / (r2 - r1)) * NB)));
+const byDet = new Map();
+for (const u of ok) {
+const det = u.p.det || 0;
+if (!byDet.has(det)) byDet.set(det, []);
+byDet.get(det).push(u);
+}
+for (const group of byDet.values()) {
+let shape = null;
+for (let round = 0; round < 2; round++) {
+const bins = Array.from({ length: NB }, () => []);
+for (const u of group) {
+if (!(u.amp > 0)) continue;
+for (let k = 0; k < u.ring.n; k++) bins[binOf(u.ring.r[k])].push(u.ring.v[k] / u.amp);
+}
+const next = bins.map((b) => (b.length >= 3 ? medianInPlace(Float64Array.from(b), b.length) : NaN));
+if (next.some((t) => !(t > 0))) break;
+shape = next;
+for (const u of group) {
+if (!Number.isFinite(u.amp)) continue;
+let st = 0, stt = 0, svar = 0;
+for (let k = 0; k < u.ring.n; k++) {
+const t = shape[binOf(u.ring.r[k])];
+st += t * u.ring.v[k];
+stt += t * t;
+svar += t * t * u.ring.var[k];
+}
+if (stt > 0) {
+u.amp = st / stt;
+u.ampErr = Math.sqrt(svar) / stt;
+}
+}
+}
+for (const u of group) u.shaped = !!shape;
+}
+const area = Math.PI * (r2 * r2 - r1 * r1);
+for (const u of ok) {
+const good = Number.isFinite(u.amp) && u.ring.ok;
+const err = Number.isFinite(u.ampErr) ? u.ampErr : u.ring.errMean;
 Object.assign(u.p, {
 sat: true, rSat: u.rSat, wingR1: r1, wingR2: r2,
-wing_uJy: w.flux_uJy, wingErr_uJy: w.err_uJy, wingOk: clean && Number.isFinite(w.flux_uJy) && w.err_uJy > 0,
+wing_uJy: good ? u.amp * area * MJYSR_TO_UJY_PER_PIX : NaN,
+wingErr_uJy: good ? err * area * MJYSR_TO_UJY_PER_PIX : NaN,
+wingOk: good && u.amp > 0 && err > 0,
 });
 }
+}
+function ringSamples(frame, ra, dec, r1, r2, opts = {}) {
+const { badMask = PHOT_BAD_MASK, subtractZodi = true, wcsFactory = makeWcs, minGood = 0.5 } = opts;
+const none = { ok: false, n: 0, mean: NaN, errMean: NaN, good: 0, r: [], v: [], var: [] };
+if (!frame || !frame.image) return none;
+const { nx, ny, image } = frame;
+const variance = frame.variance || null;
+const zodi = subtractZodi ? frame.zodi || null : null;
+const flags = frame.flags || null;
+let x0 = NaN;
+let y0 = NaN;
+try {
+[x0, y0] = wcsFactory(frame.wcs).skyToPix(ra, dec);
+} catch {
+return none;
+}
+if (!Number.isFinite(x0) || !Number.isFinite(y0)) return none;
+if (x0 - r2 < -0.5 || y0 - r2 < -0.5 || x0 + r2 > nx - 0.5 || y0 + r2 > ny - 0.5) return none;
+const { bg, bgSigma, nBg } = ringBackground(frame, x0, y0, r2 + 2.5, r2 + 5.5, badMask, zodi);
+const r = [];
+const v = [];
+const vr = [];
+let all = 0;
+for (let y = Math.floor(y0 - r2); y <= Math.ceil(y0 + r2); y++) {
+for (let x = Math.floor(x0 - r2); x <= Math.ceil(x0 + r2); x++) {
+const rr = Math.hypot(x - x0, y - y0);
+if (rr < r1 || rr > r2) continue;
+all++;
+if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+const i = y * nx + x;
+if (flags && (flags[i] & badMask) !== 0) continue;
+const val = image[i] - (zodi ? zodi[i] : 0);
+if (!Number.isFinite(val)) continue;
+const pv = variance ? variance[i] : NaN;
+r.push(rr);
+v.push(val - bg);
+vr.push(pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
+}
+}
+const n = v.length;
+const good = all > 0 ? n / all : 0;
+if (n < 6 || good < minGood) return { ...none, good };
+let sum = 0, svar = 0;
+for (let k = 0; k < n; k++) { sum += v[k]; svar += vr[k]; }
+return {
+ok: true, n, good, r, v, var: vr,
+mean: sum / n,
+errMean: Math.sqrt(svar / (n * n) + (nBg > 0 ? (Math.PI / 2) * bgSigma * bgSigma / nBg : 0)),
+};
+}
+function ringBackground(frame, x0, y0, bgIn, bgOut, badMask, zodi) {
+const { nx, ny, image } = frame;
+const flags = frame.flags || null;
+const vals = [];
+for (let y = Math.max(0, Math.floor(y0 - bgOut)); y <= Math.min(ny - 1, Math.ceil(y0 + bgOut)); y++) {
+for (let x = Math.max(0, Math.floor(x0 - bgOut)); x <= Math.min(nx - 1, Math.ceil(x0 + bgOut)); x++) {
+const q = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+if (q < bgIn * bgIn || q >= bgOut * bgOut) continue;
+const i = y * nx + x;
+if (flags && (flags[i] & badMask) !== 0) continue;
+const val = image[i] - (zodi ? zodi[i] : 0);
+if (Number.isFinite(val)) vals.push(val);
+}
+}
+let nBg = vals.length;
+if (nBg < 8) return { bg: 0, bgSigma: 0, nBg: 0 };
+const a = Float64Array.from(vals);
+const buf = new Float64Array(nBg);
+let bg = 0;
+let bgSigma = 0;
+for (let round = 0; round < 4; round++) {
+for (let j = 0; j < nBg; j++) buf[j] = a[j];
+bg = medianInPlace(buf, nBg);
+for (let j = 0; j < nBg; j++) buf[j] = Math.abs(a[j] - bg);
+bgSigma = MAD_TO_SIGMA * medianInPlace(buf, nBg);
+let kept = 0;
+for (let j = 0; j < nBg; j++) if (Math.abs(a[j] - bg) <= 3 * bgSigma) a[kept++] = a[j];
+if (kept === nBg || kept < 8) break;
+nBg = kept;
+}
+return { bg, bgSigma, nBg };
 }
 function usablePoint(p) {
 return p && p.ok !== false && !p.flagged && Number.isFinite(p.flux_uJy) && p.err_uJy > 0
@@ -25078,7 +25228,7 @@ throw asCutoutError(err, 'S3 file info');
 }
 }
 });
-__tb_define("../proxy/src/identify.js", function (__tb_self) { __tb_export(__tb_self, { IDENTIFY_DEFAULT_RADIUS: () => IDENTIFY_DEFAULT_RADIUS, IDENTIFY_MAX_OBJECTS: () => IDENTIFY_MAX_OBJECTS, IDENTIFY_MAX_RADIUS: () => IDENTIFY_MAX_RADIUS, IDENTIFY_MIN_RADIUS: () => IDENTIFY_MIN_RADIUS, MOVER_MIN_PM: () => MOVER_MIN_PM, MOVER_SEARCH_RADIUS: () => MOVER_SEARCH_RADIUS, MOVER_TOLERANCE_ARCSEC: () => MOVER_TOLERANCE_ARCSEC, OTYPE_LABELS: () => OTYPE_LABELS, SIMBAD_PAGE: () => SIMBAD_PAGE, SIMBAD_TAP_MIRROR: () => SIMBAD_TAP_MIRROR, SIMBAD_TAP_SYNC: () => SIMBAD_TAP_SYNC, buildIdentifyQuery: () => buildIdentifyQuery, buildMoversQuery: () => buildMoversQuery, clampRadius: () => clampRadius, displayName: () => displayName, identifyCone: () => identifyCone, identifyFromSynthetic: () => identifyFromSynthetic, matchMovers: () => matchMovers, otypeLabel: () => otypeLabel, parseCsv: () => parseCsv, parseIdentifyCsv: () => parseIdentifyCsv, resetSimbadBreaker: () => resetSimbadBreaker, separationArcsec: () => separationArcsec, simbadUrl: () => simbadUrl }); const { UpstreamError } = __tb_require("../proxy/src/irsa.js");
+__tb_define("../proxy/src/identify.js", function (__tb_self) { __tb_export(__tb_self, { IDENTIFY_DEFAULT_RADIUS: () => IDENTIFY_DEFAULT_RADIUS, IDENTIFY_MAX_OBJECTS: () => IDENTIFY_MAX_OBJECTS, IDENTIFY_MAX_RADIUS: () => IDENTIFY_MAX_RADIUS, IDENTIFY_MIN_RADIUS: () => IDENTIFY_MIN_RADIUS, MOVER_MIN_PM: () => MOVER_MIN_PM, MOVER_SEARCH_RADIUS: () => MOVER_SEARCH_RADIUS, MOVER_TOLERANCE_ARCSEC: () => MOVER_TOLERANCE_ARCSEC, OTYPE_LABELS: () => OTYPE_LABELS, SIMBAD_PAGE: () => SIMBAD_PAGE, SIMBAD_TAP_MIRROR: () => SIMBAD_TAP_MIRROR, SIMBAD_TAP_SYNC: () => SIMBAD_TAP_SYNC, buildIdentifyQuery: () => buildIdentifyQuery, buildMoversQuery: () => buildMoversQuery, clampRadius: () => clampRadius, displayName: () => displayName, identifyCone: () => identifyCone, identifyFromSynthetic: () => identifyFromSynthetic, matchMovers: () => matchMovers, otypeLabel: () => otypeLabel, parseCsv: () => parseCsv, parseIdentifyCsv: () => parseIdentifyCsv, rankObjects: () => rankObjects, resetSimbadBreaker: () => resetSimbadBreaker, separationArcsec: () => separationArcsec, simbadUrl: () => simbadUrl }); const { UpstreamError } = __tb_require("../proxy/src/irsa.js");
 ;
 const SIMBAD_TAP_SYNC = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
 const SIMBAD_TAP_MIRROR = 'https://simbad.harvard.edu/simbad/sim-tap/sync';
@@ -25661,11 +25811,36 @@ if (same) same.mover = m.mover;
 objects.push(m);
 }
 }
-objects.sort((p, q) => (p.sepArcsec ?? Infinity) - (q.sepArcsec ?? Infinity));
 } catch {
 }
 }
-return { objects: objects.slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
+return { objects: rankObjects(objects).slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
+}
+const isPlanet = (o) => typeof o.type === 'string' && /^Pl\??$/.test(o.type);
+const bareName = (name) => String(name || '').replace(/^NAME\s+/i, '').trim().toLowerCase();
+function rankObjects(objects) {
+const list = (objects || []).filter(Boolean);
+const sep = (o) => (Number.isFinite(o.sepArcsec) ? o.sepArcsec : Infinity);
+const hosts = list.filter((o) => !isPlanet(o));
+const rank = new Map();
+for (const o of list) {
+let r = sep(o);
+if (isPlanet(o)) {
+const name = bareName(o.name).replace(/\s+[a-z]$/, '');
+const pm = Math.hypot(o.pmra, o.pmdec);
+const host = hosts.find((h) => bareName(h.name) === name)
+|| hosts.find((h) => {
+const hpm = Math.hypot(h.pmra, h.pmdec);
+return pm > 0 && hpm > 0 && Math.abs(hpm - pm) <= 0.05 * pm && Math.abs(sep(h) - sep(o)) <= 5;
+});
+if (host) r = Math.max(r, sep(host)) + 1e-6;
+}
+rank.set(o, r);
+}
+return list
+.map((o, i) => ({ o, i }))
+.sort((a, b) => rank.get(a.o) - rank.get(b.o) || a.i - b.i)
+.map((e) => e.o);
 }
 const SYNTHETIC_KINDS = {
 mover: { type: 'PM*', spType: 'M4V', name: 'Synthetic high proper-motion star' },
@@ -26702,7 +26877,7 @@ return jsonResponse({ ...identifyFromSynthetic(sky, ra, dec, radius, { mjd }), s
 }
 const ra5 = roundTo(ra, 5);
 const dec5 = roundTo(dec, 5);
-const key = await cacheKey(['identify', 'v2', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
+const key = await cacheKey(['identify', 'v3', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
 const cached = decodeJson(await cacheGet(key, { maxAgeSeconds: IDENTIFY_TTL_SECONDS }));
 const headers = { 'cache-control': 'public, max-age=86400' };
 if (cached && Array.isArray(cached.objects)) return jsonResponse({ ...cached, cached: true }, 200, headers);
