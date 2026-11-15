@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T09:24:58.797Z, sources sha256 7ee47a3d815a617b.
+Single-file build of 111 modules, 2026-11-15T09:39:43.637Z, sources sha256 14c120ba978cddce.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -2447,18 +2447,31 @@ const median = quantileSorted(sorted, 50);
 const dev = sorted.map((v) => Math.abs(v - median)).sort((a, b) => a - b);
 return { median, sigma: 1.4826 * quantileSorted(dev, 50) };
 }
-function localSplitPasses(items, gapDays = 45) {
+function localSplitPasses(items, gapDays = 45, maxSpanDays = 120) {
 const sorted = [...items].sort((a, b) => a.mjd - b.mjd);
-const passes = [];
+const runs = [];
 let current = [];
 for (const item of sorted) {
 if (current.length && item.mjd - current[current.length - 1].mjd > gapDays) {
-passes.push(current);
+runs.push(current);
 current = [];
 }
 current.push(item);
 }
-if (current.length) passes.push(current);
+if (current.length) runs.push(current);
+const passes = [];
+for (const run of runs) {
+const t0 = run[0].mjd;
+const span = run[run.length - 1].mjd - t0;
+if (!(span > maxSpanDays)) {
+passes.push(run);
+continue;
+}
+const k = Math.ceil(span / 90);
+const seasons = Array.from({ length: k }, () => []);
+for (const item of run) seasons[Math.min(k - 1, Math.floor(((item.mjd - t0) / span) * k))].push(item);
+for (const season of seasons) if (season.length) passes.push(season);
+}
 return passes;
 }
 function localStack(layers) {
@@ -3509,7 +3522,7 @@ result.gaia = null;
 }
 return result;
 }
-function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.03 } = {}) {
+function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.08 } = {}) {
 if (!image || !(n > 0)) return null;
 const ny = Math.floor(image.length / n);
 const total = n * ny;
@@ -5387,25 +5400,39 @@ if (a === b) return a;
 if (a.slice(0, 7) === b.slice(0, 7)) return `${a} to ${b.slice(8)}`;
 return `${a} to ${b}`;
 }
-function summarizePasses(refs, gapDays = 45) {
+function summarizePasses(refs, gapDays = 45, maxSpanDays = 120) {
 const list = (refs || []).filter((r) => r && Number.isFinite(r.mjd)).slice().sort((a, b) => a.mjd - b.mjd);
-const passes = [];
-let cur = null;
+const runs = [];
+let run = null;
 let last = -Infinity;
 for (const ref of list) {
-if (!cur || ref.mjd - last > gapDays) {
-cur = { index: passes.length, mjd0: ref.mjd, mjd1: ref.mjd, total: 0, perDet: {} };
-passes.push(cur);
+if (!run || ref.mjd - last > gapDays) {
+run = [];
+runs.push(run);
 }
-cur.mjd1 = ref.mjd;
-cur.total += 1;
-(cur.perDet[ref.det] || (cur.perDet[ref.det] = [])).push(ref);
+run.push(ref);
 last = ref.mjd;
 }
-for (const p of passes) {
+const groups = [];
+for (const r of runs) {
+const t0 = r[0].mjd;
+const span = r[r.length - 1].mjd - t0;
+if (!(span > maxSpanDays)) {
+groups.push(r);
+continue;
+}
+const k = Math.ceil(span / 90);
+const seasons = Array.from({ length: k }, () => []);
+for (const ref of r) seasons[Math.min(k - 1, Math.floor(((ref.mjd - t0) / span) * k))].push(ref);
+for (const season of seasons) if (season.length) groups.push(season);
+}
+const passes = groups.map((g, index) => {
+const p = { index, mjd0: g[0].mjd, mjd1: g[g.length - 1].mjd, total: g.length, perDet: {} };
+for (const ref of g) (p.perDet[ref.det] || (p.perDet[ref.det] = [])).push(ref);
 p.label = monthLabel((p.mjd0 + p.mjd1) / 2);
 p.dates = dayRange(p.mjd0, p.mjd1);
-}
+return p;
+});
 return passes;
 }
 function foundLine(refs, det = null) {
@@ -8177,7 +8204,7 @@ function mjdNow() {
 return Date.now() / MS_PER_DAY + MJD_UNIX_EPOCH;
 }
 });
-__tb_define("src/core/frames.js", function (__tb_self) { __tb_export(__tb_self, { DETECTORS: () => DETECTORS, channelCenter: () => channelCenter, channelOf: () => channelOf, channelRange: () => channelRange, detOf: () => detOf, groupLayers: () => groupLayers, layerWave: () => layerWave, medianMjd: () => medianMjd, passLabel: () => passLabel, splitPasses: () => splitPasses });
+__tb_define("src/core/frames.js", function (__tb_self) { __tb_export(__tb_self, { DETECTORS: () => DETECTORS, SEASON_DAYS: () => SEASON_DAYS, channelCenter: () => channelCenter, channelOf: () => channelOf, channelRange: () => channelRange, detOf: () => detOf, groupLayers: () => groupLayers, layerWave: () => layerWave, medianMjd: () => medianMjd, passLabel: () => passLabel, splitPasses: () => splitPasses });
 const DETECTORS = [
 { det: 1, min: 0.75, max: 1.09, channels: 17 },
 { det: 2, min: 1.10, max: 1.62, channels: 17 },
@@ -8219,23 +8246,37 @@ function channelCenter(det, ch) {
 const [a, b] = channelRange(det, ch);
 return Math.sqrt(a * b);
 }
-function splitPasses(items, gapDays = 45) {
+function splitPasses(items, gapDays = 45, maxSpanDays = 120) {
 const sorted = [];
 for (const it of items || []) if (it && Number.isFinite(it.mjd)) sorted.push(it);
 sorted.sort((a, b) => a.mjd - b.mjd);
-const passes = [];
+const runs = [];
 let current = null;
 let last = -Infinity;
 for (const it of sorted) {
 if (!current || it.mjd - last > gapDays) {
 current = [];
-passes.push(current);
+runs.push(current);
 }
 current.push(it);
 last = it.mjd;
 }
+const passes = [];
+for (const run of runs) {
+const t0 = run[0].mjd;
+const span = run[run.length - 1].mjd - t0;
+if (!(span > maxSpanDays)) {
+passes.push(run);
+continue;
+}
+const k = Math.ceil(span / SEASON_DAYS);
+const seasons = Array.from({ length: k }, () => []);
+for (const it of run) seasons[Math.min(k - 1, Math.floor(((it.mjd - t0) / span) * k))].push(it);
+for (const season of seasons) if (season.length) passes.push(season);
+}
 return passes;
 }
+const SEASON_DAYS = 90;
 function medianMjd(items) {
 const t = [];
 for (const it of items || []) if (it && Number.isFinite(it.mjd)) t.push(it.mjd);
@@ -9183,7 +9224,13 @@ const pv = variance ? variance[i] : NaN;
 varSum += f * f * (pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
 }
 }
-if (!(area > 0)) return failed(frame, { x: x0, y: y0 });
+if (!(area > 0)) {
+const w = sampleAt(frame.wave, nx, ny, x0, y0);
+const wAt = Number.isFinite(w) && w > 0 ? w : frame.waveCenter;
+let b = frame.bwCenter;
+if (b > 0 && frame.waveCenter > 0 && wAt > 0) b = b * wAt / frame.waveCenter;
+return failed(frame, { x: x0, y: y0, wave: wAt, bw: Number.isFinite(b) ? b : NaN, masked: true });
+}
 const apcor = apCorr && caught > 0.2 ? caught : 1;
 const net = (sum - bg * area) / apcor;
 const bgVar = nAnn > 0 ? area * area * (Math.PI / 2) * bgSigma * bgSigma / nAnn : 0;
@@ -9330,17 +9377,18 @@ const pos = opts.track(frame.mjd);
 if (pos && Number.isFinite(pos.ra) && Number.isFinite(pos.dec)) { r = pos.ra; d = pos.dec; }
 }
 const p = aperturePhot(frame, r, d, opts);
-if (p.ok || opts.keepFailed) {
-points.push(p);
-used.push({ frame, ra: r, dec: d, p });
+if (p.ok || opts.keepFailed) points.push(p);
+if (p.ok || p.masked) used.push({ frame, ra: r, dec: d, p });
 }
+if (opts.wings !== false) {
+addWings(used, opts);
+if (!opts.keepFailed) for (const u of used) if (!u.p.ok && u.p.wingOk) points.push(u.p);
 }
-if (opts.wings !== false) addWings(used, opts);
 points.sort((a, b) => (Number.isFinite(a.wave) ? a.wave : Infinity) - (Number.isFinite(b.wave) ? b.wave : Infinity));
 return points;
 }
 function addWings(used, opts) {
-const ok = used.filter((u) => u.p.ok);
+const ok = used.filter((u) => u.p.ok || u.p.masked);
 if (ok.length < 3) return;
 const radii = [];
 for (const u of ok) {
@@ -9392,6 +9440,12 @@ u.ampErr = Math.sqrt(svar) / stt;
 }
 for (const u of group) u.shaped = !!shape;
 }
+const snr = [];
+for (const u of ok) {
+const e = Number.isFinite(u.ampErr) ? u.ampErr : u.ring.errMean;
+if (Number.isFinite(u.amp) && e > 0) snr.push(u.amp / e);
+}
+if (snr.length < 3 || medianInPlace(Float64Array.from(snr), snr.length) < 5) return;
 const area = Math.PI * (r2 * r2 - r1 * r1);
 for (const u of ok) {
 const good = Number.isFinite(u.amp) && u.ring.ok;
@@ -9654,7 +9708,88 @@ mjd: p.mjd, ratio: p.flux_uJy / m, err: p.err_uJy / m, wave: p.wave, det,
 flux_uJy: p.flux_uJy, model_uJy: m, method,
 });
 }
+refineByWavelength(out);
 out.sort((a, b) => a.mjd - b.mjd);
+return out;
+}
+function refineByWavelength(points, { minPoints = 40, perBin = 8, minSpanDays = 60, minSpread = 0.6 } = {}) {
+const groups = new Map();
+for (const p of points) {
+if (!groups.has(p.det)) groups.set(p.det, []);
+groups.get(p.det).push(p);
+}
+for (const pts of groups.values()) {
+const n = pts.length;
+if (n < minPoints) continue;
+let t0 = Infinity;
+let t1 = -Infinity;
+for (const p of pts) { if (p.mjd < t0) t0 = p.mjd; if (p.mjd > t1) t1 = p.mjd; }
+const span = t1 - t0;
+if (!(span >= minSpanDays)) continue;
+const nb = Math.max(4, Math.min(24, Math.floor(n / perBin)));
+const lnw = Float64Array.from(pts, (p) => Math.log(p.wave));
+const mjd = Float64Array.from(pts, (p) => p.mjd);
+const byWave = binOrder(lnw, nb);
+if (byWave.some((bin) => {
+let b0 = Infinity;
+let b1 = -Infinity;
+for (const k of bin) { if (mjd[k] < b0) b0 = mjd[k]; if (mjd[k] > b1) b1 = mjd[k]; }
+return bin.length < 5 || b1 - b0 < minSpread * span;
+})) continue;
+const ratio = Float64Array.from(pts, (p) => p.ratio);
+let inTime = new Float64Array(n).fill(1);
+let inWave = new Float64Array(n).fill(1);
+let ok = true;
+for (let round = 0; round < 3 && ok; round++) {
+const next = binnedMedianCurve(mjd, ratio.map((r, k) => r / inWave[k]), nb);
+if (!next) { ok = false; break; }
+inTime = next;
+const w = binnedMedianCurve(lnw, ratio.map((r, k) => r / inTime[k]), nb);
+if (!w) { ok = false; break; }
+inWave = w;
+}
+if (!ok) continue;
+const norm = medianInPlace(Float64Array.from(inWave), n);
+if (!(norm > 0)) continue;
+pts.forEach((p, k) => {
+const c = inWave[k] / norm;
+if (!(c > 0)) return;
+p.ratio /= c;
+p.err /= c;
+p.model_uJy *= c;
+p.refined = true;
+});
+}
+}
+function binOrder(x, nb) {
+const order = Array.from(x.keys()).sort((a, b) => x[a] - x[b]);
+const bins = [];
+for (let b = 0; b < nb; b++) bins.push(order.slice(Math.floor((b * order.length) / nb), Math.floor(((b + 1) * order.length) / nb)));
+return bins;
+}
+function binnedMedianCurve(x, y, nb) {
+const bins = binOrder(x, nb);
+const cx = [];
+const cy = [];
+for (const bin of bins) {
+if (!bin.length) return null;
+const m = medianInPlace(Float64Array.from(bin, (k) => y[k]), bin.length);
+if (!(m > 0)) return null;
+cx.push(medianInPlace(Float64Array.from(bin, (k) => x[k]), bin.length));
+cy.push(m);
+}
+const out = new Float64Array(x.length);
+for (let i = 0; i < x.length; i++) {
+const v = x[i];
+if (v <= cx[0]) out[i] = cy[0];
+else if (v >= cx[nb - 1]) out[i] = cy[nb - 1];
+else {
+let k = 0;
+while (k < nb - 2 && v > cx[k + 1]) k++;
+const f = cx[k + 1] > cx[k] ? (v - cx[k]) / (cx[k + 1] - cx[k]) : 0;
+out[i] = cy[k] + f * (cy[k + 1] - cy[k]);
+}
+}
 return out;
 }
 function wingPoints(points) {
@@ -9663,7 +9798,7 @@ const wing = all.filter((p) => p && p.sat && p.wingOk);
 if (wing.length < 5) return null;
 const core = all.filter((p) => usablePoint(p));
 if (core.length >= wing.length) return null;
-return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, method: 'wings' }));
+return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, ok: true, method: 'wings' }));
 }
 function fluxToABmag(uJy) {
 return uJy > 0 ? 23.9 - 2.5 * Math.log10(uJy) : NaN;
@@ -14714,7 +14849,7 @@ bins[i].push(p);
 }
 for (const b of bins) {
 if (!b.length) continue;
-const m = weightedMean(b.map((p) => p.ratio), b.map((p) => p.err));
+const m = robustCentre(b);
 let t = 0;
 for (const p of b) t += p.mjd;
 epochs.push({
@@ -14737,6 +14872,18 @@ count.set(e.label, (count.get(e.label) || 0) + 1);
 }
 for (const e of epochs) if (count.get(e.label) > 1) e.label = formatDayMonthYear(e.mjd);
 return epochs;
+}
+function robustCentre(bin) {
+const mean = weightedMean(bin.map((p) => p.ratio), bin.map((p) => p.err));
+if (bin.length < 5) return mean;
+const v = bin.map((p) => p.ratio).sort((a, b) => a - b);
+const med = quantile(v, 0.5);
+const dev = v.map((x) => Math.abs(x - med)).sort((a, b) => a - b);
+const scatter = 1.4826 * quantile(dev, 0.5);
+const errs = bin.map((p) => p.err).filter((e) => isNum(e) && e > 0).sort((a, b) => a - b);
+const typical = errs.length ? quantile(errs, 0.5) : 0;
+if (!(scatter > 2 * typical)) return mean;
+return { mean: med, err: (1.253 * scatter) / Math.sqrt(bin.length), robust: true };
 }
 const PERCENT_STEPS = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100];
 function sigmaText(s) {
