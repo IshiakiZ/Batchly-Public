@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T08:51:33.248Z, sources sha256 f1196a8dbd247ee8.
+Single-file build of 111 modules, 2026-11-15T09:15:54.337Z, sources sha256 0781303452777de2.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -1317,9 +1317,9 @@ if (attempt < attempts) await sleep(backoffMs * Math.pow(3, attempt));
 }
 throw lastError;
 }
-function searchCached(entry, ra, dec, isCurrent, signal) {
+function searchCached(entry, ra, dec) {
 if (!entry.searchPromise) {
-const promise = withRetries(() => api.search(ra, dec, { signal }), isCurrent, 1);
+const promise = withRetries(() => api.search(ra, dec, {}), () => true, 1);
 entry.searchPromise = promise;
 promise.catch(() => {
 if (entry.searchPromise === promise) entry.searchPromise = null;
@@ -1341,7 +1341,7 @@ const grid = L.makeGrid(ra, dec, fov);
 const entry = entryFor(ra, dec);
 let search;
 try {
-search = await searchCached(entry, ra, dec, isCurrent, signal);
+search = await searchCached(entry, ra, dec);
 } catch (err) {
 if (isCancelled(err)) throw cancelledError();
 throw err;
@@ -2313,7 +2313,7 @@ report(total);
 return layers;
 }
 });
-__tb_define("src/pipeline.js", function (__tb_self) { __tb_export(__tb_self, { DETECTOR_RANGES: () => DETECTOR_RANGES, VIEW_INFO: () => VIEW_INFO, buildMovie: () => buildMovie, channelOfLayer: () => channelOfLayer, channelRange: () => channelRange, clusterCandidates: () => clusterCandidates, describePasses: () => describePasses, findChangeCandidates: () => findChangeCandidates, fitModel: () => fitModel, fmtDateTime: () => fmtDateTime, fmtDay: () => fmtDay, fmtDistance: () => fmtDistance, fmtMonth: () => fmtMonth, fmtWave: () => fmtWave, gaiaGhosts: () => gaiaGhosts, layerWave: () => layerWave, lensDetectors: () => lensDetectors, measureMotion: () => measureMotion, measureSpectrum: () => measureSpectrum, mjdToDate: () => mjdToDate, normalizeLayers: () => normalizeLayers, passHop: () => passHop, prepareResidual: () => prepareResidual, selectChannel: () => selectChannel, splitPasses: () => splitPasses, timelineGroups: () => timelineGroups, trackOffsets: () => trackOffsets });
+__tb_define("src/pipeline.js", function (__tb_self) { __tb_export(__tb_self, { DETECTOR_RANGES: () => DETECTOR_RANGES, VIEW_INFO: () => VIEW_INFO, buildMovie: () => buildMovie, channelOfLayer: () => channelOfLayer, channelRange: () => channelRange, clusterCandidates: () => clusterCandidates, compareWithGaia: () => compareWithGaia, describePasses: () => describePasses, fillMaskedForDisplay: () => fillMaskedForDisplay, findChangeCandidates: () => findChangeCandidates, fitModel: () => fitModel, fmtDateTime: () => fmtDateTime, fmtDay: () => fmtDay, fmtDistance: () => fmtDistance, fmtMonth: () => fmtMonth, fmtWave: () => fmtWave, gaiaGhosts: () => gaiaGhosts, layerWave: () => layerWave, lensDetectors: () => lensDetectors, measureMotion: () => measureMotion, measureSpectrum: () => measureSpectrum, mjdToDate: () => mjdToDate, normalizeLayers: () => normalizeLayers, passHop: () => passHop, photometryTrack: () => photometryTrack, prepareResidual: () => prepareResidual, selectChannel: () => selectChannel, splitPasses: () => splitPasses, timelineGroups: () => timelineGroups, trackOffsets: () => trackOffsets });
 const VIEW_INFO = [
 {
 id: 'passes',
@@ -3353,9 +3353,9 @@ out.push(ghost);
 }
 return out;
 }
-function measureSpectrum(lib, frames, ra, dec) {
+function measureSpectrum(lib, frames, ra, dec, opts = {}) {
 if (!lib.extractSpectrum) return { points: [], binned: [], curve: [], ok: false };
-const points = lib.extractSpectrum(frames, ra, dec, {}) || [];
+const points = lib.extractSpectrum(frames, ra, dec, opts && typeof opts.track === 'function' ? { track: opts.track } : {}) || [];
 let binned = [];
 let curve = [];
 try {
@@ -3370,8 +3370,48 @@ curve = [];
 }
 return { points, binned, curve, ok: points.some((p) => p && p.ok !== false && Number.isFinite(p.flux_uJy)) };
 }
+function compareWithGaia(motion) {
+const m = motion && motion.measured;
+const g = motion && motion.gaia;
+if (!g || g.total === null || !Number.isFinite(g.pmra) || !Number.isFinite(g.pmdec)) return { verdict: 'none', diff: NaN, err: NaN };
+if (!m || !Number.isFinite(m.pmra) || !Number.isFinite(m.pmdec)) return { verdict: 'unmeasured', diff: NaN, err: NaN };
+const diff = Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec);
+const fitErr = Math.hypot(Number.isFinite(m.errPmra) ? m.errPmra : 0, Number.isFinite(m.errPmdec) ? m.errPmdec : 0);
+const err = Math.max(300, fitErr);
+return { verdict: diff > 3 * err && diff > 500 ? 'different' : 'consistent', diff, err };
+}
+function photometryTrack(lib, motion, verdict) {
+if (!motion) return null;
+const m = motion.measured;
+if (verdict === 'different' && m && Number.isFinite(m.ra0) && Number.isFinite(m.mjd0) && lib.offsetBy) {
+return {
+kind: 'fit',
+track: (mjd) => {
+const t = (mjd - m.mjd0) / 365.25;
+return lib.offsetBy(m.ra0, m.dec0, (m.pmra / 1000) * t, (m.pmdec / 1000) * t);
+},
+};
+}
+const g = motion.gaia;
+if (verdict !== 'different' && g && g.star && g.total >= 300 && lib.propagate) {
+const star = g.star;
+const src = { ra: star.ra, dec: star.dec, pmra: star.pmra || 0, pmdec: star.pmdec || 0, parallax: star.parallax || 0, epoch: star.epoch ?? 2016.0 };
+return {
+kind: 'gaia',
+track: (mjd) => {
+try {
+const pos = lib.propagate(src, mjd);
+return { ra: pos.ra, dec: pos.dec };
+} catch {
+return null;
+}
+},
+};
+}
+return null;
+}
 function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd = null, tolArcsec = 8 } = {}) {
-const result = { track: [], measured: null, gaia: null };
+const result = { track: [], measured: null, gaia: null, saturated: false };
 if (!lib.centroid || !lib.gridSkyToPix || !lib.gridPixToSky || !layers || !layers.length) return result;
 const passes = describePasses(lib, normalizeLayers(lib, layers));
 if (!passes.length) return result;
@@ -3391,9 +3431,15 @@ start = i;
 const [x0, y0] = lib.gridSkyToPix(grid, ra, dec);
 const found = new Array(passes.length).fill(null);
 const locate = (i, x, y) => {
+const near = (c) => c && c.ok && Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x - x, c.y - y) < 6;
 try {
+const core = lib.maskedCoreRadius ? lib.maskedCoreRadius(stacks[i].image, stacks[i].mask, n, x, y) : 0;
+if (core > 0 && lib.centroidWings) {
+const w = lib.centroidWings(stacks[i].image, stacks[i].mask, n, x, y);
+return near(w) ? w : null;
+}
 const c = lib.centroid(stacks[i].image, stacks[i].mask, n, x, y, { box: 5 });
-if (c && c.ok && Number.isFinite(c.x) && Number.isFinite(c.y) && Math.hypot(c.x - x, c.y - y) < 6) return c;
+if (near(c)) return c;
 } catch {
 }
 return null;
@@ -3414,7 +3460,12 @@ if (!found[i]) return;
 const [r, d] = lib.gridPixToSky(grid, found[i].x, found[i].y);
 const errPix = Math.hypot(Number.isFinite(found[i].xErr) ? found[i].xErr : 0.15, Number.isFinite(found[i].yErr) ? found[i].yErr : 0.15) / Math.SQRT2;
 const sigma = Math.max(0.15, errPix * grid.scale);
-result.track.push({ mjd: p.mjd, ra: r, dec: d, sigma, err_arcsec: sigma, w: 1 / (sigma * sigma), snr: found[i].snr });
+const point = { mjd: p.mjd, ra: r, dec: d, sigma, err_arcsec: sigma, w: 1 / (sigma * sigma), snr: found[i].snr };
+if (found[i].method === 'wings') {
+point.method = 'wings';
+result.saturated = true;
+}
+result.track.push(point);
 });
 if (result.track.length >= 2 && lib.fitMotion) {
 try {
@@ -3440,6 +3491,80 @@ result.gaia = null;
 }
 }
 return result;
+}
+function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.03 } = {}) {
+if (!image || !(n > 0)) return null;
+const ny = Math.floor(image.length / n);
+const total = n * ny;
+const missing = new Uint8Array(total);
+let any = 0;
+for (let i = 0; i < total; i++) {
+if ((mask && mask[i]) || !Number.isFinite(image[i])) {
+missing[i] = 1;
+any++;
+}
+}
+if (!any) return null;
+const label = new Int32Array(total);
+const stack = new Int32Array(total);
+const out = new Float32Array(image);
+const still = new Uint8Array(missing);
+const limit = Math.max(1, Math.floor(maxFrac * total));
+let filled = 0;
+let next = 0;
+for (let start = 0; start < total; start++) {
+if (!missing[start] || label[start]) continue;
+next += 1;
+let top = 0;
+stack[top++] = start;
+label[start] = next;
+const members = [];
+let touchesEdge = false;
+while (top > 0) {
+const i = stack[--top];
+members.push(i);
+const x = i % n;
+const y = (i - x) / n;
+if (x === 0 || y === 0 || x === n - 1 || y === ny - 1) touchesEdge = true;
+if (x > 0 && missing[i - 1] && !label[i - 1]) { label[i - 1] = next; stack[top++] = i - 1; }
+if (x < n - 1 && missing[i + 1] && !label[i + 1]) { label[i + 1] = next; stack[top++] = i + 1; }
+if (y > 0 && missing[i - n] && !label[i - n]) { label[i - n] = next; stack[top++] = i - n; }
+if (y < ny - 1 && missing[i + n] && !label[i + n]) { label[i + n] = next; stack[top++] = i + n; }
+}
+if (touchesEdge || members.length > limit) continue;
+let todo = members;
+for (let round = 0; round < 64 && todo.length; round++) {
+const values = [];
+const later = [];
+for (const i of todo) {
+const x = i % n;
+const y = (i - x) / n;
+let sum = 0, count = 0;
+for (let dy = -1; dy <= 1; dy++) {
+for (let dx = -1; dx <= 1; dx++) {
+if (!dx && !dy) continue;
+const xx = x + dx, yy = y + dy;
+if (xx < 0 || yy < 0 || xx >= n || yy >= ny) continue;
+const j = yy * n + xx;
+if (still[j]) continue;
+sum += out[j];
+count++;
+}
+}
+if (count) values.push([i, sum / count]);
+else later.push(i);
+}
+if (!values.length) break;
+for (const [i, v] of values) {
+out[i] = v;
+still[i] = 0;
+filled++;
+}
+todo = later;
+}
+}
+if (!filled) return null;
+return { image: out, mask: still, filled };
 }
 });
 __tb_define("src/ui/layout.js", function (__tb_self) { __tb_export(__tb_self, { clear: () => clear, createLayout: () => createLayout, h: () => h, makeScrollStrip: () => makeScrollStrip, storage: () => storage });
@@ -4960,12 +5085,14 @@ clear(els.spectrumBody).append(spec.head, specHost, specNote);
 const spectrumPlot = mountPlot(specHost, plots.createSpectrumPlot, 'Spectrum', 'The spectrum plot is not available in this build.');
 const lc = sourceHeader();
 const lcHost = h('div', { class: 'plot-host' });
-const lcNote = h('p', { class: 'panel-note' }, 'Brightness over time, relative to the source’s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.');
+const LC_NOTE = 'Brightness over time, relative to the source’s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
+const lcNote = h('p', { class: 'panel-note' }, LC_NOTE);
 clear(els.lightcurveBody).append(lc.head, lcHost, lcNote);
 const lightPlot = mountPlot(lcHost, plots.createLightCurvePlot, 'Light curve', 'The light-curve plot is not available in this build.');
 const mo = sourceHeader();
 const moHost = h('div', { class: 'plot-host is-short' });
-const moNote = h('p', { class: 'panel-note' }, 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.');
+const MO_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+const moNote = h('p', { class: 'panel-note' }, MO_NOTE);
 clear(els.motionBody).append(mo.head, moHost, moNote);
 const motionMeter = mountPlot(moHost, plots.createMotionMeter, 'Motion', 'The motion meter is not available in this build.');
 const candHost = h('div');
@@ -5081,6 +5208,7 @@ console.warn('[tombaugh] light curve plot', err);
 }
 }
 if (note) lcNote.textContent = note;
+else lcNote.textContent = LC_NOTE;
 },
 setMotion({ measured = null, gaia = null, track = [], title = '', note = '' } = {}) {
 if (motionMeter) {
@@ -5092,6 +5220,7 @@ console.warn('[tombaugh] motion meter', err);
 }
 }
 if (note) moNote.textContent = note;
+else moNote.textContent = MO_NOTE;
 },
 setCandidates({ status = 'idle', list = [], active = -1, text = '' } = {}) {
 candidates = list;
@@ -5534,7 +5663,7 @@ name: 'WISE 0855-0714',
 blurb: 'A brown dwarf at about 250 K',
 ra: 133.795129,
 dec: -7.245147,
-epoch: 2014.3,
+epoch: 2010.35,
 pmra: -8118,
 pmdec: 680,
 parallax: 439.0,
@@ -5969,7 +6098,7 @@ if (L.phase === 'search') {
 return {
 kicker: 'Step 1 of 2 · search',
 title: 'Finding exposures of this spot',
-text: 'Asking the IRSA archive which SPHEREx exposures cover this position. The archive is slow: this takes about 20 seconds, sometimes longer. Nothing is frozen.',
+text: 'Looking this position up in an index of every public SPHEREx exposure. This usually takes two or three seconds; if the index is out of reach the archive itself is asked, which can take half a minute.',
 };
 }
 if (L.phase === 'model') {
@@ -6257,6 +6386,10 @@ const search = session.search;
 if (search && search.complete === false) notes.push('The exposure index is still being built; more frames may appear later.');
 const thin = thinningNote();
 if (thin) notes.push(`Crowded field: ${thin} of detector D${store.get().det}, spread evenly over the passes.`);
+const frame = player.frame();
+if (frame && frame.image && !frame.diverging && displayOf(frame).filled) {
+notes.push('A star in this field is bright enough to saturate the detector. Its flagged core is filled in from its rim so it looks like a star; switch on Flagged pixels to see which pixels those are. Measurements never use them.');
+}
 return notes;
 }
 function coverageCounts() {
@@ -6632,6 +6765,22 @@ return out;
 }
 return null;
 }
+function displayOf(frame) {
+if (frame.diverging || !pipeline.fillMaskedForDisplay || !session.grid) return { image: frame.image, mask: frame.mask || null, filled: 0 };
+const displayCache = displayOf.cache || (displayOf.cache = new WeakMap());
+let shown = displayCache.get(frame);
+if (!shown) {
+let fill = null;
+try {
+fill = pipeline.fillMaskedForDisplay(frame.image, frame.mask || null, session.grid.n);
+} catch (err) {
+console.warn('[tombaugh] display fill', err);
+}
+shown = fill || { image: frame.image, mask: frame.mask || null, filled: 0 };
+displayCache.set(frame, shown);
+}
+return shown;
+}
 function renderFrame(frame) {
 if (!frame) return;
 const s = store.get();
@@ -6640,9 +6789,10 @@ try {
 const rgba = frame.rgb || frame.rgba ? rgbaOf(frame) : null;
 if (rgba) viewer.setRgb(rgba);
 else if (frame.image) {
+const shown = displayOf(frame);
 viewer.setImage({
-image: frame.image,
-mask: frame.mask || undefined,
+image: shown.image,
+mask: shown.mask || undefined,
 range: frame.range || undefined,
 stretch: frame.diverging ? 'linear' : s.stretch,
 colormap: frame.diverging ? undefined : s.colormap,
@@ -6865,26 +7015,16 @@ let note = '';
 if (!pts.length) note = 'No exposure covers this position cleanly. Try a source nearer the middle of the field.';
 else if (missing.length) note = `Detectors loaded: ${loaded.map((d) => `D${d}`).join(', ')}. One point per exposure; each exposure sees the source at a different wavelength.`;
 else note = 'All six detectors loaded: 0.75 to 5.0 micrometres. One point per exposure.';
+const nSat = pts.filter((p) => p && p.sat && p.flagged).length;
+if (nSat && nSat >= 0.5 * pts.length) note = `This star saturates the detector in ${nSat} of ${pts.length} exposures: the open circles there are not its true brightness (see Light curve for how it is followed instead). ${note}`;
+if (sel.followed === 'gaia') note += ' The aperture follows the star along its Gaia proper motion.';
+else if (sel.followed === 'fit') note += ' The aperture follows the source along its measured motion.';
 panels.setSpectrum({ points: pts, binned: sel.binned || [], title, lens, note, more });
 }
 function measureSelection() {
 const sel = session.selection;
 if (!sel) return;
 const data = currentData();
-try {
-const spec = timed('measureSpectrum', () => pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec));
-sel.spectrum = spec.points;
-sel.binned = spec.binned;
-sel.lightCurve = spec.curve;
-} catch (err) {
-console.warn('[tombaugh] photometry failed', err);
-sel.spectrum = [];
-sel.binned = [];
-sel.lightCurve = [];
-}
-const title = sel.label || 'Clicked source';
-refreshSpectrumMore(false);
-panels.setLightCurve({ points: sel.lightCurve, title });
 sel.motion = null;
 if (data && data.layers.length && !data.partial) {
 try {
@@ -6900,14 +7040,75 @@ console.warn('[tombaugh] motion measurement failed', err);
 }
 }
 const m = sel.motion;
+const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
+sel.identity = verdict.verdict;
+if (verdict.verdict === 'different' && (!sel.label || sel.label === 'Gaia star')) {
+sel.label = 'Moving source';
+if (m.track.length) {
+sel.ra = m.track[0].ra;
+sel.dec = m.track[0].dec;
+}
+panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
+}
+const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
+sel.followed = follow ? follow.kind : null;
+try {
+const spec = timed('measureSpectrum', () => pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec, follow ? { track: follow.track } : {}));
+sel.spectrum = spec.points;
+sel.binned = spec.binned;
+sel.lightCurve = spec.curve;
+} catch (err) {
+console.warn('[tombaugh] photometry failed', err);
+sel.spectrum = [];
+sel.binned = [];
+sel.lightCurve = [];
+}
+const title = sel.label || 'Clicked source';
+refreshSpectrumMore(false);
+panels.setLightCurve({ points: sel.lightCurve, title, note: lightCurveNote(sel) });
 panels.setMotion({
 measured: m ? m.measured : null,
 gaia: m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
 track: m ? m.track : [],
 title,
+note: motionNote(sel, verdict),
 });
 updateOverlays();
 emit('select', { ...sel });
+}
+const LIGHTCURVE_NOTE = 'Brightness over time, relative to the source\u2019s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
+const MOTION_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+function lightCurveNote(sel) {
+const lc = sel.lightCurve || [];
+const wing = (sel.spectrum || []).find((p) => p && p.sat && Number.isFinite(p.wingR1));
+if (lc.length && lc[0].method === 'wings' && wing) {
+return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux.`;
+}
+if (!lc.length && (sel.spectrum || []).length && (sel.spectrum || []).every((p) => p.flagged)) {
+return 'Every exposure of this source has flagged pixels in the aperture (often a saturated star), and the light around it is too faint or too crowded to follow instead.';
+}
+if (sel.followed === 'gaia') return `${LIGHTCURVE_NOTE} The aperture follows the star along its Gaia proper motion.`;
+if (sel.followed === 'fit') return `${LIGHTCURVE_NOTE} The aperture follows the source along its measured motion.`;
+return LIGHTCURVE_NOTE;
+}
+function motionNote(sel, verdict) {
+const m = sel.motion;
+const notes = [];
+if (verdict.verdict === 'different' && m && m.measured && m.gaia) {
+const fmt = (mas) => (mas >= 100 ? `${(mas / 1000).toFixed(mas >= 1000 ? 1 : 2)} arcsec` : `${mas.toFixed(0)} milliarcsec`);
+let sep = '';
+try {
+const star = m.gaia.star;
+const at = lib.propagate ? lib.propagate({ ra: star.ra, dec: star.dec, pmra: star.pmra || 0, pmdec: star.pmdec || 0, parallax: star.parallax || 0, epoch: star.epoch ?? 2016.0 }, m.track[0].mjd) : star;
+const d = lib.separationArcsec ? lib.separationArcsec(m.track[0].ra, m.track[0].dec, at.ra, at.dec) : NaN;
+if (Number.isFinite(d)) sep = ` ${d.toFixed(1)} arcsec away`;
+} catch {
+sep = '';
+}
+notes.push(`This source moves ${fmt(m.measured.total)} a year. The nearest Gaia star${sep} moves ${fmt(m.gaia.total)} a year, so it is not the same object: Gaia has no entry for what is moving here.`);
+}
+if (m && m.saturated) notes.push('The star saturates the detector, so its position in each pass is taken from the unsaturated light around the flagged core.');
+return notes.length ? `${notes.join(' ')} ${MOTION_NOTE}` : MOTION_NOTE;
 }
 function updateAbout() {
 const s = store.get();
@@ -7383,7 +7584,13 @@ if (!e || !Number.isFinite(e.ra) || !Number.isFinite(e.dec)) return;
 const c = fmtCoord(e.ra, e.dec);
 const frame = player.frame();
 let value = '';
-if (frame && !frame.rgb && !frame.rgba) value = e.masked || e.value === null || !Number.isFinite(e.value) ? '   no data' : `   ${e.value.toFixed(Math.abs(e.value) >= 100 ? 1 : 3)} MJy/sr`;
+if (frame && !frame.rgb && !frame.rgba) {
+const gi = session.grid && Number.isFinite(e.x) && Number.isFinite(e.y) ? Math.round(e.y) * session.grid.n + Math.round(e.x) : -1;
+const flaggedHere = gi >= 0 && frame.mask && frame.mask[gi];
+if (e.masked || e.value === null || !Number.isFinite(e.value)) value = '   no data';
+else if (flaggedHere) value = '   flagged pixel (filled in for display)';
+else value = `   ${e.value.toFixed(Math.abs(e.value) >= 100 ? 1 : 3)} MJy/sr`;
+}
 layout.setReadout(`${c.deg}${c.hms ? `   ${c.hms} ${c.dms}` : ''}${value}`);
 });
 viewer.on('leave', () => layout.setReadout(DEFAULT_READOUT));
@@ -8825,7 +9032,7 @@ npix: b.npix,
 return out;
 }
 });
-__tb_define("src/core/photometry.js", function (__tb_self) { __tb_export(__tb_self, { MJYSR_TO_UJY_PER_PIX: () => MJYSR_TO_UJY_PER_PIX, PHOT_BAD_BITS: () => PHOT_BAD_BITS, PHOT_BAD_MASK: () => PHOT_BAD_MASK, aperturePhot: () => aperturePhot, binSpectrum: () => binSpectrum, extractSpectrum: () => extractSpectrum, fitSpectrumModel: () => fitSpectrumModel, fluxToABmag: () => fluxToABmag, lightCurve: () => lightCurve }); const { makeWcs } = __tb_require("src/core/wcs.js"); const { DETECTORS, channelOf, channelRange, detOf } = __tb_require("src/core/frames.js"); const { medianInPlace } = __tb_require("src/core/stack.js");
+__tb_define("src/core/photometry.js", function (__tb_self) { __tb_export(__tb_self, { MJYSR_TO_UJY_PER_PIX: () => MJYSR_TO_UJY_PER_PIX, PHOT_BAD_BITS: () => PHOT_BAD_BITS, PHOT_BAD_MASK: () => PHOT_BAD_MASK, aperturePhot: () => aperturePhot, binSpectrum: () => binSpectrum, extractSpectrum: () => extractSpectrum, fitSpectrumModel: () => fitSpectrumModel, fluxToABmag: () => fluxToABmag, lightCurve: () => lightCurve, saturationRadius: () => saturationRadius, wingPhot: () => wingPhot, wingPoints: () => wingPoints }); const { makeWcs } = __tb_require("src/core/wcs.js"); const { DETECTORS, channelOf, channelRange, detOf } = __tb_require("src/core/frames.js"); const { medianInPlace } = __tb_require("src/core/stack.js");
 ;
 ;
 ;
@@ -8976,8 +9183,118 @@ npix: area,
 apcor,
 };
 }
+function saturationRadius(frame, x0, y0, { badMask = PHOT_BAD_MASK, rMax = 12 } = {}) {
+if (!frame || !frame.flags || !Number.isFinite(x0) || !Number.isFinite(y0)) return 0;
+const { nx, ny, flags, image } = frame;
+const bad = new Float64Array(rMax + 3);
+const all = new Float64Array(rMax + 3);
+const lim = rMax + 2;
+for (let y = Math.max(0, Math.floor(y0 - lim)); y <= Math.min(ny - 1, Math.ceil(y0 + lim)); y++) {
+for (let x = Math.max(0, Math.floor(x0 - lim)); x <= Math.min(nx - 1, Math.ceil(x0 + lim)); x++) {
+const k = Math.round(Math.hypot(x - x0, y - y0));
+if (k > lim) continue;
+const i = y * nx + x;
+all[k] += 1;
+if ((flags[i] & badMask) !== 0 || !Number.isFinite(image[i])) bad[k] += 1;
+}
+}
+const frac = (k) => (all[k] > 0 ? bad[k] / all[k] : 0);
+if (frac(0) < 0.5 && frac(1) < 0.5) return 0;
+for (let k = 1; k <= rMax; k++) {
+if (frac(k) < 0.25 && frac(k + 1) < 0.25) return k - 0.5;
+}
+return rMax;
+}
+function wingPhot(frame, ra, dec, r1, r2, opts = {}) {
+const { badMask = PHOT_BAD_MASK, subtractZodi = true, wcsFactory = makeWcs, minGood = 0.6 } = opts;
+const bgIn = Number.isFinite(opts.bgIn) ? opts.bgIn : r2 + 2.5;
+const bgOut = Number.isFinite(opts.bgOut) ? opts.bgOut : bgIn + 3;
+const none = { flux_uJy: NaN, err_uJy: NaN, ok: false, good: 0, bg: NaN, x: NaN, y: NaN };
+if (!frame || !frame.image || !(frame.nx > 0) || !(frame.ny > 0) || !(r2 > r1) || !(r1 >= 0)) return none;
+const { nx, ny, image } = frame;
+const variance = frame.variance || null;
+const zodi = subtractZodi ? frame.zodi || null : null;
+const flags = frame.flags || null;
+let x0 = NaN;
+let y0 = NaN;
+try {
+[x0, y0] = wcsFactory(frame.wcs).skyToPix(ra, dec);
+} catch {
+return none;
+}
+if (!Number.isFinite(x0) || !Number.isFinite(y0)) return none;
+if (x0 - r2 < -0.5 || y0 - r2 < -0.5 || x0 + r2 > nx - 0.5 || y0 + r2 > ny - 0.5) return { ...none, x: x0, y: y0 };
+const vals = [];
+for (let y = Math.max(0, Math.floor(y0 - bgOut)); y <= Math.min(ny - 1, Math.ceil(y0 + bgOut)); y++) {
+for (let x = Math.max(0, Math.floor(x0 - bgOut)); x <= Math.min(nx - 1, Math.ceil(x0 + bgOut)); x++) {
+const r2c = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+if (r2c < bgIn * bgIn || r2c >= bgOut * bgOut) continue;
+const i = y * nx + x;
+if (flags && (flags[i] & badMask) !== 0) continue;
+const v = image[i] - (zodi ? zodi[i] : 0);
+if (Number.isFinite(v)) vals.push(v);
+}
+}
+let bg = 0;
+let bgSigma = 0;
+let nBg = vals.length;
+if (nBg >= 8) {
+const a = Float64Array.from(vals);
+const buf = new Float64Array(nBg);
+for (let round = 0; round < 4; round++) {
+for (let j = 0; j < nBg; j++) buf[j] = a[j];
+bg = medianInPlace(buf, nBg);
+for (let j = 0; j < nBg; j++) buf[j] = Math.abs(a[j] - bg);
+bgSigma = MAD_TO_SIGMA * medianInPlace(buf, nBg);
+let kept = 0;
+for (let j = 0; j < nBg; j++) if (Math.abs(a[j] - bg) <= 3 * bgSigma) a[kept++] = a[j];
+if (kept === nBg || kept < 8) break;
+nBg = kept;
+}
+} else {
+nBg = 0;
+}
+let sw = 0, swv = 0, swAll = 0, varSum = 0;
+const a2 = r1 * r1, b2 = r2 * r2;
+for (let y = Math.floor(y0 - r2); y <= Math.ceil(y0 + r2); y++) {
+for (let x = Math.floor(x0 - r2); x <= Math.ceil(x0 + r2); x++) {
+let inside = 0;
+for (let sy = 0; sy < SUB; sy++) {
+const dy = y + (sy + 0.5) / SUB - 0.5 - y0;
+for (let sx = 0; sx < SUB; sx++) {
+const dx = x + (sx + 0.5) / SUB - 0.5 - x0;
+const q = dx * dx + dy * dy;
+if (q >= a2 && q <= b2) inside++;
+}
+}
+if (!inside) continue;
+const f = inside / (SUB * SUB);
+swAll += f;
+if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+const i = y * nx + x;
+if (flags && (flags[i] & badMask) !== 0) continue;
+const v = image[i] - (zodi ? zodi[i] : 0);
+if (!Number.isFinite(v)) continue;
+sw += f;
+swv += f * v;
+const pv = variance ? variance[i] : NaN;
+varSum += f * f * (pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
+}
+}
+const good = swAll > 0 ? sw / swAll : 0;
+if (!(sw > 0) || good < minGood) return { ...none, good, bg, x: x0, y: y0 };
+const area = Math.PI * (b2 - a2);
+const mean = swv / sw - bg;
+const errMean = Math.sqrt(varSum / (sw * sw) + (nBg > 0 ? (Math.PI / 2) * bgSigma * bgSigma / nBg : 0));
+return {
+flux_uJy: mean * area * MJYSR_TO_UJY_PER_PIX,
+err_uJy: errMean * area * MJYSR_TO_UJY_PER_PIX,
+ok: true, good, bg, x: x0, y: y0,
+};
+}
 function extractSpectrum(frames, ra, dec, opts = {}) {
 const points = [];
+const used = [];
 for (const frame of frames || []) {
 if (!frame) continue;
 let r = ra;
@@ -8987,10 +9304,36 @@ const pos = opts.track(frame.mjd);
 if (pos && Number.isFinite(pos.ra) && Number.isFinite(pos.dec)) { r = pos.ra; d = pos.dec; }
 }
 const p = aperturePhot(frame, r, d, opts);
-if (p.ok || opts.keepFailed) points.push(p);
+if (p.ok || opts.keepFailed) {
+points.push(p);
+used.push({ frame, ra: r, dec: d, p });
 }
+}
+if (opts.wings !== false) addWings(used, opts);
 points.sort((a, b) => (Number.isFinite(a.wave) ? a.wave : Infinity) - (Number.isFinite(b.wave) ? b.wave : Infinity));
 return points;
+}
+function addWings(used, opts) {
+const ok = used.filter((u) => u.p.ok);
+if (ok.length < 3) return;
+const radii = [];
+for (const u of ok) {
+u.rSat = u.p.flagged ? saturationRadius(u.frame, u.p.x, u.p.y, opts) : 0;
+if (u.rSat >= 1) radii.push(u.rSat);
+}
+if (radii.length < 3 || radii.length < 0.5 * ok.length) return;
+radii.sort((a, b) => a - b);
+const rCore = radii[Math.min(radii.length - 1, Math.floor(0.85 * radii.length))];
+const r1 = rCore + 1;
+const r2 = r1 + 2.5;
+for (const u of ok) {
+const w = wingPhot(u.frame, u.ra, u.dec, r1, r2, opts);
+const clean = w.ok && u.rSat <= r1 - 0.5;
+Object.assign(u.p, {
+sat: true, rSat: u.rSat, wingR1: r1, wingR2: r2,
+wing_uJy: w.flux_uJy, wingErr_uJy: w.err_uJy, wingOk: clean && Number.isFinite(w.flux_uJy) && w.err_uJy > 0,
+});
+}
 }
 function usablePoint(p) {
 return p && p.ok !== false && !p.flagged && Number.isFinite(p.flux_uJy) && p.err_uJy > 0
@@ -9142,20 +9485,35 @@ return out;
 return { dets, evaluate, curve };
 }
 function lightCurve(points) {
-const model = fitSpectrumModel(points);
+let pts = points || [];
+let method = 'aperture';
+const wings = wingPoints(pts);
+if (wings) {
+pts = wings;
+method = 'wings';
+}
+const model = fitSpectrumModel(pts);
 const out = [];
-for (const p of points || []) {
+for (const p of pts) {
 if (!usablePoint(p)) continue;
 const det = pointDet(p);
 const m = model.evaluate(p.wave, det);
 if (!(m > 0) || !Number.isFinite(m)) continue;
 out.push({
 mjd: p.mjd, ratio: p.flux_uJy / m, err: p.err_uJy / m, wave: p.wave, det,
-flux_uJy: p.flux_uJy, model_uJy: m,
+flux_uJy: p.flux_uJy, model_uJy: m, method,
 });
 }
 out.sort((a, b) => a.mjd - b.mjd);
 return out;
+}
+function wingPoints(points) {
+const all = points || [];
+const wing = all.filter((p) => p && p.sat && p.wingOk);
+if (wing.length < 5) return null;
+const core = all.filter((p) => usablePoint(p));
+if (core.length >= wing.length) return null;
+return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, method: 'wings' }));
 }
 function fluxToABmag(uJy) {
 return uJy > 0 ? 23.9 - 2.5 * Math.log10(uJy) : NaN;
@@ -9676,7 +10034,7 @@ const a = earthPosition(mjd1), b = earthPosition(mjd2);
 return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 });
-__tb_define("src/core/astrometry.js", function (__tb_self) { __tb_export(__tb_self, { GAIA_DR3_EPOCH: () => GAIA_DR3_EPOCH, centroid: () => centroid, centroidError: () => centroidError, fitMotion: () => fitMotion, fitMotionWithParallax: () => fitMotionWithParallax, matchGaia: () => matchGaia, matchGaiaDetailed: () => matchGaiaDetailed, mjdFromYear: () => mjdFromYear, offsetBy: () => offsetBy, positionAngle: () => positionAngle, propagate: () => propagate, separationArcsec: () => separationArcsec, tangentOffset: () => tangentOffset, yearFromMjd: () => yearFromMjd }); const { earthPosition, parallaxFactors } = __tb_require("src/core/ephemeris.js");
+__tb_define("src/core/astrometry.js", function (__tb_self) { __tb_export(__tb_self, { GAIA_DR3_EPOCH: () => GAIA_DR3_EPOCH, centroid: () => centroid, centroidError: () => centroidError, centroidWings: () => centroidWings, fitMotion: () => fitMotion, fitMotionWithParallax: () => fitMotionWithParallax, maskedCoreRadius: () => maskedCoreRadius, matchGaia: () => matchGaia, matchGaiaDetailed: () => matchGaiaDetailed, mjdFromYear: () => mjdFromYear, offsetBy: () => offsetBy, positionAngle: () => positionAngle, propagate: () => propagate, separationArcsec: () => separationArcsec, tangentOffset: () => tangentOffset, yearFromMjd: () => yearFromMjd }); const { earthPosition, parallaxFactors } = __tb_require("src/core/ephemeris.js");
 ;
 const DEG = Math.PI / 180;
 const ARCSEC = DEG / 3600;
@@ -9870,6 +10228,122 @@ out.x = x; out.y = y; out.ok = true;
 return out;
 }
 out.iterations = iterations;
+return out;
+}
+function maskedCoreRadius(image, mask, n, x0, y0, rMax = 16) {
+if (!image || !(n > 0) || !isNum(x0) || !isNum(y0)) return 0;
+const ny = Math.floor(image.length / n);
+const lim = rMax + 2;
+const bad = new Float64Array(lim + 1);
+const all = new Float64Array(lim + 1);
+for (let y = Math.max(0, Math.floor(y0 - lim)); y <= Math.min(ny - 1, Math.ceil(y0 + lim)); y++) {
+for (let x = Math.max(0, Math.floor(x0 - lim)); x <= Math.min(n - 1, Math.ceil(x0 + lim)); x++) {
+const k = Math.round(Math.hypot(x - x0, y - y0));
+if (k > lim) continue;
+const i = y * n + x;
+all[k] += 1;
+if ((mask && mask[i]) || !Number.isFinite(image[i])) bad[k] += 1;
+}
+}
+const frac = (k) => (all[k] > 0 ? bad[k] / all[k] : 0);
+if (frac(0) < 0.5 && frac(1) < 0.5) return 0;
+for (let k = 1; k <= rMax; k++) {
+if (frac(k) < 0.25 && frac(k + 1) < 0.25) return k - 0.5;
+}
+return rMax;
+}
+function centroidWings(image, mask, n, x0, y0, opts = {}) {
+const out = {
+x: x0, y: y0, flux: NaN, ok: false, snr: 0, background: NaN, noise: NaN,
+xErr: NaN, yErr: NaN, fluxErr: NaN, peak: NaN, iterations: 0, validFrac: 0,
+method: 'wings', rCore: 0,
+};
+if (!image || !(n > 0) || !isNum(x0) || !isNum(y0)) return out;
+const ny = Math.floor(image.length / n);
+const rCore = maskedCoreRadius(image, mask, n, x0, y0, isNum(opts.rMax) ? opts.rMax : 16);
+out.rCore = rCore;
+if (!(rCore > 0)) return out;
+const sigma = isNum(opts.sigma) && opts.sigma > 0 ? opts.sigma : Math.max(2.5, rCore + 2);
+const minSnr = isNum(opts.minSnr) ? opts.minSnr : 8;
+const R = Math.ceil(rCore + 2.5 * sigma);
+const inv2s2 = 1 / (2 * sigma * sigma);
+const usable = (xx, yy) => {
+if (xx < 0 || yy < 0 || xx >= n || yy >= ny) return false;
+const i = yy * n + xx;
+return !(mask && mask[i]) && Number.isFinite(image[i]);
+};
+const sky = [];
+for (let yy = Math.floor(y0 - R - 5); yy <= Math.ceil(y0 + R + 5); yy++) {
+for (let xx = Math.floor(x0 - R - 5); xx <= Math.ceil(x0 + R + 5); xx++) {
+const r = Math.hypot(xx - x0, yy - y0);
+if (r <= R || r > R + 5 || !usable(xx, yy)) continue;
+sky.push(image[yy * n + xx]);
+}
+}
+if (sky.length < 12) {
+for (let yy = Math.floor(y0 - R); yy <= Math.ceil(y0 + R); yy++) {
+for (let xx = Math.floor(x0 - R); xx <= Math.ceil(x0 + R); xx++) if (usable(xx, yy)) sky.push(image[yy * n + xx]);
+}
+sky.sort((a, b) => a - b);
+sky.length = Math.max(1, Math.floor(sky.length / 5));
+}
+const bg = medianOf(sky);
+const noise = 1.4826 * medianOf(sky.map((v) => Math.abs(v - bg)));
+out.background = bg;
+out.noise = noise;
+let x = x0, y = y0;
+let damp = 0.7;
+let px = 0, py = 0;
+let sw = 0, sw2 = 0, gx = 0, gy = 0, vx = 0, vy = 0, used = 0, total = 0;
+const is2 = 1 / (sigma * sigma);
+const maxIter = isNum(opts.maxIter) ? opts.maxIter : 60;
+const tol = isNum(opts.tol) ? opts.tol : 0.02;
+const recent = [];
+let converged = false;
+for (let it = 0; it < maxIter; it++) {
+sw = 0; sw2 = 0; gx = 0; gy = 0; vx = 0; vy = 0; used = 0; total = 0;
+let sx = 0, sy = 0;
+for (let yy = Math.floor(y - R); yy <= Math.ceil(y + R); yy++) {
+for (let xx = Math.floor(x - R); xx <= Math.ceil(x + R); xx++) {
+const dx = xx - x, dy = yy - y;
+const r2 = dx * dx + dy * dy;
+if (r2 > R * R) continue;
+total++;
+if (!usable(xx, yy) || !usable(Math.round(2 * x - xx), Math.round(2 * y - yy))) continue;
+used++;
+const d = image[yy * n + xx] - bg;
+const w = Math.exp(-r2 * inv2s2);
+sw += w * d; sx += w * d * dx; sy += w * d * dy; sw2 += w * w;
+gx += w * d * (1 - dx * dx * is2); gy += w * d * (1 - dy * dy * is2);
+vx += w * w * dx * dx; vy += w * w * dy * dy;
+}
+}
+out.iterations = it + 1;
+if (!(sw > 0) || used < 12) return out;
+let ddx = damp * sx / sw, ddy = damp * sy / sw;
+const step = Math.hypot(ddx, ddy);
+if (step > 1) { ddx /= step; ddy /= step; }
+if (ddx * px + ddy * py < 0) damp = Math.max(0.1, damp * 0.5);
+px = ddx; py = ddy;
+x += ddx; y += ddy;
+if (Math.hypot(x - x0, y - y0) > rCore + 3) return out;
+recent.push([x, y, step]);
+if (recent.length > 8) recent.shift();
+if (step < tol) { converged = true; break; }
+}
+if (!converged && recent.length === 8 && recent.every((r) => r[2] < 0.15)) {
+x = recent.reduce((a, r) => a + r[0], 0) / recent.length;
+y = recent.reduce((a, r) => a + r[1], 0) / recent.length;
+converged = true;
+}
+out.validFrac = total > 0 ? used / total : 0;
+out.snr = noise > 0 ? sw / (noise * Math.sqrt(sw2)) : (sw > 0 ? Infinity : 0);
+const ex = Math.abs(gx) > 0 ? (noise * Math.sqrt(vx)) / Math.abs(gx) : NaN;
+const ey = Math.abs(gy) > 0 ? (noise * Math.sqrt(vy)) / Math.abs(gy) : NaN;
+out.xErr = Math.hypot(isNum(ex) ? Math.min(ex, 2) : 0.5, 0.15);
+out.yErr = Math.hypot(isNum(ey) ? Math.min(ey, 2) : 0.5, 0.15);
+if (!converged || !(out.snr >= minSnr)) return out;
+out.x = x; out.y = y; out.ok = true;
 return out;
 }
 function centroidError(snr, fwhmPix = 2.44, { floor = 0.05 } = {}) {
@@ -10440,7 +10914,7 @@ why: 'The two are under an arcsecond apart, so they share one pixel, but their b
 {
 id: 'wise0855',
 name: 'WISE 0855-0714',
-ra: 133.795129, dec: -7.245147, epoch: 2014.3,
+ra: 133.795129, dec: -7.245147, epoch: 2010.35,
 pmra: -8118, pmdec: 680, parallax: 439,
 det: 6, fov: 4,
 kind: 'cold', challenge: true,
@@ -24604,7 +25078,7 @@ throw asCutoutError(err, 'S3 file info');
 }
 }
 });
-__tb_define("../proxy/src/identify.js", function (__tb_self) { __tb_export(__tb_self, { IDENTIFY_DEFAULT_RADIUS: () => IDENTIFY_DEFAULT_RADIUS, IDENTIFY_MAX_OBJECTS: () => IDENTIFY_MAX_OBJECTS, IDENTIFY_MAX_RADIUS: () => IDENTIFY_MAX_RADIUS, IDENTIFY_MIN_RADIUS: () => IDENTIFY_MIN_RADIUS, OTYPE_LABELS: () => OTYPE_LABELS, SIMBAD_PAGE: () => SIMBAD_PAGE, SIMBAD_TAP_MIRROR: () => SIMBAD_TAP_MIRROR, SIMBAD_TAP_SYNC: () => SIMBAD_TAP_SYNC, buildIdentifyQuery: () => buildIdentifyQuery, clampRadius: () => clampRadius, displayName: () => displayName, identifyCone: () => identifyCone, identifyFromSynthetic: () => identifyFromSynthetic, otypeLabel: () => otypeLabel, parseCsv: () => parseCsv, parseIdentifyCsv: () => parseIdentifyCsv, resetSimbadBreaker: () => resetSimbadBreaker, separationArcsec: () => separationArcsec, simbadUrl: () => simbadUrl }); const { UpstreamError } = __tb_require("../proxy/src/irsa.js");
+__tb_define("../proxy/src/identify.js", function (__tb_self) { __tb_export(__tb_self, { IDENTIFY_DEFAULT_RADIUS: () => IDENTIFY_DEFAULT_RADIUS, IDENTIFY_MAX_OBJECTS: () => IDENTIFY_MAX_OBJECTS, IDENTIFY_MAX_RADIUS: () => IDENTIFY_MAX_RADIUS, IDENTIFY_MIN_RADIUS: () => IDENTIFY_MIN_RADIUS, MOVER_MIN_PM: () => MOVER_MIN_PM, MOVER_SEARCH_RADIUS: () => MOVER_SEARCH_RADIUS, MOVER_TOLERANCE_ARCSEC: () => MOVER_TOLERANCE_ARCSEC, OTYPE_LABELS: () => OTYPE_LABELS, SIMBAD_PAGE: () => SIMBAD_PAGE, SIMBAD_TAP_MIRROR: () => SIMBAD_TAP_MIRROR, SIMBAD_TAP_SYNC: () => SIMBAD_TAP_SYNC, buildIdentifyQuery: () => buildIdentifyQuery, buildMoversQuery: () => buildMoversQuery, clampRadius: () => clampRadius, displayName: () => displayName, identifyCone: () => identifyCone, identifyFromSynthetic: () => identifyFromSynthetic, matchMovers: () => matchMovers, otypeLabel: () => otypeLabel, parseCsv: () => parseCsv, parseIdentifyCsv: () => parseIdentifyCsv, resetSimbadBreaker: () => resetSimbadBreaker, separationArcsec: () => separationArcsec, simbadUrl: () => simbadUrl }); const { UpstreamError } = __tb_require("../proxy/src/irsa.js");
 ;
 const SIMBAD_TAP_SYNC = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
 const SIMBAD_TAP_MIRROR = 'https://simbad.harvard.edu/simbad/sim-tap/sync';
@@ -24842,6 +25316,61 @@ return (
 `WHERE CONTAINS(POINT('ICRS', basic.ra, basic.dec), CIRCLE('ICRS', ${a}, ${d}, ${r})) = 1 ` +
 'ORDER BY dist'
 );
+}
+const MOVER_SEARCH_RADIUS = 0.1;
+const MOVER_MIN_PM = 300;
+const MOVER_TOLERANCE_ARCSEC = 15;
+function buildMoversQuery(ra, dec, { radiusDeg = MOVER_SEARCH_RADIUS, minPm = MOVER_MIN_PM, top = 60 } = {}) {
+checkPosition(ra, dec);
+const r = fixed(Math.max(0.01, Math.min(0.5, Number(radiusDeg) || MOVER_SEARCH_RADIUS)), 6);
+const a = fixed(ra, 7);
+const d = fixed(dec, 7);
+const n = Math.max(1, Math.min(200, Math.floor(top) || 60));
+const pm2 = Math.round(Math.max(1, Number(minPm) || MOVER_MIN_PM) ** 2);
+return (
+`SELECT TOP ${n} main_id, otype, ra, dec, pmra, pmdec, plx_value, sp_type, ` +
+`DISTANCE(POINT('ICRS', ra, dec), POINT('ICRS', ${a}, ${d})) AS dist ` +
+'FROM basic ' +
+`WHERE CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${a}, ${d}, ${r})) = 1 ` +
+`AND pmra * pmra + pmdec * pmdec > ${pm2} ` +
+'ORDER BY dist'
+);
+}
+function matchMovers(objects, ra, dec, { year = new Date().getUTCFullYear() + 0.5, tolArcsec = MOVER_TOLERANCE_ARCSEC } = {}) {
+const out = [];
+const maxYears = Math.max(1, year - 1990);
+const cosd = Math.cos((dec * Math.PI) / 180);
+for (const o of objects || []) {
+if (!o || !Number.isFinite(o.pmra) || !Number.isFinite(o.pmdec) || !Number.isFinite(o.ra) || !Number.isFinite(o.dec)) continue;
+const pm = Math.hypot(o.pmra, o.pmdec);
+if (!(pm >= 1)) continue;
+let dRa = ra - o.ra;
+if (dRa > 180) dRa -= 360;
+if (dRa < -180) dRa += 360;
+const dE = dRa * cosd * 3600;
+const dN = (dec - o.dec) * 3600;
+const ux = o.pmra / pm;
+const uy = o.pmdec / pm;
+const along = dE * ux + dN * uy;
+const perp = Math.abs(dE * uy - dN * ux);
+const length = (pm / 1000) * maxYears;
+const clamped = Math.max(0, Math.min(length, along));
+const dist = Math.hypot(perp, along - clamped);
+if (dist > tolArcsec) continue;
+const years = clamped / (pm / 1000);
+out.push({
+...o,
+sepArcsec: Math.round(dist * 100) / 100,
+mover: {
+catalogueSepArcsec: Math.round(Math.hypot(dE, dN) * 10) / 10,
+pm: Math.round(pm * 10) / 10,
+years: Math.round(years * 10) / 10,
+epoch: Math.round((year - years) * 10) / 10,
+},
+});
+}
+out.sort((p, q) => p.sepArcsec - q.sepArcsec);
+return out;
 }
 function parseCsv(text) {
 const rows = [];
@@ -25097,12 +25626,13 @@ if (!(err instanceof UpstreamError)) return false;
 if (err.kind === 'parse') return true;
 return err.kind === 'http' && err.upstreamStatus >= 400 && err.upstreamStatus < 500 && ![403, 404, 408, 429].includes(err.upstreamStatus);
 }
-async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.fetch, timeoutMs = 8000, extended = true } = {}) {
+async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.fetch, timeoutMs = 8000, extended = true, movers = true, year = NaN } = {}) {
 checkPosition(ra, dec);
 if (typeof fetchImpl !== 'function') {
 throw new UpstreamError('No fetch implementation is available', { kind: 'network', retryable: false });
 }
 const radius = clampRadius(radiusDeg);
+const moversPromise = movers ? simbadCsv(buildMoversQuery(ra, dec), fetchImpl, timeoutMs).catch(() => null) : null;
 let text = null;
 let usedExtended = false;
 if (extended) {
@@ -25118,7 +25648,24 @@ text = null;
 if (!usedExtended) text = await simbadCsv(buildIdentifyQuery(ra, dec, radius), fetchImpl, timeoutMs);
 const limit = radius * 3600 * 1.001 + 0.01;
 const objects = parseIdentifyCsv(text, ra, dec).filter((o) => o.sepArcsec === null || o.sepArcsec <= limit);
-return { objects, source: 'simbad' };
+const moversText = moversPromise ? await moversPromise : null;
+if (moversText) {
+try {
+const found = matchMovers(parseIdentifyCsv(moversText, ra, dec), ra, dec, Number.isFinite(year) ? { year } : {});
+const known = new Set(objects.map((o) => o.name));
+for (const m of found) {
+if (known.has(m.name)) {
+const same = objects.find((o) => o.name === m.name);
+if (same) same.mover = m.mover;
+} else {
+objects.push(m);
+}
+}
+objects.sort((p, q) => (p.sepArcsec ?? Infinity) - (q.sepArcsec ?? Infinity));
+} catch {
+}
+}
+return { objects: objects.slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
 }
 const SYNTHETIC_KINDS = {
 mover: { type: 'PM*', spType: 'M4V', name: 'Synthetic high proper-motion star' },
@@ -26155,7 +26702,7 @@ return jsonResponse({ ...identifyFromSynthetic(sky, ra, dec, radius, { mjd }), s
 }
 const ra5 = roundTo(ra, 5);
 const dec5 = roundTo(dec, 5);
-const key = await cacheKey(['identify', 'v1', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
+const key = await cacheKey(['identify', 'v2', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
 const cached = decodeJson(await cacheGet(key, { maxAgeSeconds: IDENTIFY_TTL_SECONDS }));
 const headers = { 'cache-control': 'public, max-age=86400' };
 if (cached && Array.isArray(cached.objects)) return jsonResponse({ ...cached, cached: true }, 200, headers);
@@ -31672,7 +32219,7 @@ const FLAGGED = new Set(['unknown-mover', 'cold-atmosphere', 'variable', 'moving
 const TEXT = Object.freeze({
 idle: 'Click a source in the image. This panel then lists what the catalogues know at that spot, and what its SPHEREx spectrum, brightness and motion suggest.',
 loading: 'Asking SIMBAD what is catalogued here',
-empty: `Nothing catalogued within ${RADIUS_ARCSEC} arcsec. If it moves or varies, that is interesting.`,
+empty: `Nothing catalogued within ${RADIUS_ARCSEC} arcsec, and no catalogued fast mover has a track through here. If it moves or varies, that is interesting.`,
 noGaiaLoaded: 'No Gaia stars are loaded for this field yet.',
 noHints: 'Not enough has been measured here to suggest anything. Brighter sources and more loaded frames give the measurements something to work with.',
 hintsHeading: 'What the SPHEREx data suggest',
@@ -31779,11 +32326,19 @@ if (isNum(o.vmag)) mags.push(`V ${o.vmag.toFixed(1)}`);
 if (isNum(o.kmag)) mags.push(`K ${o.kmag.toFixed(1)}`);
 if (mags.length) facts.push(el('span', null, 'Magnitude ', el('b', { text: mags.join(', ') })));
 const others = Array.isArray(o.ids) ? o.ids.filter((id) => typeof id === 'string' && id && id !== name).slice(0, 3) : [];
+const mv = o.mover && typeof o.mover === 'object' && isNum(o.mover.catalogueSepArcsec) ? o.mover : null;
+let moverLine = null;
+if (mv) {
+const far = mv.catalogueSepArcsec >= 90 ? `${(mv.catalogueSepArcsec / 60).toFixed(1)} arcmin` : `${mv.catalogueSepArcsec.toFixed(0)} arcsec`;
+const since = isNum(mv.epoch) ? ` since about ${Math.round(mv.epoch)}` : '';
+moverLine = el('div', { class: 'tbi-facts' }, el('span', null, 'The catalogue lists it ', el('b', { text: far }), ` from here, where it used to be. Its proper motion has carried it to this spot${since}.`));
+}
 return el(
 'li',
 { class: 'tbi-obj' },
-el('div', { class: 'tbi-obj-top' }, outLink(o.url, name, 'tbi-name'), el('span', { class: 'tbi-sep', text: sepText(o.sepArcsec) })),
+el('div', { class: 'tbi-obj-top' }, outLink(o.url, name, 'tbi-name'), el('span', { class: 'tbi-sep', text: mv ? 'on its track' : sepText(o.sepArcsec) })),
 el('div', { class: 'tbi-type', text: typeof o.typeLabel === 'string' && o.typeLabel ? o.typeLabel : 'catalogued object' }),
+moverLine,
 facts.length ? el('div', { class: 'tbi-facts' }, facts) : null,
 others.length ? el('div', { class: 'tbi-aka', text: `Also ${others.join(', ')}` }) : null,
 );
