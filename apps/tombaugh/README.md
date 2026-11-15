@@ -38,8 +38,8 @@ Quick Release 3) on 15 November 2026. Full tables, controls and limits:
   two to four visits.
 - Two variables recovered: RW Aurigae rose by 40 %, R Draconis fell by 28 %.
 - Methane seen twice: in the T dwarfs Epsilon Indi Ba,Bb, and as ice on Pluto.
-- Blind search: every challenge target is the one entry in its own field's candidate list. On
-  nine empty control fields the list holds none.
+- Blind search: every challenge target is the top entry in its own field's candidate list, and
+  in four of the five fields the only one. On nine empty control fields the list holds none.
 - The search's reach, from planted bodies in real frames: a body at 500 AU is recovered half of
   the time at 51 µJy. A Neptune-size planet there would be about 25 µJy, twice too faint.
 - No new object is claimed.

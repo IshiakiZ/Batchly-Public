@@ -914,9 +914,12 @@ export function haloChange(stacks, n, core, rHalo) {
     if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
     return { ...none, dipole, monopole };
   };
+  // `turned` says the verdict had to come from a pair that is not a year apart, so the caller
+  // can pass the caution on.
   const yearly = verdict(sameSeason);
-  if (yearly.from >= 0) return yearly;
-  return verdict(() => true);
+  if (yearly.from >= 0) return { ...yearly, turned: false };
+  const any = verdict(() => true);
+  return { ...any, turned: any.from >= 0 && !sameSeason(any.from, any.to) };
 }
 
 /**
@@ -1176,6 +1179,7 @@ export function findCandidates(model, layers, opts = {}) {
       shift: change.kind === 2 ? { dx: change.dx, dy: change.dy } : null,
       brighter: change.kind === 1 ? change.brighter : null,
       between: change.from >= 0 && change.to >= 0 ? [stacks[change.from].label, stacks[change.to].label] : null,
+      turned: !!change.turned,
     });
   }
   out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));

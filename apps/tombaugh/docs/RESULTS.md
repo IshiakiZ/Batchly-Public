@@ -122,20 +122,51 @@ catalogue input.
 
 ### On the targets
 
-| Field | Candidates | Top entry |
-|---|---|---|
-| Barnard's Star | 1 | "Moved. Saturated star: its halo shifted north between Aug 2025 and Aug 2026; 25 residual patches belong to it." 10.2 sigma |
-| Epsilon Indi Ba,Bb | 1 | "Moved", 29.5 sigma |
-| WISE 0855-0714 | 1 | the brown dwarf, 6.3 sigma |
-| R Draconis | 1 | "Saturated star: its halo faded between May 2025 and Apr 2026; 14 residual patches belong to it." 13.1 sigma |
-| RW Aurigae | 1 | "Saturated star: its halo brightened between Sep 2025 and Sep 2026; 5 residual patches belong to it." 18.6 sigma. Four patches on neighbouring stars set aside |
+Each field as its target button opens it (the detector and field size in the built-in target
+table, centred on where the object is today), final build, 2026-11-15:
 
-Every challenge target is the only entry in its own field's list. Two more nearby objects were
-tried the same way, and each is again the one entry in its field: Teegarden's Star, "Moved.
-Saturated star: its halo shifted south-east between Aug 2025 and Aug 2026" (31.2 sigma; its
-catalogue motion is 5.1 arcsec a year towards the south-east), and the brown-dwarf pair
-Luhman 16, "Moved" (17.3 sigma), in a crowded Galactic-plane field where 19 patches on stars and
-4 at the edge were set aside.
+| Field | Opens as | Candidates | Top entry |
+|---|---|---|---|
+| Barnard's Star | detector 3, 4 arcmin | 1 | "Moved. Saturated star: its halo shifted north between Aug 2025 and Aug 2026; 26 residual patches belong to it." 10.3 sigma |
+| Epsilon Indi Ba,Bb | detector 6, 6 arcmin | 2 | "Moved", 30.0 sigma. The second entry is described below |
+| WISE 0855-0714 | detector 6, 4 arcmin | 1 | the brown dwarf, 5.9 sigma |
+| R Draconis | detector 3, 4 arcmin | 1 | "Saturated star: its halo faded between May 2025 and Apr 2026; 14 residual patches belong to it." 13.1 sigma |
+| RW Aurigae | detector 2, 4 arcmin | 1 | "Saturated star: its halo brightened between Sep 2025 and Mar 2026; 5 residual patches belong to it." 19.2 sigma. Three patches on neighbouring stars set aside |
+
+Every challenge target is the top entry in its own field's list, and in four of the five fields
+the only one. The numbers move a little with the field centre and the detector (an earlier run
+of RW Aurigae paired Sep 2025 with Sep 2026, at 18.6 sigma); which object is listed does not.
+RW Aurigae's verdict comes from two passes half a year apart, so its note adds: "These two
+passes are half a year apart, with the telescope turned round, so the star's own image can differ
+between them: check the light curve before trusting this." The light curve does confirm it
+(section 2).
+
+Two more nearby objects were tried the same way, and each is the one entry in its field:
+Teegarden's Star, "Moved. Saturated star: its halo shifted south-east between Aug 2025 and Aug
+2026" (31.3 sigma; its catalogue motion is 5.1 arcsec a year towards the south-east), and the
+brown-dwarf pair Luhman 16, "Moved" (17.3 sigma), in a crowded Galactic-plane field where 19
+patches on stars and 4 at the edge were set aside.
+
+### An entry we cannot explain
+
+The second entry in the Epsilon Indi field is "Changed brightness", 7.4 sigma, at
+RA 331.07824, Dec -56.76371, 2.4 arcmin from the brown dwarfs and outside a 4 arcmin field. What
+Tombaugh shows there:
+
+- A faint source that was brighter in May and June 2025 than in the three passes since. Relative
+  to its own average it reads about 2.0 in spring 2025 and 0.5 in both autumns on detector 6
+  (4.4 to 5.0 µm), and about 1.5 against 0.8 to 0.9 on detectors 4 and 5 (2.4 to 4.4 µm). The
+  Light curve tab calls it a fall "by a factor of 4.0 between May 2025 and Oct 2025
+  (6.4 sigma)" on detector 6.
+- It stayed bright through the whole first pass, about 40 days, so it is not an asteroid going by.
+- It did not come back in spring 2026, so it does not simply follow the telescope's orientation.
+- "What is this?" finds nothing in SIMBAD within 12 arcsec, and the nearest Gaia star is
+  13 arcsec away.
+
+We do not know what it is, and we do not claim it is new. We did not check the WISE or 2MASS
+catalogues. A variable galaxy nucleus or a dust-shrouded star would both fit; so might scattered
+light from Epsilon Indi A, a very bright star about 8 arcmin away. It is listed here because this is
+what the Candidates tab is for: a place to look, with the evidence one click away.
 
 The Gaia stars loaded for that field hold no match for Luhman 16: the one nearest its position
 moves 14 milliarcsec a year. For fast named objects like this one the Motion tab therefore compares with

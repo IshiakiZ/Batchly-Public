@@ -319,7 +319,9 @@ image cancels. The verdict on a saturated star (moved, brightened, faded) is the
 first from pairs of passes within 60 days of a whole number of years apart, and from other
 pairs only if those give none. On real data this changed Teegarden's Star from "shifted east"
 to "shifted south-east" (its catalogue direction), and stopped Proxima Centauri from being
-listed as "faded" when it had moved.
+listed as "faded" when it had moved. When a verdict does have to come from a pair that is not
+a year apart, the candidate's note says so: the telescope was turned round between those two
+passes, and the star's own image may account for what is seen.
 
 ![Residual view of Barnard's Star: one candidate, labelled Moved](real/barnard-residual-one-mover.jpg)
 

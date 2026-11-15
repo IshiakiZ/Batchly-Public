@@ -680,10 +680,12 @@ test('a saturated star is judged between passes a year apart: a halo that only l
   const change = haloChange(stacks, n, cores[0], 30);
   assert.equal(change.kind, 2, JSON.stringify(change));
   assert.deepEqual([change.from, change.to], [0, 2], 'the first and last pass, a year apart');
+  assert.equal(change.turned, false, 'a year apart: no caution needed');
   assert.ok(change.dx > 0.9 && Math.abs(change.dy) < 0.4, JSON.stringify(change));
   // With only the first two passes there is no pair a year apart, and the old rule applies.
   const two = layers.filter((l) => l.pass < 2);
   const model2 = fitSkyModel(two);
   const change2 = haloChange(residualPassStacks(model2, two), n, saturatedCores(two, n)[0], 30);
   assert.deepEqual([change2.from, change2.to], [0, 1]);
+  assert.equal(change2.turned, true, 'half a year apart: the verdict carries the caution');
 });

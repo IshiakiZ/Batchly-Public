@@ -169,9 +169,12 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
     if (!c || !c.saturated) return '';
     const lumps = c.peaks > 1 ? `; ${c.peaks} residual patches belong to it` : '';
     const when = Array.isArray(c.between) && c.between[0] && c.between[1] && c.between[0] !== c.between[1] ? `between ${c.between[0]} and ${c.between[1]}` : 'between the passes';
-    if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.`;
-    if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.`;
-    if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.`;
+    // Two passes that are not a year apart see the star with the telescope turned round, and
+    // its own lopsided image can then pass for a change. Say so instead of leaving it unsaid.
+    const caution = c.turned ? ' These two passes are half a year apart, with the telescope turned round, so the star\u2019s own image can differ between them: check the light curve before trusting this.' : '';
+    if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.${caution}`;
+    if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.${caution}`;
+    if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.${caution}`;
     return `Saturated star: its halo changed between the passes${lumps}.`;
   }
 
