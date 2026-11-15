@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T12:14:05.275Z, sources sha256 c887c2ea05d676a9.
+Single-file build of 111 modules, 2026-11-15T12:23:28.650Z, sources sha256 ceeb100b1ed7bca7.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -5258,9 +5258,10 @@ function saturatedNote(c) {
 if (!c || !c.saturated) return '';
 const lumps = c.peaks > 1 ? `; ${c.peaks} residual patches belong to it` : '';
 const when = Array.isArray(c.between) && c.between[0] && c.between[1] && c.between[0] !== c.between[1] ? `between ${c.between[0]} and ${c.between[1]}` : 'between the passes';
-if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.`;
-if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.`;
-if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.`;
+const caution = c.turned ? ' The telescope was turned round between these two passes, so the star\u2019s own image may account for this: weaker evidence than a pair a year apart.' : '';
+if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.${caution}`;
+if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.${caution}`;
+if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.${caution}`;
 return `Saturated star: its halo changed between the passes${lumps}.`;
 }
 function setSourceHeader(target, source) {
@@ -9299,8 +9300,9 @@ if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, 
 return { ...none, dipole, monopole };
 };
 const yearly = verdict(sameSeason);
-if (yearly.from >= 0) return yearly;
-return verdict(() => true);
+if (yearly.from >= 0) return { ...yearly, turned: false };
+const any = verdict(() => true);
+return { ...any, turned: any.from >= 0 && !sameSeason(any.from, any.to) };
 }
 function coverageEdge(stack, n) {
 const npix = n * n;
@@ -9471,6 +9473,7 @@ peaks: members.length,
 shift: change.kind === 2 ? { dx: change.dx, dy: change.dy } : null,
 brighter: change.kind === 1 ? change.brighter : null,
 between: change.from >= 0 && change.to >= 0 ? [stacks[change.from].label, stacks[change.to].label] : null,
+turned: !!change.turned,
 });
 }
 out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
