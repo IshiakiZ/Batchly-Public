@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T12:34:25.242Z, sources sha256 e3134190f23d8271.
+Single-file build of 112 modules, 2026-11-15T18:16:13.701Z, sources sha256 f10fc7948af6de08.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -561,6 +561,73 @@ html[data-embed="1"] .player-blink { flex: 0 0 auto; }
 html[data-embed="1"] .embed-credit { display: block; }
 .embed-credit { display: none; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .embed-credit a { color: var(--muted); }
+.simplebar, .simple { display: none; }
+html[data-mode="simple"] { --rail-w: 0px; --chrome-v: 276px; }
+html[data-mode="simple"] .modebar,
+html[data-mode="simple"] .modeopts,
+html[data-mode="simple"] .controls,
+html[data-mode="simple"] .toolrow,
+html[data-mode="simple"] .side > .strip,
+html[data-mode="simple"] .tabs,
+html[data-mode="simple"] .panels,
+html[data-mode="simple"] .fieldsum,
+html[data-mode="simple"] .sheet-backdrop,
+html[data-mode="simple"] #btn-map,
+html[data-mode="simple"] .player-row > .select,
+html[data-mode="simple"] .player-blink .select,
+html[data-mode="simple"] .player-blink .ab,
+html[data-mode="simple"] .caption-meta,
+html[data-mode="simple"] .caption-note,
+html[data-mode="simple"] .tbv-toolbar { display: none; }
+html[data-mode="simple"] .player-blink { flex: 0 0 auto; }
+html[data-mode="simple"] .stage-body { gap: 0; }
+html[data-mode="simple"] .viewcol { display: grid; gap: 8px; }
+html[data-mode="simple"] .simplebar {
+display: flex; align-items: center; gap: 14px; width: var(--viewer-size); min-height: 44px; margin-bottom: 10px;
+}
+html[data-embed="1"] .simplebar { display: none; }
+.simple-seg { flex: 0 0 auto; height: 40px; }
+.simple-seg .seg-btn { height: 38px; padding: 0 16px; font-size: 14px; }
+.simple-seg .seg-btn[aria-checked="true"] { font-weight: bold; }
+.simple-hint { flex: 1 1 0; min-width: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+html[data-mode="simple"] .simple {
+display: block; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px var(--pad) 8px;
+scrollbar-width: thin; scrollbar-color: var(--stone) transparent;
+}
+.simple-card { display: grid; gap: 8px; max-width: 600px; padding: 18px 0; border-top: 1px solid var(--rule); }
+.simple-card:first-child { border-top: 0; padding-top: 0; }
+.simple-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
+.simple-eyebrow, .simple-q { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+.simple-name { font-family: var(--font-head); font-weight: 900; font-size: 26px; line-height: 1.12; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.simple-title { font-family: var(--font-head); font-weight: 900; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+.simple-text { font-size: 14px; line-height: 1.5; max-width: 62ch; }
+.simple-look { font-size: 14px; line-height: 1.5; max-width: 62ch; padding-left: 12px; border-left: 2px solid var(--signal); }
+.simple-fine { font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 70ch; }
+.simple-wait { font-size: 14px; line-height: 1.5; color: var(--muted); }
+.simple-answer { font-family: var(--font-head); font-weight: 900; font-size: 20px; line-height: 1.2; }
+.simple-answer.is-yes { color: var(--signal); }
+.simple-answer.is-none { color: var(--muted); }
+.simple-qa { display: grid; gap: 4px; padding-top: 10px; }
+.simple-qa:first-child { padding-top: 0; }
+.simple-pick { display: grid; gap: 8px; }
+.simple-spec { display: grid; gap: 6px; padding-top: 10px; }
+.simple-plot .tbp-tools, .simple-plot .tbp-head { display: none; }
+.simple-list { display: grid; gap: 8px; }
+.simple-change {
+appearance: none; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; width: 100%;
+padding: 12px 14px; text-align: left; color: inherit; background: var(--ink-raised); border: 1px solid var(--rule);
+border-radius: 2px; cursor: pointer; transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.simple-change:hover { border-color: var(--paper); background: var(--hover); }
+.simple-change[aria-current="true"] { border-color: var(--signal); }
+.simple-change[aria-current="true"] .cand-n { border-color: var(--signal); color: var(--signal); }
+.simple-change-main { display: grid; gap: 3px; min-width: 0; }
+.simple-change-title { font-size: 16px; font-weight: bold; }
+.simple-change-detail { font-size: 13px; line-height: 1.45; }
+.simple-change-caution, .simple-change-strength { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.simple-foot { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; }
+.simple-foot .simple-text { font-size: 12px; color: var(--muted); }
+.btn-mode[aria-pressed="true"] { border-color: var(--paper); }
 @media (max-width: 1099px) {
 :root {
 --viewer-size: clamp(280px, min(calc(100vh - 250px), calc(100vw - var(--rail-w) - 2 * var(--pad) - var(--gap))), 760px);
@@ -579,6 +646,9 @@ html[data-embed="1"] .embed-credit { display: block; }
 .panel:first-child { border-top: 0; }
 .panel-title { display: block; }
 .tagline { display: none; }
+html[data-mode="simple"] { --viewer-size: clamp(280px, min(calc(100vh - 220px), calc(100vw - 2 * var(--pad))), 760px); }
+html[data-mode="simple"] .simple { overflow: visible; padding-top: 20px; }
+.simple-card { margin: 0 auto; }
 }
 @media (max-width: 719px) {
 :root {
@@ -622,6 +692,14 @@ transition: transform var(--t-slow) var(--ease), visibility 0s linear var(--t-sl
 .player { min-height: 150px; }
 .cite-links { margin-left: 0; }
 .dialog-body { padding: 14px 14px 18px; }
+html[data-mode="simple"] { --viewer-size: clamp(260px, min(calc(100vw - 2 * var(--pad)), calc(100vh - 230px)), 720px); }
+html[data-mode="simple"] .simplebar { flex-wrap: wrap; row-gap: 6px; }
+html[data-mode="simple"] .player { min-height: 0; padding-bottom: 14px; }
+.simple-seg { flex: 1 1 100%; }
+.simple-seg .seg-btn { flex: 1 1 0; }
+.simple-hint { flex-basis: 100%; }
+.simple-name { font-size: 22px; }
+.simple-foot { grid-template-columns: minmax(0, 1fr); row-gap: 10px; justify-items: start; }
 }
 @media (max-width: 419px) {
 .controls-body { grid-template-columns: 1fr; }
@@ -696,6 +774,7 @@ color: rgba(247, 242, 231, 0.78); font: 12px/1 Arial, Helvetica, sans-serif; tra
       <button class="btn" type="button" id="btn-map" aria-haspopup="dialog" hidden>Sky map</button>
       <button class="btn" type="button" id="btn-share" title="Copy a link to exactly this view">Share</button>
       <button class="btn" type="button" id="btn-help" aria-haspopup="dialog" title="Help and keyboard shortcuts (?)">Help</button>
+      <button class="btn btn-mode" type="button" id="btn-mode" data-testid="mode-switch" aria-pressed="false" title="Show every view, detector, plot and tool">Advanced</button>
     </nav>
   </header>
 
@@ -706,6 +785,7 @@ color: rgba(247, 242, 231, 0.78); font: 12px/1 Arial, Helvetica, sans-serif; tra
         <button class="btn btn-sheet" type="button" id="btn-sheet" aria-haspopup="dialog" aria-controls="controls">Controls</button>
       </div>
       <div class="modeopts" id="modeopts" aria-live="polite"></div>
+      <div class="simplebar" id="simplebar" data-testid="simplebar"></div>
 
       <div class="stage-body">
         <div class="controls" id="controls" role="group" aria-label="Display controls">
@@ -735,6 +815,7 @@ color: rgba(247, 242, 231, 0.78); font: 12px/1 Arial, Helvetica, sans-serif; tra
     </section>
 
     <aside class="side" id="side" aria-label="Measurements">
+      <section class="simple" id="simple" data-testid="simple" aria-label="What Tombaugh found here"></section>
       <div class="tabs" id="tabs" role="tablist" aria-label="Measurement panels">
         <button class="tab" role="tab" type="button" id="tab-spectrum" aria-controls="panel-spectrum" aria-selected="true">Spectrum</button>
         <button class="tab" role="tab" type="button" id="tab-lightcurve" aria-controls="panel-lightcurve" aria-selected="false" tabindex="-1">Light curve</button>
@@ -800,7 +881,7 @@ color: rgba(247, 242, 231, 0.78); font: 12px/1 Arial, Helvetica, sans-serif; tra
 <script type="module">
 // Tombaugh - SPHEREx blink comparator. Apache-2.0.
 // AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-// Single-file bundle of 111 modules, generated by tools/build.mjs. Edit the sources in web/, not this file.
+// Single-file bundle of 112 modules, generated by tools/build.mjs. Edit the sources in web/, not this file.
 const __tb_m = new Map();
 const __tb_define = (id, fn) => { __tb_m.set(id, { fn, ns: Object.create(null, { [Symbol.toStringTag]: { value: 'Module' } }), st: 0, err: null, subs: [] }); };
 const __tb_rec = (id) => { const r = __tb_m.get(id); if (!r) throw new Error('Tombaugh bundle: module not found: ' + id); return r; };
@@ -831,7 +912,7 @@ id = parts.join('/');
 if (id === null || !__tb_m.has(id)) throw new TypeError('Failed to fetch dynamically imported module: ' + spec + ' (it is not part of this single-file build)');
 return __tb_require(id);
 });
-__tb_define("src/state.js", function (__tb_self) { __tb_export(__tb_self, { DEFAULT_STATE: () => DEFAULT_STATE, FOVS: () => FOVS, LENS_IDS: () => LENS_IDS, SESSION_DEFAULTS: () => SESSION_DEFAULTS, STRETCHES: () => STRETCHES, URL_DEFAULTS: () => URL_DEFAULTS, VIEWS: () => VIEWS, createStore: () => createStore, parseQuery: () => parseQuery, readUrlState: () => readUrlState, shareUrl: () => shareUrl, stateToQuery: () => stateToQuery, writeUrlState: () => writeUrlState });
+__tb_define("src/state.js", function (__tb_self) { __tb_export(__tb_self, { DEFAULT_STATE: () => DEFAULT_STATE, FOVS: () => FOVS, LENS_IDS: () => LENS_IDS, MODES: () => MODES, SESSION_DEFAULTS: () => SESSION_DEFAULTS, SIMPLE_VIEWS: () => SIMPLE_VIEWS, STRETCHES: () => STRETCHES, URL_DEFAULTS: () => URL_DEFAULTS, VIEWS: () => VIEWS, createStore: () => createStore, initialMode: () => initialMode, parseQuery: () => parseQuery, readUrlState: () => readUrlState, shareUrl: () => shareUrl, stateToQuery: () => stateToQuery, writeUrlState: () => writeUrlState });
 const VIEWS = ['passes', 'exposures', 'matched', 'residual', 'diff', 'lens', 'distance'];
 const FOVS = [2, 4, 6, 10];
 const STRETCHES = ['asinh', 'linear', 'log', 'sqrt'];
@@ -851,7 +932,10 @@ stretch: 'asinh',
 gaia: true,
 flags: false,
 embed: false,
+mode: 'simple',
 });
+const MODES = Object.freeze(['simple', 'advanced']);
+const SIMPLE_VIEWS = Object.freeze(['passes', 'residual']);
 const SESSION_DEFAULTS = Object.freeze({
 colormap: 'gray',
 smooth: false,
@@ -951,7 +1035,26 @@ if (STRETCHES.includes(stretch)) out.stretch = stretch;
 if (params.has('gaia')) out.gaia = bool(params.get('gaia'));
 if (params.has('flags')) out.flags = bool(params.get('flags'));
 if (params.has('embed')) out.embed = bool(params.get('embed'));
+const mode = params.get('mode');
+if (MODES.includes(mode)) out.mode = mode;
 return out;
+}
+function initialMode(urlState = {}, search = '', stored = null) {
+if (MODES.includes(urlState.mode)) return urlState.mode;
+if (urlState.embed) return 'advanced';
+if (typeof urlState.view === 'string' && !SIMPLE_VIEWS.includes(urlState.view)) return 'advanced';
+let params = null;
+try {
+params = new URLSearchParams(search || '');
+} catch {
+params = null;
+}
+if (params) {
+for (const key of ['body', 'panel', 'lens', 'dist', 'ch', 'stretch', 'flags', 'story', 'tour']) {
+if (params.has(key)) return 'advanced';
+}
+}
+return stored === 'advanced' ? 'advanced' : 'simple';
 }
 function trimNumber(value, digits) {
 return String(Number(value.toFixed(digits)));
@@ -975,6 +1078,7 @@ if (STRETCHES.includes(s.stretch) && s.stretch !== URL_DEFAULTS.stretch) params.
 if (typeof s.gaia === 'boolean' && s.gaia !== URL_DEFAULTS.gaia) params.set('gaia', s.gaia ? '1' : '0');
 if (typeof s.flags === 'boolean' && s.flags !== URL_DEFAULTS.flags) params.set('flags', s.flags ? '1' : '0');
 if (s.embed) params.set('embed', '1');
+if (s.mode === 'advanced') params.set('mode', 'advanced');
 if (keep) {
 let old;
 try {
@@ -3792,6 +3896,9 @@ searchTourHeading: $('search-tour-heading'),
 btnMap: $('btn-map'),
 btnShare: $('btn-share'),
 btnHelp: $('btn-help'),
+btnMode: $('btn-mode'),
+simplebar: $('simplebar'),
+simple: $('simple'),
 viewSeg: $('view-seg'),
 btnSheet: $('btn-sheet'),
 btnSheetClose: $('btn-sheet-close'),
@@ -3832,6 +3939,15 @@ els.landing.hidden = name !== 'landing';
 function setEmbed(on) {
 if (on) root.dataset.embed = '1';
 else delete root.dataset.embed;
+}
+function setMode(mode) {
+const advanced = mode === 'advanced';
+root.dataset.mode = advanced ? 'advanced' : 'simple';
+if (els.btnMode) {
+els.btnMode.setAttribute('aria-pressed', advanced ? 'true' : 'false');
+els.btnMode.textContent = advanced ? 'Simple' : 'Advanced';
+els.btnMode.title = advanced ? 'Back to the simple view: the picture and what changed' : 'Show every view, detector, plot and tool';
+}
 }
 function setSimulated(on) {
 if (els.simBadge) els.simBadge.hidden = !on;
@@ -4261,6 +4377,7 @@ return {
 els,
 setScreen,
 setEmbed,
+setMode,
 setSimulated,
 selectTab,
 addTab,
@@ -5359,6 +5476,440 @@ factsHead.hidden = !facts.childElementCount;
 };
 }
 });
+__tb_define("src/ui/simple.js", function (__tb_self) { __tb_export(__tb_self, { PLAIN_TARGETS: () => PLAIN_TARGETS, SIMPLE_VIEW_INFO: () => SIMPLE_VIEW_INFO, createSimpleView: () => createSimpleView, plainBrightness: () => plainBrightness, plainCandidate: () => plainCandidate, plainLabel: () => plainLabel, plainMotion: () => plainMotion, plainSetAside: () => plainSetAside, plainTarget: () => plainTarget, plainVisits: () => plainVisits, strengthWord: () => strengthWord }); const { h, clear } = __tb_require("src/ui/layout.js");
+;
+const SIMPLE_VIEW_INFO = Object.freeze([
+{
+id: 'passes',
+label: 'The sky',
+hint: 'Each frame is one visit by the telescope, months apart. Press play: the stars stay in their rings, and anything that moves or changes stands out.',
+},
+{
+id: 'residual',
+label: 'What changed',
+hint: 'Everything that stayed the same has been subtracted. Whatever is left moved or changed brightness.',
+},
+]);
+const PLAIN_TARGETS = Object.freeze({
+barnard: {
+what: 'A small red star six light-years away. It crosses our sky faster than any other star.',
+look: 'Press play and watch the star in the middle step upward while every other star holds still.',
+found: 'On the real pictures it moves 11.9 arcseconds a year. The star catalogue says 10.4, inside our margin of error.',
+},
+'eps-indi-b': {
+what: 'Two failed stars (brown dwarfs) orbiting each other 12 light-years away, too close together to tell apart here.',
+look: 'Press play: the faint dot in the middle drifts between visits. Click it to see the dip that methane gas cuts in its light.',
+found: 'On the real pictures it drifts 4.5 arcseconds a year (published: 4.6), and methane removes 60 % of its light at one colour.',
+},
+wise0855: {
+what: 'The coldest known brown dwarf, colder than ice, 7.4 light-years away. It is almost too faint for this telescope.',
+look: 'It glows only in the reddest infrared and moves quickly. Look for a faint dot that changes place between visits.',
+found: 'It is there on the real pictures, moving 8.0 arcseconds a year. The published value is 8.2.',
+},
+'rw-aur': {
+what: 'A young star, 530 light-years away, that is still pulling in gas. It brightens and fades without warning.',
+look: 'Nothing moves here. Switch to “What changed” and one star lights up because its brightness changed.',
+found: 'On the real pictures it brightened by 40 % between Sep 2025 and Mar 2026.',
+},
+'r-dra': {
+what: 'An old red giant star that swells and shrinks, getting brighter and fainter about every eight months.',
+look: 'Nothing moves here. Switch to “What changed” to see the one star whose brightness changed.',
+found: 'On the real pictures it faded by 28 % between Mar and Apr 2026.',
+},
+proxima: {
+what: 'The closest star to the Sun, 4.2 light-years away.',
+look: 'Press play and watch it move against the stars behind it.',
+},
+luhman16: {
+what: 'The nearest brown dwarfs to the Sun: a pair 6.5 light-years away, found only in 2013.',
+look: 'Press play and watch the pair move between visits.',
+},
+teegarden: {
+what: 'A dim red star 12.5 light-years away that nobody noticed until 2003, even though it moves quickly.',
+look: 'Press play and watch it move against the stars behind it.',
+},
+m101: {
+what: 'The Pinwheel Galaxy, a spiral of stars 21 million light-years away.',
+look: 'Nothing here should move or change. This is what a quiet patch of sky looks like.',
+},
+});
+function plainTarget(target) {
+const plain = target && PLAIN_TARGETS[target.id];
+if (!plain) return target;
+return { ...target, blurb: plain.what, why: plain.look, found: plain.found || target.found };
+}
+const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
+function betweenText(c) {
+const b = c && Array.isArray(c.between) ? c.between : null;
+return b && b[0] && b[1] && b[0] !== b[1] ? `between ${b[0]} and ${b[1]}` : '';
+}
+function strengthWord(score) {
+if (!isNum(score)) return '';
+if (score >= 10) return 'Strong signal';
+if (score >= 6) return 'Clear signal';
+return 'Weak signal';
+}
+function plainCandidate(c) {
+const out = { title: 'Something changed', detail: 'This spot does not look the same on every visit.', caution: '', strength: strengthWord(c && c.score) };
+if (!c) return out;
+const when = betweenText(c);
+if (c.saturated) {
+if (c.kind === 'moved') {
+out.title = 'A bright star moved';
+out.detail = `Its glare shifted${c.towards ? ` ${c.towards}` : ''}${when ? ` ${when}` : ' between visits'}.`;
+} else if (c.brighter === true || c.brighter === false) {
+out.title = c.brighter ? 'A bright star got brighter' : 'A bright star got fainter';
+out.detail = `Its glare ${c.brighter ? 'grew' : 'shrank'}${when ? ` ${when}` : ' between visits'}.`;
+} else {
+out.title = 'A bright star changed';
+out.detail = 'Its glare is not the same on every visit.';
+}
+if (c.turned) out.caution = 'Treat this one with care: the two visits were half a year apart, with the telescope turned round, and that alone can change how a very bright star looks.';
+return out;
+}
+if (c.kind === 'moved') {
+out.title = 'Something moved';
+out.detail = 'It is in a different place on different visits.';
+return out;
+}
+const net = c.net;
+if (net && net.onSource && isNum(net.frac)) {
+const pct = Math.abs(100 * net.frac);
+const size = pct >= 10 ? pct.toFixed(0) : pct.toFixed(1);
+out.title = net.frac > 0 ? 'Something got brighter' : 'Something got fainter';
+out.detail = `Its light ${net.frac > 0 ? 'rose' : 'fell'} by about ${size} %${net.label ? ` in ${net.label}` : ''}.`;
+return out;
+}
+if (c.kind === 'varies') {
+out.title = 'Something changed brightness';
+out.detail = 'It is brighter on some visits than on others.';
+}
+return out;
+}
+function plainSetAside(list) {
+const k = list && isNum(list.setAside) ? list.setAside : 0;
+const e = list && isNum(list.setAsideEdge) ? list.setAsideEdge : 0;
+const n = k + e;
+if (!n) return '';
+const what = k && e ? 'left by very bright stars or at the edge of the pictures' : k ? 'left by very bright stars' : 'at the edge of the pictures';
+return `${n} smudge${n === 1 ? '' : 's'} ${what} ${n === 1 ? 'was' : 'were'} ignored.`;
+}
+function plainMotion(verdict) {
+const v = verdict || {};
+const table = /catalogue says/i.test(v.text || '');
+const book = table ? 'its published motion' : 'what the Gaia star catalogue lists for it';
+switch (v.kind) {
+case 'agree':
+return v.weak
+? { answer: 'Probably', tone: 'maybe', gloss: `There is a hint of movement, in the direction and at the speed of ${book}. On its own it is too faint to be sure.` }
+: { answer: 'Yes', tone: 'yes', gloss: `It changes place from visit to visit, and its speed matches ${book}.` };
+case 'disagree':
+return /No motion detected/i.test(v.text || '')
+? { answer: 'Not that we can see', tone: 'maybe', gloss: 'A catalogue says it should have moved enough to notice, yet it looks still. Something here does not add up.' }
+: { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, but not the way the catalogue says the star here should. It may be a different object.' };
+case 'unexplained':
+return { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit, and no catalogued star at this spot explains that.' };
+case 'measured':
+return { answer: 'Yes', tone: 'yes', gloss: 'It changes place from visit to visit.' };
+case 'static':
+return { answer: 'No', tone: 'no', gloss: 'It is in the same place on every visit, as far as these pictures can tell.' };
+default:
+return { answer: 'Can’t tell yet', tone: 'none', gloss: 'Movement needs at least two visits to this spot, months apart.' };
+}
+}
+function plainBrightness(verdict) {
+const v = verdict || {};
+switch (v.kind) {
+case 'changed':
+return {
+answer: v.direction === 'rose' ? 'Yes, it got brighter' : v.direction === 'fell' ? 'Yes, it got fainter' : 'Yes',
+tone: 'yes',
+gloss: 'Its brightness is clearly different from one visit to another.',
+};
+case 'possible':
+return { answer: 'Maybe', tone: 'maybe', gloss: 'There is a hint of a change, but not enough to be sure.' };
+case 'steady':
+return { answer: 'No', tone: 'no', gloss: 'It is as bright on every visit, within what these pictures can measure.' };
+case 'single':
+return { answer: 'Can’t tell yet', tone: 'none', gloss: 'The telescope has visited this spot only once so far, so there is nothing to compare with.' };
+case 'noisy':
+return { answer: 'Can’t tell', tone: 'none', gloss: 'It is too faint here to say whether its brightness changed.' };
+default:
+return { answer: 'Can’t tell yet', tone: 'none', gloss: 'There are no brightness measurements for this spot yet.' };
+}
+}
+function plainLabel(label) {
+const text = String(label || '').trim();
+if (!text || ['Clicked source', 'Gaia star'].includes(text)) return 'The star you clicked';
+const m = /^Candidate (\d+)$/.exec(text);
+if (m) return `Number ${m[1]} on the list`;
+if (text === 'Moving source') return 'The moving thing you clicked';
+return text;
+}
+function plainVisits(passes) {
+const list = Array.isArray(passes) ? passes.filter((p) => p && p.total > 0) : [];
+const n = list.reduce((sum, p) => sum + p.total, 0);
+if (!n) return '';
+const labels = [];
+for (const p of list) if (p.label && !labels.includes(p.label)) labels.push(p.label);
+const when = labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` : labels[0] || '';
+return `${n} picture${n === 1 ? '' : 's'} from ${list.length} visit${list.length === 1 ? '' : 's'} by the SPHEREx telescope${when ? `: ${when}` : ''}.`;
+}
+function createSimpleView({
+bar,
+host,
+plots = {},
+findTarget = null,
+verdicts = {},
+onView = () => {},
+onPickCandidate = () => {},
+onClear = () => {},
+onAdvanced = () => {},
+} = {}) {
+const viewButtons = new Map();
+const seg = h('div', { class: 'seg simple-seg', role: 'radiogroup', 'aria-label': 'What to show' });
+for (const info of SIMPLE_VIEW_INFO) {
+const btn = h('button', { type: 'button', class: 'seg-btn', role: 'radio', 'aria-checked': 'false', 'data-view': info.id, onclick: () => onView(info.id) }, info.label);
+viewButtons.set(info.id, btn);
+seg.append(btn);
+}
+const hint = h('p', { class: 'simple-hint', 'aria-live': 'polite' });
+if (bar) clear(bar).append(seg, hint);
+function setView(view) {
+let shown = SIMPLE_VIEW_INFO.find((v) => v.id === view) || null;
+for (const [id, btn] of viewButtons) {
+const on = id === view;
+btn.setAttribute('aria-checked', String(on));
+btn.tabIndex = on || (!shown && id === SIMPLE_VIEW_INFO[0].id) ? 0 : -1;
+}
+if (!shown) shown = SIMPLE_VIEW_INFO[0];
+hint.textContent = shown.hint;
+}
+function setViewDisabled(view, reason) {
+const btn = viewButtons.get(view);
+if (!btn) return;
+btn.disabled = true;
+btn.title = reason || '';
+}
+seg.addEventListener('keydown', (ev) => {
+if (!['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;
+const ids = [...viewButtons.keys()].filter((id) => !viewButtons.get(id).disabled);
+const at = ids.findIndex((id) => viewButtons.get(id).getAttribute('aria-checked') === 'true');
+const next = ids[(at + (ev.key === 'ArrowRight' ? 1 : ids.length - 1) + ids.length) % ids.length];
+if (!next) return;
+ev.preventDefault();
+onView(next);
+viewButtons.get(next).focus();
+});
+const fieldName = h('h2', { class: 'simple-name' });
+const fieldWhat = h('p', { class: 'simple-text' });
+const fieldLook = h('p', { class: 'simple-look' });
+const fieldVisits = h('p', { class: 'simple-fine' });
+const fieldCard = h('section', { class: 'simple-card simple-field' }, h('p', { class: 'simple-eyebrow' }, 'You are looking at'), fieldName, fieldWhat, fieldLook, fieldVisits);
+let field = { name: '', coord: '' };
+let visits = { loading: true, passes: [], error: '' };
+function renderField() {
+const known = field.name && typeof findTarget === 'function' ? findTarget(field.name) : null;
+const plain = known && PLAIN_TARGETS[known.id] ? PLAIN_TARGETS[known.id] : null;
+clear(fieldName).append(field.name || 'This patch of sky');
+if (plain) {
+fieldWhat.textContent = plain.what;
+fieldLook.textContent = plain.look;
+} else if (known && known.blurb) {
+fieldWhat.textContent = known.blurb;
+fieldLook.textContent = '';
+} else {
+fieldWhat.textContent = field.coord ? `A small square of sky centred on ${field.coord}.` : 'A small square of sky.';
+fieldLook.textContent = 'Press play to flip between the telescope’s visits, then see what changed.';
+}
+fieldLook.hidden = !fieldLook.textContent;
+if (visits.error) fieldVisits.textContent = visits.error;
+else if (visits.loading) fieldVisits.textContent = 'Fetching the telescope’s pictures of this spot…';
+else fieldVisits.textContent = plainVisits(visits.passes) || 'The telescope has no pictures of this spot yet.';
+}
+const changeBody = h('div', { class: 'simple-changes' });
+const changeFine = h('p', { class: 'simple-fine' });
+const changeCard = h('section', { class: 'simple-card' }, h('h3', { class: 'simple-title' }, 'What changed here'), changeBody, changeFine);
+let cands = { status: 'idle', list: [], active: -1 };
+function renderChanges() {
+clear(changeBody);
+changeFine.textContent = '';
+const { status, list, active } = cands;
+if (status === 'working' || status === 'idle') {
+changeBody.append(
+h('p', { class: 'simple-wait' }, status === 'working' ? 'Comparing every visit, pixel by pixel…' : 'Once the pictures are in, Tombaugh compares the visits and lists anything that moved or changed brightness.'),
+);
+return;
+}
+if (status === 'unavailable') {
+changeBody.append(h('p', { class: 'simple-wait' }, 'There are not enough pictures of this spot yet to compare one visit with another.'));
+return;
+}
+const aside = plainSetAside(list);
+if (!list.length) {
+changeBody.append(
+h('p', { class: 'simple-answer' }, 'Nothing.'),
+h('p', { class: 'simple-text' }, 'Every star in this patch stayed where it was and kept its brightness, as far as these pictures can tell.'),
+);
+changeFine.textContent = aside;
+return;
+}
+const ol = h('ol', { class: 'simple-list' });
+list.forEach((c, i) => {
+const p = plainCandidate(c);
+const sigma = isNum(c.score) ? `${c.score.toFixed(1)} sigma` : '';
+ol.append(
+h(
+'li',
+null,
+h(
+'button',
+{
+type: 'button',
+class: 'simple-change',
+'aria-current': i === active ? 'true' : null,
+'aria-label': `${i + 1}. ${p.title}. ${p.detail} ${p.strength}. Show it.`,
+onclick: () => onPickCandidate(c, i),
+},
+h('span', { class: 'cand-n' }, String(i + 1)),
+h(
+'span',
+{ class: 'simple-change-main' },
+h('span', { class: 'simple-change-title' }, p.title),
+h('span', { class: 'simple-change-detail' }, p.detail),
+p.caution ? h('span', { class: 'simple-change-caution' }, p.caution) : null,
+h('span', { class: 'simple-change-strength' }, p.strength, sigma ? h('span', { class: 'num' }, ` (${sigma})`) : null),
+),
+),
+),
+);
+});
+changeBody.append(ol);
+changeFine.textContent = `Click one to circle it in the picture. These are places worth a look, not discoveries.${aside ? ` ${aside}` : ''}`;
+}
+const pickTitle = h('h3', { class: 'simple-title' }, 'Click any star');
+const pickBody = h('div', { class: 'simple-pick' });
+const specHost = h('div', { class: 'plot-host simple-plot' });
+const specNote = h('p', { class: 'simple-fine' }, 'Each dot is one picture, taken in a different infrared colour. The shape of this curve tells astronomers what the object is made of.');
+const specBlock = h('div', { class: 'simple-spec' }, h('p', { class: 'simple-q' }, 'Its light, colour by colour'), specHost, specNote);
+specBlock.hidden = true;
+const btnClear = h('button', { type: 'button', class: 'btn btn-small btn-quiet', onclick: () => onClear() }, 'Clear');
+btnClear.hidden = true;
+const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, specBlock);
+let spectrumPlot = null;
+if (typeof plots.createSpectrumPlot === 'function') {
+try {
+spectrumPlot = plots.createSpectrumPlot(specHost);
+} catch (err) {
+console.warn('[tombaugh] simple view: spectrum plot failed to mount', err);
+spectrumPlot = null;
+}
+}
+let selection = null;
+let hasSpectrum = false;
+function question(q, a) {
+return h(
+'div',
+{ class: 'simple-qa' },
+h('p', { class: 'simple-q' }, q),
+h('p', { class: `simple-answer is-${a.tone}` }, a.answer),
+h('p', { class: 'simple-text' }, a.gloss),
+a.exact ? h('p', { class: 'simple-fine' }, a.exact) : null,
+);
+}
+function renderPick() {
+clear(pickBody);
+btnClear.hidden = !selection;
+specBlock.hidden = !(selection && hasSpectrum && spectrumPlot);
+if (!selection) {
+pickTitle.textContent = 'Click any star';
+pickBody.append(h('p', { class: 'simple-text' }, 'Click a star in the picture to find out whether it is moving, whether its brightness changed, and what its light looks like.'));
+return;
+}
+const sel = selection;
+pickTitle.textContent = plainLabel(sel.label);
+let mv = { kind: 'few', text: '' };
+let lv = { kind: 'empty', text: '' };
+try {
+if (typeof verdicts.motionVerdict === 'function') mv = verdicts.motionVerdict(sel.measured, sel.gaia, { passes: sel.passes }) || mv;
+} catch (err) {
+console.warn('[tombaugh] simple view: motion verdict', err);
+}
+try {
+if (typeof verdicts.lightCurveVerdict === 'function') lv = verdicts.lightCurveVerdict(sel.lightCurve || []) || lv;
+} catch (err) {
+console.warn('[tombaugh] simple view: light-curve verdict', err);
+}
+const motion = plainMotion(mv);
+const bright = plainBrightness(lv);
+if (sel.saturated) {
+bright.gloss = `${bright.gloss} This star is so bright that it overflows the detector, so take its brightness with caution.`;
+}
+pickBody.append(
+question('Is it moving?', { ...motion, exact: mv.kind === 'few' ? '' : mv.text }),
+question('Did its brightness change?', { ...bright, exact: ['empty', 'single'].includes(lv.kind) ? '' : lv.text }),
+);
+}
+const foot = h(
+'section',
+{ class: 'simple-card simple-foot' },
+h('p', { class: 'simple-text' }, 'This is the simple view. Advanced mode adds every view, all six detectors, the plots behind these answers and the measuring tools.'),
+h('button', { type: 'button', class: 'btn btn-small', onclick: () => onAdvanced() }, 'Open Advanced mode'),
+);
+if (host) clear(host).append(fieldCard, changeCard, pickCard, foot);
+setView('passes');
+renderField();
+renderChanges();
+renderPick();
+return {
+setView,
+setViewDisabled,
+setField({ name = '', coord = '' } = {}) {
+field = { name, coord };
+renderField();
+},
+setVisits({ loading = false, passes = [], error = '' } = {}) {
+visits = { loading: !!loading, passes: Array.isArray(passes) ? passes : [], error: error || '' };
+renderField();
+},
+setCandidates({ status = 'idle', list = [], active = -1 } = {}) {
+cands = { status, list: Array.isArray(list) ? list : [], active };
+renderChanges();
+},
+setSelection(sel) {
+const fresh = !!sel && (!selection || selection.key !== sel.key);
+selection = sel || null;
+if (!selection) {
+hasSpectrum = false;
+if (spectrumPlot) {
+try {
+spectrumPlot.clear();
+} catch {
+}
+}
+}
+renderPick();
+if (fresh && host && host.offsetParent !== null && typeof pickCard.scrollIntoView === 'function') {
+try {
+pickCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+} catch {
+}
+}
+},
+setSpectrum({ points = [], binned = [], lens = null, title = '' } = {}) {
+hasSpectrum = Array.isArray(points) && points.length > 0;
+if (spectrumPlot && hasSpectrum) {
+try {
+spectrumPlot.setData({ points, binned, lens: lens || undefined, title });
+} catch (err) {
+console.warn('[tombaugh] simple view: spectrum plot', err);
+}
+}
+specBlock.hidden = !(selection && hasSpectrum && spectrumPlot);
+},
+};
+}
+});
 __tb_define("src/ui/citation.js", function (__tb_self) { __tb_export(__tb_self, { DOIS: () => DOIS, citationText: () => citationText, createCitation: () => createCitation, externalLinks: () => externalLinks, releaseLabel: () => releaseLabel });
 const DOIS = Object.freeze({
 releases: Object.freeze({
@@ -5967,7 +6518,8 @@ return false;
 }
 }
 });
-__tb_define("src/main.js", function (__tb_self) { const { createStore, readUrlState, writeUrlState, shareUrl, DEFAULT_STATE, VIEWS } = __tb_require("src/state.js"); const { createApi, resolveApiBase } = __tb_require("src/api.js"); const { createLoader, isCancelled } = __tb_require("src/loader.js"); const pipeline = __tb_require("src/pipeline.js"); const { createLayout, h, clear } = __tb_require("src/ui/layout.js"); const { createControls } = __tb_require("src/ui/controls.js"); const { createPlayer } = __tb_require("src/ui/player.js"); const { createPanels } = __tb_require("src/ui/panels.js"); const { createCitation } = __tb_require("src/ui/citation.js"); const { createFieldSummary, frameWaveSpan, foundLine, summarizePasses } = __tb_require("src/ui/fieldsummary.js"); const { createTour, FALLBACK_TARGETS, findTarget } = __tb_require("src/ui/tour.js"); const { createToasts, copyText } = __tb_require("src/ui/toast.js");
+__tb_define("src/main.js", function (__tb_self) { const { createStore, readUrlState, writeUrlState, shareUrl, initialMode, DEFAULT_STATE, VIEWS, SIMPLE_VIEWS } = __tb_require("src/state.js"); const { createApi, resolveApiBase } = __tb_require("src/api.js"); const { createLoader, isCancelled } = __tb_require("src/loader.js"); const pipeline = __tb_require("src/pipeline.js"); const { createLayout, h, clear, storage } = __tb_require("src/ui/layout.js"); const { createControls } = __tb_require("src/ui/controls.js"); const { createPlayer } = __tb_require("src/ui/player.js"); const { createPanels } = __tb_require("src/ui/panels.js"); const { createSimpleView, plainTarget } = __tb_require("src/ui/simple.js"); const { createCitation } = __tb_require("src/ui/citation.js"); const { createFieldSummary, frameWaveSpan, foundLine, summarizePasses } = __tb_require("src/ui/fieldsummary.js"); const { createTour, FALLBACK_TARGETS, findTarget } = __tb_require("src/ui/tour.js"); const { createToasts, copyText } = __tb_require("src/ui/toast.js");
+;
 ;
 ;
 ;
@@ -5985,6 +6537,7 @@ const GAIA_RADIUS_DEG = 0.12;
 const PARTIAL_VIEWS = ['passes', 'exposures', 'matched'];
 const MICRON = 'µm';
 const SIMULATED_WORD = 'SIMULATED';
+const MODE_KEY = 'tombaugh.mode';
 const DEBUG = (() => {
 try {
 return new URLSearchParams(location.search).get('debug') === '1';
@@ -6083,11 +6636,15 @@ return { missing: true, setGrid: noop, setImage: noop, setRgb: noop, setOverlays
 }
 async function boot() {
 const urlState = readUrlState();
-const store = createStore({ ...DEFAULT_STATE, ...urlState });
+const startMode = initialMode(urlState, globalThis.location ? globalThis.location.search : '', storage.get(MODE_KEY));
+const startState = { ...DEFAULT_STATE, ...urlState, mode: startMode };
+if (startMode === 'simple' && VIEWS.includes(startState.view) && !SIMPLE_VIEWS.includes(startState.view)) startState.view = 'passes';
+const store = createStore(startState);
 let api = createApi(resolveApiBase());
 const layout = createLayout({ onSearch: (text) => handleSearch(text), onHome: () => goHome() });
 const { els } = layout;
 layout.setEmbed(store.get().embed);
+layout.setMode(store.get().mode);
 const toasts = createToasts(els.toasts);
 const [{ mods: core, missing: coreMissing }, { mods: opt }] = await Promise.all([importAll(CORE_MODULES), importAll(OPTIONAL_MODULES)]);
 const lib = {};
@@ -6184,6 +6741,63 @@ if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'resid
 },
 onClearSource: () => select(null),
 });
+const simple = createSimpleView({
+bar: els.simplebar,
+host: els.simple,
+plots: { createSpectrumPlot: opt.spectrum && opt.spectrum.createSpectrumPlot },
+findTarget: (name) => findTarget(targets, name),
+verdicts: {
+motionVerdict: opt.motion && opt.motion.motionVerdict,
+lightCurveVerdict: opt.lightcurve && opt.lightcurve.lightCurveVerdict,
+},
+onView: (view) => {
+if (store.get().view !== view) store.set({ view, t: 0 });
+},
+onPickCandidate: (c, i) => {
+select({ ra: c.ra, dec: c.dec, label: `Candidate ${i + 1}`, candidate: i });
+if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
+},
+onClear: () => select(null),
+onAdvanced: () => setMode('advanced', { remember: true }),
+});
+if (!lib.fitSkyModel || !lib.residualLayer) simple.setViewDisabled('residual', 'The comparison is not available in this build');
+simple.setView(store.get().view);
+applyModeToViewer();
+for (const name of ['setCandidates', 'setSpectrum']) {
+const base = panels[name];
+panels[name] = (arg) => {
+base(arg);
+try {
+simple[name](arg);
+} catch (err) {
+console.warn('[tombaugh] simple view', err);
+}
+};
+}
+{
+const base = panels.setSource;
+panels.setSource = (source) => {
+base(source);
+if (!source) simple.setSelection(null);
+};
+}
+function applyModeToViewer() {
+try {
+viewer.setOptions({ colorbar: store.get().mode !== 'simple' });
+refreshCaptions();
+} catch {
+}
+}
+function setMode(mode, { remember = false } = {}) {
+const next = mode === 'advanced' ? 'advanced' : 'simple';
+if (remember) storage.set(MODE_KEY, next);
+const patch = { mode: next };
+if (next === 'simple' && !SIMPLE_VIEWS.includes(store.get().view)) {
+patch.view = 'passes';
+patch.t = 0;
+}
+store.set(patch);
+}
 let fieldSummary = null;
 try {
 fieldSummary = createFieldSummary(els.fieldsum);
@@ -6364,6 +6978,7 @@ function showError(err) {
 session.error = err;
 player.pause();
 layout.setProgress(null);
+updateSimpleField();
 const retryable = !err || err.retryable !== false;
 const message = err && err.message ? String(err.message) : 'Something went wrong while loading this position.';
 layout.setStatus({
@@ -6489,6 +7104,7 @@ renderStatus();
 updateCoverage();
 updateCitation();
 emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+updateSimpleField();
 if (!res.layers.length) {
 showNoExposures(res);
 updateAbout();
@@ -6638,6 +7254,7 @@ const res = await loader.load({ ra: s.ra, dec: s.dec, fov: s.fov, det, subtractZ
 if (token !== session.token) throw Object.assign(new Error('cancelled'), { aborted: true });
 session.byDet.set(det, res);
 emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+updateSimpleField();
 }
 if (session.loading && session.loading.label === label) {
 session.loading = null;
@@ -6662,6 +7279,7 @@ const res = await loader.load({ ra: s.ra, dec: s.dec, fov: s.fov, det, subtractZ
 if (token !== session.token) return;
 session.byDet.set(det, res);
 emit('frames', { det, count: res.frames.length, total: res.refs.length, complete: true });
+updateSimpleField();
 if (session.selection) measureSelection();
 }
 } catch (err) {
@@ -6964,7 +7582,7 @@ colormap: frame.diverging ? undefined : s.colormap,
 diverging: !!frame.diverging,
 });
 }
-viewer.setCaption(frame.caption || null);
+viewer.setCaption(shownCaption(frame));
 } catch (err) {
 console.warn('[tombaugh] frame failed to draw', err);
 }
@@ -6981,12 +7599,19 @@ console.info(`[tombaugh debug] renderFrame (${s.view}, stretch ${s.stretch}) too
 }
 function decorateCaptions(frames) {
 const extra = captionSuffix();
+const simpleWords = store.get().mode === 'simple';
 for (const frame of frames || []) {
 if (!frame) continue;
 if (frame.captionBase === undefined) frame.captionBase = frame.caption || { title: '', date: '', wave: '', note: '' };
-const base = frame.captionBase;
+let base = frame.captionBase;
+if (simpleWords && typeof base.title === 'string') base = { ...base, title: base.title.replace(/^Residual · pass/, 'What changed · visit').replace(/^Pass /, 'Visit ') };
 frame.caption = extra ? { ...base, note: [extra, base.note].filter(Boolean).join(' · ') } : base;
 }
+}
+function shownCaption(frame) {
+const c = frame && frame.caption ? frame.caption : null;
+if (!c || store.get().mode !== 'simple') return c;
+return { title: c.title, date: c.date };
 }
 function refreshCaptions() {
 if (!session.movie) return;
@@ -6995,12 +7620,26 @@ player.refresh();
 const frame = player.frame();
 if (frame) {
 try {
-viewer.setCaption(frame.caption || null);
+viewer.setCaption(shownCaption(frame));
 } catch {
 }
 }
 }
+function updateSimpleField() {
+const s = store.get();
+if (!hasTarget()) return;
+try {
+simple.setField({ name: s.name || '', coord: fmtCoord(s.ra, s.dec).deg });
+const data = session.byDet.get(s.det);
+if (session.error) simple.setVisits({ error: 'The telescope archive did not answer. Use “Try again” in the picture.' });
+else if (data) simple.setVisits({ passes: summarizePasses(data.frames) });
+else simple.setVisits({ loading: true });
+} catch (err) {
+console.warn('[tombaugh] simple view', err);
+}
+}
 function updateFieldSummary() {
+updateSimpleField();
 if (!fieldSummary) return;
 const s = store.get();
 if (!hasTarget()) {
@@ -7257,6 +7896,22 @@ title,
 note: motionNote(sel, verdict),
 });
 updateOverlays();
+try {
+const passCount = m && m.track.length && opt.motion && opt.motion.passPositions ? opt.motion.passPositions(m.track).length : undefined;
+simple.setSelection({
+key: Number.isInteger(sel.candidate) ? `c${sel.candidate}` : `${sel.x},${sel.y}`,
+label: sel.label || '',
+measured: m ? m.measured : null,
+gaia: m && m.catalogue
+? { pmra: m.catalogue.pmra, pmdec: m.catalogue.pmdec, total: m.catalogue.total, source: 'catalogue' }
+: m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
+passes: passCount,
+lightCurve: sel.lightCurve,
+saturated: !!(m && m.saturated),
+});
+} catch (err) {
+console.warn('[tombaugh] simple view', err);
+}
 emit('select', { ...sel });
 }
 const LIGHTCURVE_NOTE = 'Brightness over time, relative to the source\u2019s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
@@ -7376,6 +8031,7 @@ if (session.epochNote) parts.push(`  ·  ${session.epochNote}`);
 layout.setSearchStatus(parts);
 }
 let landing = null;
+let landingPlain = true;
 let landingFallback = null;
 let resolveToken = 0;
 function reportSearchProblem(message) {
@@ -7591,11 +8247,26 @@ layout.setStatus(null);
 layout.setProgress(null);
 layout.setScreen('landing');
 document.title = 'Tombaugh: a blink comparator for the 102-color sky';
+const plain = store.get().mode !== 'advanced';
+if (landing && landingPlain !== plain) {
+try {
+landing.destroy();
+} catch {
+}
+landing = null;
+clear(els.landing);
+}
 if (!landing && !landingFallback) {
 if (opt.landing && typeof opt.landing.createLanding === 'function') {
 try {
+landingPlain = plain;
 landing = opt.landing.createLanding(els.landing, {
-targets: tourTargets,
+plain,
+onMode: () => {
+setMode(plain ? 'advanced' : 'simple', { remember: true });
+showLanding();
+},
+targets: plain ? tourTargets.map(plainTarget) : tourTargets,
 onPick: (t) => pickTarget(t),
 onSearch: (text) => handleSearch(text),
 onSurprise: () => surprise(),
@@ -7662,14 +8333,25 @@ const FALLBACK_SHORTCUTS = [
 ];
 function buildHelp() {
 const body = clear(els.helpBody);
-const steps = h(
+const simpleMode = store.get().mode !== 'advanced';
+const steps = simpleMode
+? h(
+'ol',
+{ class: 'help-steps' },
+h('li', null, 'Type a place or a name in the box at the top, or pick one of the five places on the start page.'),
+h('li', null, 'Press play. Each frame is one visit by the telescope, months apart: stars stay put, anything that moves jumps.'),
+h('li', null, 'Switch to “What changed” to subtract everything that stayed the same. Whatever is left moved or changed brightness.'),
+h('li', null, 'Click any star to find out whether it is moving and whether its brightness changed.'),
+h('li', null, 'Use Share to copy a link to this view. Advanced, at the top right, opens every view, all six detectors, the plots and the measuring tools.'),
+)
+: h(
 'ol',
 { class: 'help-steps' },
 h('li', null, 'Type coordinates or a name in the box at the top, or pick a challenge target.'),
 h('li', null, 'Watch the movie. In the Passes view every frame is one survey pass, six months apart: stars stay put, movers jump.'),
 h('li', null, 'Switch to Residual to subtract what the unchanging sky should look like. What is left moved or changed.'),
 h('li', null, 'Click any source to read its spectrum, its light curve and its motion compared with Gaia.'),
-h('li', null, 'Use Share to copy a link that reopens exactly this view.'),
+h('li', null, 'Use Share to copy a link that reopens exactly this view. Simple, at the top right, goes back to the short version of this page.'),
 );
 const keys = h('dl', { class: 'keys' });
 const list = opt.shortcuts && Array.isArray(opt.shortcuts.SHORTCUTS) ? opt.shortcuts.SHORTCUTS : FALLBACK_SHORTCUTS;
@@ -7753,6 +8435,7 @@ layout.closeDialog(els.mapDialog);
 }
 els.btnShare.addEventListener('click', () => share());
 els.btnHelp.addEventListener('click', () => openHelp());
+if (els.btnMode) els.btnMode.addEventListener('click', () => setMode(store.get().mode === 'advanced' ? 'simple' : 'advanced', { remember: true }));
 if (opt.fogmap && typeof opt.fogmap.createFogMap === 'function') {
 els.btnMap.hidden = false;
 els.btnMap.title = 'An all-sky map of the patches anyone has opened with this tool';
@@ -7786,14 +8469,15 @@ viewer.on('leave', () => layout.setReadout(DEFAULT_READOUT));
 viewer.on('option', (e) => {
 if (e && e.name === 'smooth') store.set({ smooth: !!e.value });
 });
+const advancedOnly = () => store.get().mode === 'advanced';
 const keymap = {
 Space: () => player.toggle(),
 ArrowLeft: () => player.step(-1),
 ArrowRight: () => player.step(1),
 b: () => player.toggleBlink(),
 r: () => store.set({ view: store.get().view === 'residual' ? 'passes' : lib.fitSkyModel ? 'residual' : store.get().view, t: 0 }),
-g: () => store.set({ gaia: !store.get().gaia }),
-f: () => store.set({ flags: !store.get().flags }),
+g: () => (advancedOnly() ? store.set({ gaia: !store.get().gaia }) : false),
+f: () => (advancedOnly() ? store.set({ flags: !store.get().flags }) : false),
 '?': () => openHelp(),
 Escape: () => {
 if (layout.isSheetOpen()) layout.setSheet(false);
@@ -7801,7 +8485,7 @@ else return false;
 return undefined;
 },
 };
-for (let d = 1; d <= 6; d++) keymap[String(d)] = () => store.set({ det: d, t: 0 });
+for (let d = 1; d <= 6; d++) keymap[String(d)] = () => (advancedOnly() ? store.set({ det: d, t: 0 }) : false);
 const keysEnabled = () => document.documentElement.dataset.screen === 'console' && !document.querySelector('dialog[open]');
 if (opt.shortcuts && typeof opt.shortcuts.bindShortcuts === 'function') {
 try {
@@ -7826,6 +8510,14 @@ writeUrlState(s);
 const has = (k) => changed.includes(k);
 emit('state', { state: s, changed });
 if (has('embed')) layout.setEmbed(s.embed);
+if (has('mode')) {
+layout.setMode(s.mode);
+applyModeToViewer();
+}
+if (has('view')) {
+simple.setView(s.view);
+if (s.mode === 'simple' && !SIMPLE_VIEWS.includes(s.view)) queueMicrotask(() => setMode('advanced'));
+}
 if (has('ra') || has('dec')) {
 document.title = titleFor(s);
 if (hasTarget()) startTarget();
@@ -7834,6 +8526,7 @@ return;
 }
 if (has('name')) updateSearchLine();
 if (!hasTarget()) return;
+if (has('name') || has('det')) updateSimpleField();
 if (has('fov') || has('zodi')) {
 resetField({ keepSelection: true });
 session.key = targetKey(s);
@@ -17054,6 +17747,7 @@ const CSS = `
 }
 .tbx-foot li:last-child { margin-left: auto; }
 .tbx-foot .tbx-foot__result { flex: 1 1 100%; color: var(--tbx-paper); }
+.tbx-foot button { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: var(--tbx-paper); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 @media (max-width: 900px) {
   .tbx-top {
@@ -18215,6 +18909,11 @@ cap.appendChild(pauseBtn);
 figure.append(heroCanvas, cap);
 const body = el(doc, 'div', 'tbx-body');
 const lede = stagger(el(doc, 'p', 'tbx-lede'), heroStep);
+if (opts.plain) {
+lede.append(
+'Give Tombaugh any spot on the sky and it plays every picture the SPHEREx space telescope took of that spot as a movie, so whatever moves or changes brightness stands out. Pick one of the five places below to start.',
+);
+} else {
 lede.append(
 'Give Tombaugh any spot on the sky and it plays every SPHEREx image of that spot as a movie, so whatever moves or changes brightness stands out. ',
 );
@@ -18229,6 +18928,7 @@ lede.append('A plain blink would flicker everywhere');
 lede.append(
 ', because SPHEREx sees each spot in a different infrared color on every exposure; Tombaugh learns each pixel’s spectrum, predicts the unchanging sky in that color and subtracts it, so only real change is left.',
 );
+}
 const form = stagger(el(doc, 'form', 'tbx-search'));
 form.setAttribute('role', 'search');
 form.noValidate = true;
@@ -18364,6 +19064,14 @@ for (const line of [
 'Code written with Claude (AI)',
 ]) {
 foot.appendChild(el(doc, 'li', '', line));
+}
+if (typeof opts.onMode === 'function') {
+const item = el(doc, 'li', 'tbx-foot__mode');
+const btn = el(doc, 'button', '', opts.plain ? 'Switch to Advanced mode' : 'Switch to Simple mode');
+btn.type = 'button';
+btn.addEventListener('click', () => opts.onMode());
+item.appendChild(btn);
+foot.insertBefore(item, foot.lastChild);
 }
 foot.firstChild.className = 'tbx-foot__result';
 inner.appendChild(foot);
