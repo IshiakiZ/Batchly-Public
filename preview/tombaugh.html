@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:35:29.770Z, sources sha256 c7c81a7822279bca.
+Single-file build of 111 modules, 2026-11-15T10:37:52.310Z, sources sha256 18fd49a81c041e9e.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -15027,6 +15027,7 @@ state.binned = [];
 state.model = [];
 state.lens = null;
 state.title = '';
+state.featureList = null;
 state.passOf = new Map();
 state.passes = [];
 state.hasData = false;
@@ -37041,6 +37042,7 @@ warn('showSpectrum failed', err);
 }
 async function buildView(ctx) {
 if (!st.items.length) return [];
+if (st.spectrum) setTimeout(() => { if (!disposed) publishSpectrum(); }, 60);
 const grid = ctx && ctx.grid ? ctx.grid : null;
 const dims = grid && grid.n > 0 && grid.scale > 0 ? { n: grid.n, scale: grid.scale } : panelDims();
 const analysis = await analyse(dims.n, dims.scale, null, null);
