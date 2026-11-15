@@ -1388,6 +1388,16 @@ async function boot() {
       }
       panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
     }
+    // A source that is where one of the built-in targets is on that date gets its name.
+    if (!sel.label || ['Gaia star', 'Moving source', 'Clicked source'].includes(sel.label)) {
+      const frameNow = player.frame();
+      const at = m && m.track.length ? m.track[0] : { ra: sel.ra, dec: sel.dec, mjd: frameNow ? frameNow.mjd : NaN };
+      const known = pipeline.knownTargetAt(lib, at.ra, at.dec, at.mjd);
+      if (known) {
+        sel.label = known.name;
+        panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
+      }
+    }
     const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
     sel.followed = follow ? follow.kind : null;
     try {

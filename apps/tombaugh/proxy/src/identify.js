@@ -712,12 +712,46 @@ export async function identifyCone(ra, dec, radiusDeg, { fetchImpl = globalThis.
           objects.push(m);
         }
       }
-      objects.sort((p, q) => (p.sepArcsec ?? Infinity) - (q.sepArcsec ?? Infinity));
     } catch {
       // the plain cone answer stands
     }
   }
-  return { objects: objects.slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
+  return { objects: rankObjects(objects).slice(0, IDENTIFY_MAX_OBJECTS), source: 'simbad' };
+}
+
+const isPlanet = (o) => typeof o.type === 'string' && /^Pl\??$/.test(o.type);
+const bareName = (name) => String(name || '').replace(/^NAME\s+/i, '').trim().toLowerCase();
+
+/**
+ * Nearest first, except that a planet never comes before the star it circles. SIMBAD gives a
+ * planet its star's position and motion, so "Barnard's Star b" can land a hair nearer to a
+ * click than Barnard's Star does, and a list that opens with three planets hides the answer.
+ * The host is the non-planet whose name the planet's name starts with, or failing that one
+ * with the same proper motion (within 5%) at nearly the same distance from the position.
+ */
+export function rankObjects(objects) {
+  const list = (objects || []).filter(Boolean);
+  const sep = (o) => (Number.isFinite(o.sepArcsec) ? o.sepArcsec : Infinity);
+  const hosts = list.filter((o) => !isPlanet(o));
+  const rank = new Map();
+  for (const o of list) {
+    let r = sep(o);
+    if (isPlanet(o)) {
+      const name = bareName(o.name).replace(/\s+[a-z]$/, '');
+      const pm = Math.hypot(o.pmra, o.pmdec);
+      const host = hosts.find((h) => bareName(h.name) === name)
+        || hosts.find((h) => {
+          const hpm = Math.hypot(h.pmra, h.pmdec);
+          return pm > 0 && hpm > 0 && Math.abs(hpm - pm) <= 0.05 * pm && Math.abs(sep(h) - sep(o)) <= 5;
+        });
+      if (host) r = Math.max(r, sep(host)) + 1e-6;
+    }
+    rank.set(o, r);
+  }
+  return list
+    .map((o, i) => ({ o, i }))
+    .sort((a, b) => rank.get(a.o) - rank.get(b.o) || a.i - b.i)
+    .map((e) => e.o);
 }
 
 const SYNTHETIC_KINDS = {

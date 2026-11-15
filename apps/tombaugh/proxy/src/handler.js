@@ -799,7 +799,7 @@ export function createHandler(options = {}) {
     }
     const ra5 = roundTo(ra, 5);
     const dec5 = roundTo(dec, 5);
-    const key = await cacheKey(['identify', 'v2', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
+    const key = await cacheKey(['identify', 'v3', ra5.toFixed(5), dec5.toFixed(5), radius.toFixed(5)]);
     const cached = decodeJson(await cacheGet(key, { maxAgeSeconds: IDENTIFY_TTL_SECONDS }));
     const headers = { 'cache-control': 'public, max-age=86400' };
     if (cached && Array.isArray(cached.objects)) return jsonResponse({ ...cached, cached: true }, 200, headers);

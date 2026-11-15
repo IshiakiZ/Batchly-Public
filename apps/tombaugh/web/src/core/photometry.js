@@ -397,7 +397,9 @@ export function extractSpectrum(frames, ra, dec, opts = {}) {
  *   p.sat = true, p.rSat (this frame's core radius), p.wing_uJy, p.wingErr_uJy, p.wingOk,
  *   p.wingR1, p.wingR2 (the ring, native pixels; the same for all points of the source).
  * One ring for all frames matters: the fraction of the star's light in the ring then changes
- * only smoothly with wavelength, which lightCurve() divides out.
+ * only smoothly with wavelength, which lightCurve() divides out. The wing flux is the ring's
+ * area times an amplitude fitted to the profile shape learned from all frames (see below), so
+ * a frame that has lost some of its ring to flags is still on the same scale as the others.
  */
 function addWings(used, opts) {
   const ok = used.filter((u) => u.p.ok);
@@ -412,15 +414,155 @@ function addWings(used, opts) {
   const rCore = radii[Math.min(radii.length - 1, Math.floor(0.85 * radii.length))];
   const r1 = rCore + 1;
   const r2 = r1 + 2.5;
+
+  // First pass: the good pixels of the ring in every frame, and their plain mean.
   for (const u of ok) {
-    const w = wingPhot(u.frame, u.ra, u.dec, r1, r2, opts);
-    // A frame whose own core reaches into the ring is not comparable with the others.
-    const clean = w.ok && u.rSat <= r1 - 0.5;
+    u.ring = ringSamples(u.frame, u.ra, u.dec, r1, r2, opts);
+    u.amp = u.ring.ok && u.rSat <= r1 - 0.5 ? u.ring.mean : NaN;
+  }
+  // The plain mean is biased whenever some of the ring is flagged: the profile falls steeply
+  // across the ring, so losing inner pixels lowers the mean and losing outer ones raises it.
+  // Second pass: learn the shape of the profile across the ring from all frames of a detector
+  // (median of value / amplitude in bins of radius), then fit each frame's amplitude to that
+  // shape using whatever pixels it has. Which pixels are missing then no longer matters.
+  const NB = Math.max(3, Math.round((r2 - r1) / 0.5));
+  const binOf = (r) => Math.max(0, Math.min(NB - 1, Math.floor(((r - r1) / (r2 - r1)) * NB)));
+  const byDet = new Map();
+  for (const u of ok) {
+    const det = u.p.det || 0;
+    if (!byDet.has(det)) byDet.set(det, []);
+    byDet.get(det).push(u);
+  }
+  for (const group of byDet.values()) {
+    let shape = null;
+    for (let round = 0; round < 2; round++) {
+      const bins = Array.from({ length: NB }, () => []);
+      for (const u of group) {
+        if (!(u.amp > 0)) continue;
+        for (let k = 0; k < u.ring.n; k++) bins[binOf(u.ring.r[k])].push(u.ring.v[k] / u.amp);
+      }
+      const next = bins.map((b) => (b.length >= 3 ? medianInPlace(Float64Array.from(b), b.length) : NaN));
+      if (next.some((t) => !(t > 0))) break; // not enough light to learn a shape: keep the plain means
+      shape = next;
+      for (const u of group) {
+        if (!Number.isFinite(u.amp)) continue;
+        let st = 0, stt = 0, svar = 0;
+        for (let k = 0; k < u.ring.n; k++) {
+          const t = shape[binOf(u.ring.r[k])];
+          st += t * u.ring.v[k];
+          stt += t * t;
+          svar += t * t * u.ring.var[k];
+        }
+        if (stt > 0) {
+          u.amp = st / stt;
+          u.ampErr = Math.sqrt(svar) / stt;
+        }
+      }
+    }
+    for (const u of group) u.shaped = !!shape;
+  }
+
+  const area = Math.PI * (r2 * r2 - r1 * r1);
+  for (const u of ok) {
+    const good = Number.isFinite(u.amp) && u.ring.ok;
+    const err = Number.isFinite(u.ampErr) ? u.ampErr : u.ring.errMean;
     Object.assign(u.p, {
       sat: true, rSat: u.rSat, wingR1: r1, wingR2: r2,
-      wing_uJy: w.flux_uJy, wingErr_uJy: w.err_uJy, wingOk: clean && Number.isFinite(w.flux_uJy) && w.err_uJy > 0,
+      wing_uJy: good ? u.amp * area * MJYSR_TO_UJY_PER_PIX : NaN,
+      wingErr_uJy: good ? err * area * MJYSR_TO_UJY_PER_PIX : NaN,
+      wingOk: good && u.amp > 0 && err > 0,
     });
   }
+}
+
+/**
+ * The usable pixels of the ring r1..r2 (pixel centres, native pixels) around a sky position:
+ * background-subtracted values, their radii and variances, and their plain mean.
+ * ok is false when the ring leaves the frame or fewer than `minGood` (default 0.5) of its
+ * pixels are usable.
+ */
+function ringSamples(frame, ra, dec, r1, r2, opts = {}) {
+  const { badMask = PHOT_BAD_MASK, subtractZodi = true, wcsFactory = makeWcs, minGood = 0.5 } = opts;
+  const none = { ok: false, n: 0, mean: NaN, errMean: NaN, good: 0, r: [], v: [], var: [] };
+  if (!frame || !frame.image) return none;
+  const { nx, ny, image } = frame;
+  const variance = frame.variance || null;
+  const zodi = subtractZodi ? frame.zodi || null : null;
+  const flags = frame.flags || null;
+  let x0 = NaN;
+  let y0 = NaN;
+  try {
+    [x0, y0] = wcsFactory(frame.wcs).skyToPix(ra, dec);
+  } catch {
+    return none;
+  }
+  if (!Number.isFinite(x0) || !Number.isFinite(y0)) return none;
+  if (x0 - r2 < -0.5 || y0 - r2 < -0.5 || x0 + r2 > nx - 0.5 || y0 + r2 > ny - 0.5) return none;
+  const { bg, bgSigma, nBg } = ringBackground(frame, x0, y0, r2 + 2.5, r2 + 5.5, badMask, zodi);
+  const r = [];
+  const v = [];
+  const vr = [];
+  let all = 0;
+  for (let y = Math.floor(y0 - r2); y <= Math.ceil(y0 + r2); y++) {
+    for (let x = Math.floor(x0 - r2); x <= Math.ceil(x0 + r2); x++) {
+      const rr = Math.hypot(x - x0, y - y0);
+      if (rr < r1 || rr > r2) continue;
+      all++;
+      if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+      const i = y * nx + x;
+      if (flags && (flags[i] & badMask) !== 0) continue;
+      const val = image[i] - (zodi ? zodi[i] : 0);
+      if (!Number.isFinite(val)) continue;
+      const pv = variance ? variance[i] : NaN;
+      r.push(rr);
+      v.push(val - bg);
+      vr.push(pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
+    }
+  }
+  const n = v.length;
+  const good = all > 0 ? n / all : 0;
+  if (n < 6 || good < minGood) return { ...none, good };
+  let sum = 0, svar = 0;
+  for (let k = 0; k < n; k++) { sum += v[k]; svar += vr[k]; }
+  return {
+    ok: true, n, good, r, v, var: vr,
+    mean: sum / n,
+    errMean: Math.sqrt(svar / (n * n) + (nBg > 0 ? (Math.PI / 2) * bgSigma * bgSigma / nBg : 0)),
+  };
+}
+
+/** Clipped median and scatter of the good pixels in the annulus bgIn..bgOut around (x0, y0). */
+function ringBackground(frame, x0, y0, bgIn, bgOut, badMask, zodi) {
+  const { nx, ny, image } = frame;
+  const flags = frame.flags || null;
+  const vals = [];
+  for (let y = Math.max(0, Math.floor(y0 - bgOut)); y <= Math.min(ny - 1, Math.ceil(y0 + bgOut)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - bgOut)); x <= Math.min(nx - 1, Math.ceil(x0 + bgOut)); x++) {
+      const q = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+      if (q < bgIn * bgIn || q >= bgOut * bgOut) continue;
+      const i = y * nx + x;
+      if (flags && (flags[i] & badMask) !== 0) continue;
+      const val = image[i] - (zodi ? zodi[i] : 0);
+      if (Number.isFinite(val)) vals.push(val);
+    }
+  }
+  let nBg = vals.length;
+  if (nBg < 8) return { bg: 0, bgSigma: 0, nBg: 0 };
+  const a = Float64Array.from(vals);
+  const buf = new Float64Array(nBg);
+  let bg = 0;
+  let bgSigma = 0;
+  for (let round = 0; round < 4; round++) {
+    for (let j = 0; j < nBg; j++) buf[j] = a[j];
+    bg = medianInPlace(buf, nBg);
+    for (let j = 0; j < nBg; j++) buf[j] = Math.abs(a[j] - bg);
+    bgSigma = MAD_TO_SIGMA * medianInPlace(buf, nBg);
+    let kept = 0;
+    for (let j = 0; j < nBg; j++) if (Math.abs(a[j] - bg) <= 3 * bgSigma) a[kept++] = a[j];
+    if (kept === nBg || kept < 8) break;
+    nBg = kept;
+  }
+  return { bg, bgSigma, nBg };
 }
 
 function usablePoint(p) {

@@ -22,7 +22,7 @@ import {
   parseIdentifyCsv,
   separationArcsec,
   simbadUrl,
-  buildMoversQuery, matchMovers, MOVER_MIN_PM,
+  buildMoversQuery, matchMovers, MOVER_MIN_PM, rankObjects,
 } from './identify.js';
 
 // Barnard's star and two neighbours, as SIMBAD writes CSV: strings quoted, empty cells bare.
@@ -425,4 +425,21 @@ test('identifyCone adds a fast mover that the small cone cannot see', async () =
     return new Response(EMPTY, { status: 200, headers: { 'content-type': 'text/csv' } });
   };
   assert.deepEqual(await identifyCone(133.759803, -7.242169, 12 / 3600, { fetchImpl: flaky }), { objects: [], source: 'simbad' });
+});
+
+test('rankObjects: a planet never comes before its star', () => {
+  const star = { name: "NAME Barnard's star", type: 'PM*', sepArcsec: 0.9, pmra: -802.8, pmdec: 10362.5 };
+  const b = { name: "NAME Barnard's Star b", type: 'Pl', sepArcsec: 0.4, pmra: -802.8, pmdec: 10362.5 };
+  const c = { name: 'GJ 699 c', type: 'Pl?', sepArcsec: 0.5, pmra: -801, pmdec: 10360 };
+  const far = { name: 'Field star', type: '*', sepArcsec: 7, pmra: 2, pmdec: -3 };
+  const near = { name: 'Other', type: 'G', sepArcsec: 0.1, pmra: NaN, pmdec: NaN };
+  assert.deepEqual(rankObjects([b, c, far, star, near]).map((o) => o.name),
+    ['Other', "NAME Barnard's star", "NAME Barnard's Star b", 'GJ 699 c', 'Field star']);
+  // a planet whose star is not in the list keeps its place; nothing is dropped; input untouched
+  const input = [far, b];
+  assert.deepEqual(rankObjects(input).map((o) => o.name), ["NAME Barnard's Star b", 'Field star']);
+  assert.deepEqual(input.map((o) => o.name), ['Field star', "NAME Barnard's Star b"]);
+  assert.deepEqual(rankObjects(null), []);
+  // objects without a separation go last, in their given order
+  assert.deepEqual(rankObjects([{ name: 'x', sepArcsec: null }, far]).map((o) => o.name), ['Field star', 'x']);
 });

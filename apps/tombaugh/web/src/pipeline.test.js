@@ -547,3 +547,20 @@ test('fillMaskedForDisplay closes enclosed holes and leaves uncovered sky empty'
   for (let y = 5; y < 35; y++) for (let x = 5; x < 35; x++) big[y * n + x] = 1;
   assert.equal(fillMaskedForDisplay(before.map((v) => (Number.isFinite(v) ? v : 1)), big, n), null);
 });
+
+test('knownTargetAt names a source only where that target is on that date', async () => {
+  const { knownTargetAt } = await import('./pipeline.js');
+  const lib = { ...(await import('./core/targets.js')), ...(await import('./core/astrometry.js')) };
+  // WISE 0855 where SPHEREx saw it on 17 Nov 2025...
+  assert.equal(knownTargetAt(lib, 133.759803, -7.242169, 60996.3).id, 'wise0855');
+  // ...but not at its catalogue position on that date (it left 15 years ago)...
+  assert.equal(knownTargetAt(lib, 133.795129, -7.245147, 60996.3), null);
+  // ...and not the G = 16.3 star 7.7 arcsec away.
+  assert.equal(knownTargetAt(lib, 133.758183, -7.241156, 60996.3), null);
+  const b = lib.TARGETS.find((t) => t.id === 'barnard');
+  const pos = lib.positionNow(b, 60902);
+  assert.equal(knownTargetAt(lib, pos.ra, pos.dec + 3 / 3600, 60902).id, 'barnard');
+  assert.equal(knownTargetAt(lib, pos.ra, pos.dec + 30 / 3600, 60902), null);
+  assert.equal(knownTargetAt({}, 1, 2, 60000), null);
+  assert.equal(knownTargetAt(lib, 1, 2, NaN), null);
+});

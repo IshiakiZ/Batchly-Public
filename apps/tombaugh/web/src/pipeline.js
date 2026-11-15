@@ -1226,6 +1226,31 @@ export function compareWithGaia(motion) {
 }
 
 /**
+ * The entry of the built-in target table that is at (ra, dec) on date mjd, if any: each target
+ * is carried to that date with its own proper motion and parallax and must then lie within
+ * `tolArcsec` (default 5, most of one SPHEREx pixel). So a source is called "Barnard's
+ * Star" only when it is where Barnard's Star is on that date. -> the target or null.
+ */
+export function knownTargetAt(lib, ra, dec, mjd, tolArcsec = 5) {
+  if (!Array.isArray(lib.TARGETS) || !lib.positionNow || !lib.separationArcsec || !Number.isFinite(mjd)) return null;
+  let best = null;
+  let bestSep = tolArcsec;
+  for (const t of lib.TARGETS) {
+    try {
+      const pos = lib.positionNow(t, mjd);
+      const sep = lib.separationArcsec(ra, dec, pos.ra, pos.dec);
+      if (sep <= bestSep) {
+        best = t;
+        bestSep = sep;
+      }
+    } catch {
+      // a target that cannot be propagated is not a match
+    }
+  }
+  return best;
+}
+
+/**
  * Where to point the photometry aperture at each date, for a source that moves enough to
  * leave it: the Gaia star's own track when the source is that star and moves at least
  * 0.3 arcsec a year, the fitted straight line when the source is a mover Gaia does not list.

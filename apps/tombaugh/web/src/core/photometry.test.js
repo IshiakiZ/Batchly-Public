@@ -385,6 +385,45 @@ test('a saturated star: the flagged core is found and the wings carry its light 
   assert.equal(wingPhot(frames[0], ...skyOf(1, 1), 3.5, 6, { wcsFactory }).ok, false, 'ring off the frame');
 });
 
+test('a saturated star with a ragged core: frames that lose part of the ring stay on the same scale', () => {
+  const [x0, y0] = [22.3, 21.6];
+  const build = (ragged) => {
+    const frames = [];
+    for (let k = 0; k < 40; k++) {
+      const dx = 0.3 * Math.sin(k);
+      const dy = 0.3 * Math.cos(k * 1.7);
+      const f = saturatedFrame({ x0: x0 + dx, y0: y0 + dy, flux: 4000, wave0: 1.7 + 0.01 * k, mjd: 60800 + k * 5, seed: 700 + k });
+      f.wcs = { ra0: RA0 - dx * PIX_DEG, dec0: DEC0 - dy * PIX_DEG };
+      if (ragged && k % 2 === 1) {
+        // Every other frame the flagged region spills outward on one side (a bleed), eating the
+        // inner part of the ring there. The star itself has not changed.
+        for (let y = 0; y < f.ny; y++) {
+          for (let x = 0; x < f.nx; x++) {
+            const r = Math.hypot(x - (x0 + dx), y - (y0 + dy));
+            if (r > 2.2 && r < 4.6 && x > x0 + dx + 0.5) f.flags[y * f.nx + x] |= 1 << 26;
+          }
+        }
+      }
+      frames.push(f);
+    }
+    return frames;
+  };
+  const [ra, dec] = skyOf(x0, y0);
+  const spread = (pts) => {
+    const v = pts.filter((p) => p.wingOk).map((p) => p.wing_uJy);
+    const odd = v.filter((_, k) => k % 2 === 1);
+    const even = v.filter((_, k) => k % 2 === 0);
+    const mean = (a) => a.reduce((s, t) => s + t, 0) / a.length;
+    return { n: v.length, step: mean(odd) / mean(even) };
+  };
+  const clean = spread(extractSpectrum(build(false), ra, dec, { wcsFactory }));
+  assert.ok(Math.abs(clean.step - 1) < 0.02, `clean frames: odd/even ${clean.step}`);
+  const ragged = spread(extractSpectrum(build(true), ra, dec, { wcsFactory }));
+  assert.ok(ragged.n >= 36, `usable ragged frames: ${ragged.n}`);
+  // A plain mean of the surviving ring pixels would read the ragged frames about 20% low.
+  assert.ok(Math.abs(ragged.step - 1) < 0.05, `ragged frames against whole ones: ${ragged.step}`);
+});
+
 test('fluxToABmag', () => {
   assert.ok(Math.abs(fluxToABmag(3631e6)) < 1e-3); // 3631 Jy is magnitude 0
   assert.ok(Math.abs(fluxToABmag(1) - 23.9) < 1e-12);
