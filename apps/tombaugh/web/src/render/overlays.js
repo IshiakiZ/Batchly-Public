@@ -108,11 +108,13 @@ const overlaps = (a, b) => a.x < b.x + b.w + 2 && b.x < a.x + a.w + 2 && a.y < b
 /**
  * Draw a tag at the first of several candidate anchors ([{ x, y, align, valign }]) that lies
  * inside the viewport and does not cover a tag already placed in this frame (env.placed).
+ * When every anchor is taken the tag goes to the first one anyway, unless `opts.optional` is set:
+ * then it is dropped (returns null), which is what date labels along a short trail want.
  */
 export function placeTag(ctx, env, text, anchors, opts = {}) {
   if (!env.placed) env.placed = [];
   const r = env.rect;
-  let pick = anchors[0];
+  let pick = opts.optional ? null : anchors[0];
   for (const a of anchors) {
     const b = tagBox(ctx, text, a.x, a.y, { ...opts, ...a });
     const inside = b.x >= r.x + 2 && b.y >= r.y + 2 && b.x + b.w <= r.x + r.size - 2 && b.y + b.h <= r.y + r.size - 2;
@@ -121,6 +123,7 @@ export function placeTag(ctx, env, text, anchors, opts = {}) {
       break;
     }
   }
+  if (!pick) return null;
   const box = drawTag(ctx, text, pick.x, pick.y, { ...opts, ...pick, within: r });
   env.placed.push(box);
   return box;
@@ -393,14 +396,18 @@ export function drawTrail(ctx, env, trail) {
     ctx.arc(p[0], p[1], ends ? 2.6 : 2, 0, TAU);
     haloFill(ctx, BRAND.paper);
   }
-  for (const l of labels) {
-    const side = (sign) => ({
-      x: l.p[0] + sign * l.nx * 10,
-      y: l.p[1] + sign * l.ny * 10,
+  // The newest date first, then the oldest, then the ones between: when the trail is short on
+  // screen (a fast mover in a wide field) the labels that find no free spot, beside the path or a
+  // little further out, are dropped instead of being drawn over one another.
+  const order = labels.length > 1 ? [labels[labels.length - 1], labels[0], ...labels.slice(1, -1)] : labels;
+  for (const l of order) {
+    const side = (sign, dist) => ({
+      x: l.p[0] + sign * l.nx * dist,
+      y: l.p[1] + sign * l.ny * dist,
       align: sign * l.nx < -0.3 ? 'right' : sign * l.nx > 0.3 ? 'left' : 'center',
       valign: sign * l.ny < 0 ? 'bottom' : 'top',
     });
-    placeTag(ctx, env, l.text, [side(1), side(-1)], { size: 10 });
+    placeTag(ctx, env, l.text, [side(1, 10), side(-1, 10), side(1, 26), side(-1, 26)], { size: 10, optional: true });
   }
   ctx.restore();
 }

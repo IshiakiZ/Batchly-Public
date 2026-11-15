@@ -4,8 +4,9 @@
 // A tiny stand-in for the shell's `app` object, with only the parts the Validation plugin uses,
 // for the unit tests (no DOM needed) and for demo.html. It behaves like web/src/main.js where
 // that matters here: goTo() takes ra, dec and name only, the detector and the field size live in
-// the store, a new target or detector starts a load, and a load announces itself with 'frames'
-// events ({ det, count, total, complete }) followed by 'movie'.
+// the store, a new target or detector starts a load, a second detector of the same target joins
+// what is loaded, and a load announces itself with 'frames' events ({ det, count, total,
+// complete }) followed by 'movie'.
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -55,11 +56,20 @@ export function createFakeApp(options = {}) {
     }
   }
 
-  function startLoad() {
+  function startLoad({ keep = false } = {}) {
     const mine = ++token;
     const request = { ra: state.ra, dec: state.dec, name: state.name, det: state.det, fov: state.fov };
-    data = null;
-    selection = null;
+    if (!keep) {
+      data = null;
+      selection = null;
+    } else if (data && data.layersByDet.has(request.det)) {
+      // Like the shell: a detector that is already loaded only rebuilds the movie.
+      const have = data.layersByDet.get(request.det);
+      later(() => {
+        if (mine === token) emit('movie', { view: 'passes', frames: have.map((l) => ({ image: l.image, mask: l.mask, mjd: l.mjd, range: [0, 1], caption: {} })) });
+      }, 0);
+      return;
+    }
     log.push({ event: 'load', payload: request });
     let field = null;
     try {
@@ -80,7 +90,15 @@ export function createFakeApp(options = {}) {
     }
     later(() => {
       if (mine !== token) return;
-      if (total > 0) data = field;
+      if (total > 0) {
+        if (keep && data) {
+          // A second detector of the same target joins what is loaded.
+          data.layersByDet.set(request.det, layers);
+          data.frames = data.frames.filter((f) => f.det !== request.det).concat((field.frames || []).filter((f) => f.det === request.det));
+        } else {
+          data = { ...field, frames: (field.frames || []).slice(), layersByDet: new Map(field.layersByDet) };
+        }
+      }
       emit('frames', { det: request.det, count: total, total, ...flag(true) });
       if (total > 0) emit('movie', { view: 'passes', frames: layers.map((l) => ({ image: l.image, mask: l.mask, mjd: l.mjd, range: [0, 1], caption: {} })) });
     }, Math.max(0, delayMs));
@@ -102,8 +120,15 @@ export function createFakeApp(options = {}) {
       emit('state', { state: store.get(), changed });
       const moved = changed.includes('ra') || changed.includes('dec');
       if (!hasTarget()) return;
-      if (moved) emit('target', { ra: state.ra, dec: state.dec, name: state.name });
-      if (moved || changed.includes('det') || changed.includes('fov')) startLoad();
+      if (moved) {
+        // Like the shell: the old field is dropped before the new target is announced.
+        token++;
+        data = null;
+        selection = null;
+        emit('target', { ra: state.ra, dec: state.dec, name: state.name });
+      }
+      if (moved || changed.includes('fov')) startLoad();
+      else if (changed.includes('det')) startLoad({ keep: true });
     },
     subscribe(fn) {
       subscribers.add(fn);

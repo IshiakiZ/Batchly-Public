@@ -71,6 +71,75 @@ const BUILTIN_TABS = [
   { id: 'about', order: 90 },
 ];
 
+/**
+ * Turn a row that may be wider than its box (the view modes, the panel tabs) into a strip that
+ * scrolls sideways: the overflowing edge fades out and gets a small arrow button, the mouse wheel
+ * scrolls it, and `reveal(child)` brings one item fully into view (used for the active item, so
+ * it can never be scrolled out of sight by a layout change).
+ * -> { el: the wrapper, reveal(child), refresh() }
+ */
+export function makeScrollStrip(row, { label = 'items' } = {}) {
+  const wrap = h('div', { class: 'strip' });
+  const prev = h('button', { type: 'button', class: 'strip-arrow strip-prev', tabindex: '-1', 'aria-hidden': 'true', title: `Earlier ${label}` }, '‹');
+  const next = h('button', { type: 'button', class: 'strip-arrow strip-next', tabindex: '-1', 'aria-hidden': 'true', title: `More ${label}` }, '›');
+  row.replaceWith(wrap);
+  wrap.append(row, prev, next);
+  row.classList.add('strip-row');
+
+  function refresh() {
+    const max = row.scrollWidth - row.clientWidth;
+    const x = row.scrollLeft;
+    const left = max > 1 && x > 1;
+    const right = max > 1 && x < max - 1;
+    prev.hidden = !left;
+    next.hidden = !right;
+    wrap.classList.toggle('fade-left', left);
+    wrap.classList.toggle('fade-right', right);
+  }
+  function scrollBy(dx) {
+    try {
+      row.scrollBy({ left: dx, behavior: 'smooth' });
+    } catch {
+      row.scrollLeft += dx;
+    }
+  }
+  function reveal(child) {
+    if (!child || !row.contains(child)) return;
+    const pad = 28; // room for the arrow and the fade
+    const a = child.offsetLeft - row.offsetLeft;
+    const b = a + child.offsetWidth;
+    if (a - pad < row.scrollLeft) row.scrollLeft = Math.max(0, a - pad);
+    else if (b + pad > row.scrollLeft + row.clientWidth) row.scrollLeft = b + pad - row.clientWidth;
+    refresh();
+  }
+  prev.addEventListener('click', () => scrollBy(-Math.max(120, row.clientWidth * 0.6)));
+  next.addEventListener('click', () => scrollBy(Math.max(120, row.clientWidth * 0.6)));
+  row.addEventListener('scroll', refresh, { passive: true });
+  row.addEventListener(
+    'wheel',
+    (e) => {
+      if (row.scrollWidth - row.clientWidth <= 1 || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const before = row.scrollLeft;
+      row.scrollLeft += e.deltaY;
+      if (row.scrollLeft !== before) e.preventDefault();
+    },
+    { passive: false },
+  );
+  row.addEventListener('focusin', (e) => reveal(e.target.closest('button')));
+  try {
+    if (typeof ResizeObserver === 'function') new ResizeObserver(refresh).observe(row);
+  } catch {
+    // no ResizeObserver: the strip still scrolls
+  }
+  try {
+    if (typeof MutationObserver === 'function') new MutationObserver(refresh).observe(row, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  } catch {
+    // ignore
+  }
+  refresh();
+  return { el: wrap, reveal, refresh };
+}
+
 function formatElapsed(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
@@ -87,6 +156,8 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     app: $('app'),
     topbar: $('topbar'),
     brand: $('brand'),
+    simBadge: $('sim-badge'),
+    fieldsum: $('fieldsum'),
     search: $('search'),
     searchInput: $('search-input'),
     searchStatus: $('search-status'),
@@ -140,6 +211,12 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     if (on) root.dataset.embed = '1';
     else delete root.dataset.embed;
   }
+  /** The persistent "SIMULATED SKY, not real data" badge in the top bar. */
+  function setSimulated(on) {
+    if (els.simBadge) els.simBadge.hidden = !on;
+    if (on) root.dataset.simulated = '1';
+    else delete root.dataset.simulated;
+  }
 
   // ---- tabs ----------------------------------------------------------------------------------
   let currentTab = 'spectrum';
@@ -148,7 +225,9 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
   const stacked = typeof matchMedia === 'function' ? matchMedia('(max-width: 1099px)') : { matches: false };
   const tabIds = () => tabs.map((t) => t.id);
 
-  function selectTab(id, { focus = false } = {}) {
+  const tabStrip = makeScrollStrip(els.tabs, { label: 'panels' });
+
+  function selectTab(id, { focus = false, reveal = false } = {}) {
     if (!tabs.some((t) => t.id === id)) return;
     currentTab = id;
     for (const t of tabs) {
@@ -159,8 +238,17 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       tab.setAttribute('aria-selected', String(on));
       tab.tabIndex = on ? 0 : -1;
       panel.hidden = !on;
+      if (on) tabStrip.reveal(tab);
       if (on && focus) tab.focus();
       if (on && t.onShow) t.onShow();
+      // Where the panels are stacked (narrow screens) "open this panel" means "scroll to it".
+      if (on && reveal && stacked.matches) {
+        try {
+          panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        } catch {
+          // optional
+        }
+      }
     }
     for (const fn of tabListeners) fn(id);
   }
@@ -208,7 +296,8 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       if (stacked.matches && !tab.hidden && entry.onShow) entry.onShow();
     };
     if (stacked.addEventListener) stacked.addEventListener('change', maybeShowStacked);
-    maybeShowStacked();
+    // After this call has returned: the caller's onShow may use the handle it is about to get.
+    Promise.resolve().then(maybeShowStacked);
     return {
       body,
       panel,
@@ -486,8 +575,9 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
         const fill = h('span');
         const meter = h('div', { class: 'meter', role: 'progressbar', 'aria-label': 'Loading progress' }, fill);
         const sub = h('p', { class: 'status-sub num' });
-        host.append(h('div', { class: 'status-card', role: 'status' }, h('div', { class: 'status-kicker' }, kicker, clock), title, meter, text, sub));
-        statusRefs = { kicker, clock, title, text, fill, meter, sub, startedAt: status.startedAt || Date.now() };
+        const found = h('div', { class: 'status-found', hidden: true });
+        host.append(h('div', { class: 'status-card', role: 'status' }, h('div', { class: 'status-kicker' }, kicker, clock), title, meter, found, text, sub));
+        statusRefs = { kicker, clock, title, text, fill, meter, sub, found, foundKey: '', ticks: [], startedAt: status.startedAt || Date.now() };
         statusKey = key;
         const tick = () => {
           if (statusRefs) statusRefs.clock.textContent = formatElapsed(Date.now() - statusRefs.startedAt);
@@ -499,6 +589,38 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       r.kicker.textContent = status.kicker || 'Loading';
       r.title.textContent = status.title || '';
       r.text.textContent = status.text || '';
+      // What the search found: one group of ticks per survey pass, a tick per exposure, lit as
+      // each one arrives.
+      const f = status.found;
+      r.found.hidden = !f;
+      if (f) {
+        const key = `${f.line}|${f.groups.map((g) => `${g.label}:${g.total}`).join(',')}`;
+        if (key !== r.foundKey) {
+          r.foundKey = key;
+          r.ticks = [];
+          clear(r.found);
+          const groups = h('div', { class: 'status-groups', 'aria-hidden': 'true' });
+          for (const g of f.groups) {
+            const row = h('div', { class: 'status-ticks' });
+            const list = [];
+            for (let i = 0; i < g.total; i++) {
+              const tick = h('i');
+              list.push(tick);
+              row.append(tick);
+            }
+            r.ticks.push(list);
+            const el = h('div', { class: 'status-group', title: `${g.label}: ${g.dates}, ${g.total} exposures` }, h('div', { class: 'status-group-label' }, `${g.label} · ${g.total}`), row);
+            el.style.flex = `${Math.max(1, g.total)} 1 0`;
+            groups.append(el);
+          }
+          r.found.append(h('p', { class: 'status-found-line' }, f.line), groups);
+        }
+        f.groups.forEach((g, k) => {
+          (r.ticks[k] || []).forEach((tick, i) => {
+            tick.className = g.states[i] === 1 ? 'is-in' : g.states[i] === 2 ? 'is-out' : '';
+          });
+        });
+      }
       const determinate = Number.isFinite(status.total) && status.total > 0;
       r.meter.classList.toggle('is-indeterminate', !determinate);
       if (determinate) {
@@ -559,6 +681,7 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
     els,
     setScreen,
     setEmbed,
+    setSimulated,
     selectTab,
     addTab,
     addTool,

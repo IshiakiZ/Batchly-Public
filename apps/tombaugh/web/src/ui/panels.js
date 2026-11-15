@@ -169,10 +169,17 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
       }
     },
 
-    setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null } = {}) {
+    setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null, colorBy = undefined, heading = '' } = {}) {
+      if (heading) {
+        // Points handed in by a tool rather than measured from a click: name them in the header.
+        spec.head.hidden = false;
+        clear(spec.what).append(heading);
+      }
       if (spectrumPlot) {
         try {
-          spectrumPlot.setData({ points, binned, lens: lens || undefined, title });
+          const data = { points, binned, lens: lens || undefined, title };
+          if (colorBy) data.colorBy = colorBy;
+          spectrumPlot.setData(data);
         } catch (err) {
           console.warn('[tombaugh] spectrum plot', err);
         }

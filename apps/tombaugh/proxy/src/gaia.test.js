@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { GAIA_PROVIDERS, gaiaCone, gaiaFromSynthetic, parseGaiaCsv } from './gaia.js';
 import { UpstreamError } from './irsa.js';
 
-const [ESA, VIZIER, IRSA] = GAIA_PROVIDERS;
+const [ESA, GAVO, VIZIER, IRSA] = GAIA_PROVIDERS;
 
 // Hand-written samples in the layout each service returns.
 const ESA_CSV = [
@@ -81,7 +81,7 @@ test('parseGaiaCsv applies the limit, drops rows without id or position, and rej
   assert.throws(() => parseGaiaCsv('a,b\n1,2\n', ESA.columns), (e) => e.kind === 'parse');
 });
 
-test('the three queries name the right tables and columns', () => {
+test('the queries name the right tables and columns', () => {
   const esa = ESA.query(269.45, 4.69, 0.1, 500);
   assert.match(esa, /^SELECT TOP 500 source_id, ra, dec, pmra, pmdec, parallax, phot_g_mean_mag FROM gaiadr3\.gaia_source WHERE/);
   assert.match(esa, /CIRCLE\('ICRS', 269\.45, 4\.69, 0\.1\)/);
@@ -90,8 +90,10 @@ test('the three queries name the right tables and columns', () => {
   assert.match(viz, /^SELECT TOP 500 Source, RA_ICRS, DE_ICRS, pmRA, pmDE, Plx, Gmag FROM "I\/355\/gaiadr3" WHERE/);
   assert.match(viz, /CIRCLE\('ICRS', 269\.45, -4\.69, 0\.25\)/);
   assert.match(IRSA.query(1, 2, 0.1, 500), /FROM gaia_dr3_source WHERE/);
+  assert.match(GAVO.query(1, 2, 0.1, 500), /FROM gaia\.dr3lite WHERE/);
   assert.deepEqual(GAIA_PROVIDERS.map((p) => p.endpoint), [
     'https://gea.esac.esa.int/tap-server/tap/sync',
+    'https://dc.g-vo.org/tap/sync',
     'https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync',
     'https://irsa.ipac.caltech.edu/TAP/sync',
   ]);
@@ -111,7 +113,7 @@ test('gaiaCone uses the ESA archive first and posts a CSV TAP query', async () =
   assert.match(form.get('QUERY'), /gaiadr3\.gaia_source/);
 });
 
-test('gaiaCone falls back ESA -> VizieR -> IRSA', async () => {
+test('gaiaCone falls back ESA -> GAVO -> VizieR -> IRSA', async () => {
   const hang = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
   const a = fetchByHost({
     'gea.esac.esa.int': () => new Response('<html><title>Maintenance</title></html>', { status: 503, headers: { 'content-type': 'text/html' } }),
@@ -120,7 +122,20 @@ test('gaiaCone falls back ESA -> VizieR -> IRSA', async () => {
   const viaVizier = await gaiaCone(269.45, 4.69, 0.1, { fetchImpl: a.fetchImpl });
   assert.equal(viaVizier.source, 'vizier');
   assert.equal(viaVizier.stars[0].id, '4472832130942575872');
-  assert.deepEqual(a.calls.map((c) => c.host), ['gea.esac.esa.int', 'tapvizier.cds.unistra.fr']);
+  assert.deepEqual(a.calls.map((c) => c.host), ['gea.esac.esa.int', 'dc.g-vo.org', 'tapvizier.cds.unistra.fr']);
+
+  // GAVO answers when ESA is down.
+  const g = fetchByHost({ 'dc.g-vo.org': () => new Response(ESA_CSV, { status: 200 }) });
+  const viaGavo = await gaiaCone(269.45, 4.69, 0.1, { fetchImpl: g.fetchImpl });
+  assert.equal(viaGavo.source, 'gavo');
+  assert.equal(viaGavo.stars.length, 3);
+
+  // A service that hangs does not hold the others up: the next one is asked after hedgeMs.
+  const h = fetchByHost({ 'gea.esac.esa.int': hang, 'dc.g-vo.org': () => new Response(ESA_CSV, { status: 200 }) });
+  const t0 = Date.now();
+  const hedged = await gaiaCone(269.45, 4.69, 0.1, { fetchImpl: h.fetchImpl, hedgeMs: 15 });
+  assert.equal(hedged.source, 'gavo');
+  assert.ok(Date.now() - t0 < 2000, 'did not wait for the ESA timeout');
 
   const b = fetchByHost({
     'gea.esac.esa.int': hang,
@@ -130,13 +145,13 @@ test('gaiaCone falls back ESA -> VizieR -> IRSA', async () => {
   const viaIrsa = await gaiaCone(269.45, 4.69, 0.1, { fetchImpl: b.fetchImpl, timeoutMs: 20 });
   assert.equal(viaIrsa.source, 'irsa');
   assert.equal(viaIrsa.stars.length, 2);
-  assert.equal(b.calls.length, 3);
+  assert.equal(b.calls.length, 4);
 });
 
 test('gaiaCone throws a retryable upstream error when every service fails', async () => {
   const { fetchImpl, calls } = fetchByHost({});
   await assert.rejects(gaiaCone(1, 2, 0.1, { fetchImpl }), (e) => e instanceof UpstreamError && e.status === 502 && e.retryable === true && /No Gaia service answered/.test(e.message));
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 });
 
 test('gaiaCone clamps the radius to 0.25 deg and validates the position', async () => {

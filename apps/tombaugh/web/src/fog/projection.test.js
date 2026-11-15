@@ -380,3 +380,43 @@ test('fog map cells tile the Mollweide oval: equal areas, no gaps, no overlaps',
     if (process.env.FOG_VERBOSE) console.log(`ra0 ${ra0}: worst area ${(100 * worst).toFixed(3)}%, ${misses}/${checked} misses, worst ${worstMiss.toExponential(2)}`);
   }
 });
+
+test('chooseUnopenedCell: unopened and away from the plane first, then the plane, then the least visited', async () => {
+  const { chooseUnopenedCell, FOG_NPIX } = await import('./fogmap.js');
+  const { eqToGal } = await import('./projection.js');
+  assert.equal(chooseUnopenedCell(null), null);
+  assert.equal(chooseUnopenedCell(new Uint16Array(10)), null);
+
+  // Nothing opened: every pick is unopened and more than 5 degrees from the galactic plane.
+  const counts = new Uint16Array(FOG_NPIX);
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < 300; i++) {
+    const pick = chooseUnopenedCell(counts, { random });
+    assert.equal(pick.count, 0);
+    assert.equal(pick.why, '');
+    assert.ok(pick.cell >= 0 && pick.cell < FOG_NPIX);
+    assert.equal(ang2pixNest(32, pick.ra, pick.dec), pick.cell, 'the position is inside the chosen cell');
+    assert.ok(Math.abs(eqToGal(pick.ra, pick.dec)[1]) > 5, 'away from the galactic plane');
+  }
+  // random() returning 1 (out of contract) still yields a valid cell.
+  assert.ok(chooseUnopenedCell(counts, { random: () => 1 }).cell < FOG_NPIX);
+
+  // Everything outside the plane opened: the pick comes from the plane and says so.
+  const geo = fogGeometry(180);
+  for (let cell = 0; cell < FOG_NPIX; cell++) if (geo.absB[cell] > 5) counts[cell] = 1;
+  const inPlane = chooseUnopenedCell(counts, { random });
+  assert.equal(counts[inPlane.cell], 0);
+  assert.ok(Math.abs(eqToGal(inPlane.ra, inPlane.dec)[1]) <= 5.01);
+  assert.match(inPlane.why, /galactic plane/);
+
+  // Everything opened: one of the least visited.
+  counts.fill(3);
+  counts[4242] = 1;
+  const least = chooseUnopenedCell(counts, { random });
+  assert.equal(least.cell, 4242);
+  assert.match(least.why, /least visited/);
+});

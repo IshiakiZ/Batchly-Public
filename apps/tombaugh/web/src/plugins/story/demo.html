@@ -110,8 +110,8 @@
     <button class="btn btn-quiet" type="button" data-close-dialog aria-label="Close sky map">Close</button>
   </div>
   <div class="dialog-body" id="map-body">
-    <canvas id="map-canvas" width="900" height="420"></canvas>
     <p class="panel-note" id="map-count"></p>
+    <canvas id="map-canvas" width="900" height="400"></canvas>
   </div>
 </dialog>
 
@@ -518,7 +518,25 @@ function rebuild() {
   }, (s.view === 'lens' ? 450 : s.view === 'residual' ? 260 : 140) * DELAY);
 }
 
+// Like the shell, keep the address in step with the view (story parameters are left alone).
+function writeUrl(s) {
+  try {
+    const url = new URL(location.href);
+    for (const k of ['name', 'fov', 'det', 'view', 'lens', 'gaia']) url.searchParams.delete(k);
+    url.searchParams.set('name', s.name);
+    url.searchParams.set('fov', String(s.fov));
+    url.searchParams.set('det', String(s.det));
+    url.searchParams.set('view', s.view);
+    if (s.view === 'lens') url.searchParams.set('lens', s.lens);
+    if (!s.gaia) url.searchParams.set('gaia', '0');
+    history.replaceState(null, '', url);
+  } catch {
+    // a sandboxed frame: the address cannot be written
+  }
+}
+
 store.subscribe((s, changed) => {
+  writeUrl(s);
   emit('state', { state: s, changed });
   syncControls();
   if (changed.includes('ra') || changed.includes('dec') || changed.includes('fov')) loadTarget();

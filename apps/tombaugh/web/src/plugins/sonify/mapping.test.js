@@ -127,6 +127,7 @@ test('a spectrum becomes one note per point, in wavelength order, inside the ran
   assert.equal(plan.kind, 'spectrum');
   assert.equal(plan.notes.length, 102);
   assert.ok(plan.duration >= 4 && plan.duration < 4.5);
+  assert.deepEqual([plan.waveMin, plan.waveMax, plan.seconds], [0.75, WAVES[101], 4]);
   assert.ok(plan.median > 0);
   const lo = stepToHz(0);
   const hi = stepToHz(TOP_STEP);
@@ -143,6 +144,26 @@ test('a spectrum becomes one note per point, in wavelength order, inside the ran
   });
   assert.equal(plan.notes[0].t, 0);
   assert.ok(Math.abs(plan.notes[101].t - 4) < 1e-9);
+});
+
+test('a partly covered spectrum is swept over its own range, never too fast to follow', () => {
+  // One detector: 17 channels between 1.66 and 2.39 um.
+  const one = Array.from({ length: 17 }, (_, i) => ({ wave: 1.66 + (0.73 * i) / 16, flux_uJy: 4000 - 40 * i, err_uJy: 60 }));
+  const plan = spectrumToNotes(one);
+  assert.equal(plan.notes.length, 17);
+  assert.equal(plan.notes[0].t, 0, 'no silent lead-in');
+  assert.ok(Math.abs(plan.notes[16].t - 2.5) < 1e-9, 'the floor of 2.5 s applies');
+  assert.equal(plan.seconds, 2.5);
+  assert.ok(Math.abs(plan.waveMin - 1.66) < 1e-9 && Math.abs(plan.waveMax - 2.39) < 1e-9);
+  for (let i = 1; i < 17; i++) assert.ok(plan.notes[i].t - plan.notes[i - 1].t > 0.12);
+  // Four of six detectors: proportionally shorter than the full sweep.
+  const most = WAVES.filter((w) => w >= 1.1 && w <= 4.4).map((wave) => ({ wave, flux_uJy: 100, err_uJy: 5 }));
+  const p2 = spectrumToNotes(most);
+  assert.ok(p2.seconds > 2.9 && p2.seconds < 3.2, `seconds ${p2.seconds}`);
+  // A single point still plays.
+  const single = spectrumToNotes([{ wave: 2, flux_uJy: 5, err_uJy: 1 }]);
+  assert.equal(single.notes.length, 1);
+  assert.equal(single.notes[0].t, 0);
 });
 
 test('brighter points are never lower in pitch, and surer points never quieter', () => {

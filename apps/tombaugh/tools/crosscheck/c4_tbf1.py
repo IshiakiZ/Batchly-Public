@@ -252,5 +252,5 @@ want = "SPHEREx Level 2 spectral images, DR1, QR3 (IRSA, DOI 10.26131/IRSA629 fo
 R.add("citation() gives the contract's citation line", 1, 0 if text == want else 1, "mismatch", tol=0, note="" if text == want else text)
 mask = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 15, 17, 19, 25, 26, 27))
 R.add("tombaugh.DEFAULT_BAD_MASK equals the contract's bit list", 13, 0 if tombaugh.DEFAULT_BAD_MASK == mask else 1, "mismatch", tol=0)
-R.note("fetch_frame (urllib) is not exercised: the build machine has no proxy to call. Its decoding path is read_tbf1, which is.")
+R.note("fetch_frame (urllib) is not exercised in this check and never against the deployed proxy or IRSA. Its decoding path is read_tbf1, which is; check 4L calls it over HTTP against the local dev server with the synthetic backend.")
 sys.exit(R.save())

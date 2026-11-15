@@ -113,6 +113,7 @@ export function install(app) {
   let adopted = null;
   let view = null; //          the rendered panel, once it has been shown
   let busy = false;
+  let pending = ''; //         the source being started, so the choice shows while it loads
   let notice = null; //        { kind: 'info' | 'warn' | 'error', text }
   let pendingReload = false; // the source changed but the frames on screen were not loaded again
   let answersOn = false;
@@ -208,6 +209,7 @@ export function install(app) {
       return now();
     }
     busy = true;
+    pending = source;
     notice = { kind: 'info', text: TEXT.loading };
     update();
     try {
@@ -228,6 +230,7 @@ export function install(app) {
       notice = { kind: 'error', text: `${err && err.message ? err.message : 'That source could not be started'}. Nothing was changed.` };
     } finally {
       busy = false;
+      pending = '';
       if (!disposed) {
         update();
         refreshTruth();
@@ -367,8 +370,9 @@ export function install(app) {
           if (input.checked) switchTo(info.id);
         }),
       });
-      const label = el('label', { class: 'tbd-option' }, input, el('span', { class: 'tbd-option-label' }, info.label), el('span', { class: 'tbd-option-text', id: descId }, info.description));
-      options.set(info.id, { input, label });
+      const text = el('span', { class: 'tbd-option-text', id: descId }, info.description);
+      const label = el('label', { class: 'tbd-option' }, input, el('span', { class: 'tbd-option-label' }, info.label), text);
+      options.set(info.id, { input, label, text });
       fieldset.append(label);
     }
 
@@ -412,10 +416,11 @@ export function install(app) {
       if (say) noticeBox.dataset.kind = say.kind;
 
       fieldset.setAttribute('aria-busy', String(busy));
-      for (const [key, { input, label }] of options) {
-        input.checked = key === state.source;
-        input.disabled = busy;
+      for (const [key, { input, label, text }] of options) {
+        input.checked = key === (pending || state.source);
+        input.disabled = busy && key !== pending; // the chosen one keeps the keyboard focus
         label.classList.toggle('is-current', key === state.source);
+        text.hidden = key === state.source; // the same words stand under "Now reading from"
       }
 
       cacheText.textContent = cacheLine(cacheStats);

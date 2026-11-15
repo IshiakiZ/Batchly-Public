@@ -75,7 +75,7 @@ const STOP_ICON = 'M1 1 H9 V9 H1 Z';
 
 /** Seconds drawn across the score: the whole sweep for a spectrum, so the axis ends mean what they say. */
 function scoreSpan(plan) {
-  if (plan.kind === 'spectrum') return SWEEP.seconds;
+  if (plan.kind === 'spectrum') return Math.max(plan.seconds || SWEEP.seconds, 0.001);
   const last = plan.notes[plan.notes.length - 1];
   return Math.max(last ? last.t : 0, 0.001);
 }
@@ -180,8 +180,8 @@ export function install(app, { synth: injectedSynth = null } = {}) {
       dots.push(r);
     }
     if (plan.kind === 'spectrum') {
-      view.left.textContent = `${SWEEP.waveMin} µm`;
-      view.right.textContent = `${SWEEP.waveMax.toFixed(1)} µm`;
+      view.left.textContent = `${plan.waveMin.toFixed(2)} µm`;
+      view.right.textContent = `${plan.waveMax.toFixed(2)} µm`;
     } else {
       view.left.textContent = 'first pass';
       view.right.textContent = plan.passes > 1 ? `pass ${plan.passes}` : '';

@@ -8,6 +8,8 @@ import { UpstreamError, fetchWithTimeout, httpFailure, parseCsvTable, readTextLi
 
 export const SESAME_URL = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV';
 export const SIMBAD_TAP_URL = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
+// The CfA mirror of SIMBAD, for the hours when Strasbourg is unreachable.
+export const SIMBAD_MIRROR_TAP_URL = 'https://simbad.harvard.edu/simbad/sim-tap/sync';
 export const BUILTIN_SOURCE = 'builtin (approximate)';
 
 const noLog = () => {};
@@ -230,6 +232,21 @@ async function querySimbad(name, { fetchImpl, timeoutMs }) {
   return parseSimbadCsv(text, name);
 }
 
+async function querySimbadMirror(name, { fetchImpl, timeoutMs }) {
+  const text = await tapSyncCsv(SIMBAD_MIRROR_TAP_URL, buildSimbadQuery(name), { fetchImpl, timeoutMs, label: 'SIMBAD (CfA mirror)' });
+  return parseSimbadCsv(text, name);
+}
+
+// After a Strasbourg service failed, skip both of them for a while: the mirror answers in well
+// under a second, and nobody should wait out two timeouts per name during an outage.
+let cdsDownUntil = 0;
+const CDS_BREAKER_MS = 10 * 60 * 1000;
+
+/** For tests: forget that Strasbourg was down. */
+export function resetResolveBreaker() {
+  cdsDownUntil = 0;
+}
+
 function separationArcsec(ra1, dec1, ra2, dec2) {
   const d2r = Math.PI / 180;
   const dra = (ra2 - ra1) * Math.cos(((dec1 + dec2) / 2) * d2r);
@@ -266,8 +283,9 @@ function shape(found, source, builtin) {
 /**
  * resolveName(name, opts) -> Promise<{ name, ra, dec, epoch, pmra, pmdec, parallax, source } | null>
  *
- * Sesame is preferred when it answers within `timeoutMs` (default 8 s); SIMBAD TAP is next;
- * the built-in table is the fallback for the challenge targets. `null` means the name is
+ * Sesame is preferred when it answers within `timeoutMs` (default 8 s); SIMBAD TAP is next,
+ * then SIMBAD's CfA mirror (after a Strasbourg failure both Strasbourg services are skipped for
+ * ten minutes); the built-in table is the last fallback for the challenge targets. `null` means the name is
  * unknown everywhere. If every service failed (rather than said "unknown") and there is no
  * built-in entry, the last UpstreamError is thrown so the caller can report a retryable error.
  *
@@ -282,10 +300,13 @@ export async function resolveName(name, opts = {}) {
 
   let lastError = null;
   const services = [
-    ['sesame', querySesame],
-    ['simbad', querySimbad],
+    ['sesame', querySesame, true],
+    ['simbad', querySimbad, true],
+    ['simbad (CfA mirror)', querySimbadMirror, false],
   ];
-  for (const [source, query] of services) {
+  let skipStrasbourg = Date.now() < cdsDownUntil;
+  for (const [source, query, atStrasbourg] of services) {
+    if (atStrasbourg && skipStrasbourg) continue;
     const t0 = Date.now();
     try {
       const found = await query(clean, { fetchImpl, timeoutMs });
@@ -295,11 +316,17 @@ export async function resolveName(name, opts = {}) {
       }
       log(`resolve: ${source} does not know "${clean}"`);
       lastError = null;
-      if (source === 'sesame') break; // a clear "not found" from Sesame already covers SIMBAD
+      break; // a clear "not found" from one of them covers the others (same database)
     } catch (err) {
       lastError = err instanceof UpstreamError ? err : new UpstreamError(`${source} failed: ${err && err.message}`);
       log(`resolve: ${source} failed after ${Date.now() - t0} ms: ${lastError.message}`);
-      if (builtin) break; // a challenge target: answer from the table now rather than wait again
+      // Strasbourg is in trouble: the next name goes straight to the mirror. (An "input" error
+      // is about the name, not the server.)
+      if (atStrasbourg && lastError.kind !== 'input') {
+        cdsDownUntil = Date.now() + CDS_BREAKER_MS;
+        // No answer at all (rather than an error page): do not wait for its sibling either.
+        if (lastError.kind === 'timeout' || lastError.kind === 'network') skipStrasbourg = true;
+      }
     }
   }
   if (builtin) return builtin;

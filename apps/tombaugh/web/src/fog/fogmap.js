@@ -24,6 +24,9 @@
 //   getCounts() -> Uint16Array copy;  cellAt(x, y) -> cell | -1 (CSS px inside the canvas)
 //   project(ra, dec) -> { x, y } CSS px inside the canvas;  element -> the root <section>
 //   fogGeometry(ra0) (module export): the projected cell outlines, for tests and tools
+//   chooseUnopenedCell(counts, { random }) (module export, no DOM): the rule behind the button,
+//     -> { cell, ra, dec, count, why } | null. The shell uses it for "Somewhere nobody has looked"
+//     on the start page, where no map is mounted.
 //
 // Rendering: cell outlines are projected once per centre RA in map units and reused at every size.
 // The fog, the lit cells and the line work are kept on offscreen canvases; they are repainted only
@@ -204,6 +207,45 @@ function buildGeometry(ra0) {
   };
   geometryCache.set(ra0, geo);
   return geo;
+}
+
+/**
+ * Pick a cell nobody has opened: at random among the unopened cells more than 5 degrees from the
+ * galactic plane; if there are none, among the unopened cells in the plane; if every cell has been
+ * opened, among the least visited. `counts` is a Uint16Array(12288) (or anything indexable of
+ * that length). -> { cell, ra, dec, count, why } with the cell centre in degrees, or null when
+ * `counts` is unusable. `why` is a sentence for the reader when the pick is not the plain case.
+ */
+export function chooseUnopenedCell(counts, { random = Math.random, ra0 = 180 } = {}) {
+  if (!counts || !(counts.length >= FOG_NPIX)) return null;
+  const geo = buildGeometry(wrap360(ra0));
+  const clear = [];
+  const crowded = [];
+  for (let cell = 0; cell < FOG_NPIX; cell++) {
+    if (counts[cell]) continue;
+    (geo.absB[cell] > PLANE_AVOID_DEG ? clear : crowded).push(cell);
+  }
+  let pool = clear.length ? clear : crowded;
+  let why = clear.length
+    ? ''
+    : 'Nobody had opened this patch before you. It lies in the crowded galactic plane; every patch outside it has been opened.';
+  if (!pool.length) {
+    // Every cell has been opened: offer one of the least visited instead.
+    let min = Infinity;
+    for (let cell = 0; cell < FOG_NPIX; cell++) if (counts[cell] < min) min = counts[cell];
+    pool = [];
+    for (let cell = 0; cell < FOG_NPIX; cell++) if (counts[cell] === min) pool.push(cell);
+    why = 'Every patch has been opened at least once. This is one of the least visited.';
+  }
+  if (!pool.length) return null;
+  const cell = pool[Math.min(pool.length - 1, Math.max(0, Math.floor(random() * pool.length)))];
+  return {
+    cell,
+    ra: Math.round(geo.centre[2 * cell] * 1e6) / 1e6,
+    dec: Math.round(geo.centre[2 * cell + 1] * 1e6) / 1e6,
+    count: counts[cell],
+    why,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -933,25 +975,9 @@ export function createFogMap(container, options = {}) {
   }
 
   function pickUnopened() {
-    const clear = [];
-    const crowded = [];
-    for (let cell = 0; cell < FOG_NPIX; cell++) {
-      if (counts[cell]) continue;
-      (geo.absB[cell] > PLANE_AVOID_DEG ? clear : crowded).push(cell);
-    }
-    let pool = clear.length ? clear : crowded;
-    let why = clear.length
-      ? ''
-      : 'Nobody had opened this patch before you. It lies in the crowded galactic plane; every patch outside it has been opened.';
-    if (!pool.length) {
-      // Every cell has been opened: offer one of the least visited instead.
-      let min = Infinity;
-      for (let cell = 0; cell < FOG_NPIX; cell++) if (counts[cell] < min) min = counts[cell];
-      pool = [];
-      for (let cell = 0; cell < FOG_NPIX; cell++) if (counts[cell] === min) pool.push(cell);
-      why = 'Every patch has been opened at least once. This is one of the least visited.';
-    }
-    const cell = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+    const choice = chooseUnopenedCell(counts, { random, ra0 });
+    if (!choice) return null;
+    const { cell, why } = choice;
     if (!reducedMotion()) {
       pulses.set(cell, win.performance.now());
     }

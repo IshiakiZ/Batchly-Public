@@ -11,7 +11,7 @@ export const FALLBACK_TARGETS = Object.freeze([
   {
     id: 'barnard',
     name: "Barnard's Star",
-    blurb: 'The fastest star in the sky',
+    blurb: 'The star with the largest proper motion',
     ra: 269.452083,
     dec: 4.693391,
     epoch: 2000.0,
@@ -20,12 +20,12 @@ export const FALLBACK_TARGETS = Object.freeze([
     parallax: 547.0,
     det: 3,
     fov: 4,
-    why: 'Moves 10.4 arcsec a year, about three pixels between SPHEREx passes.',
+    why: 'Moves 10.4 arcsec a year: about 5.2 arcsec per six-month pass, 0.85 of a 6.15 arcsec SPHEREx pixel (1.7 pixels of the 3.075 arcsec display grid).',
   },
   {
     id: 'wise0855',
     name: 'WISE 0855-0714',
-    blurb: 'The coldest known brown dwarf',
+    blurb: 'A brown dwarf at about 250 K',
     ra: 133.795129,
     dec: -7.245147,
     epoch: 2014.3,
@@ -34,7 +34,7 @@ export const FALLBACK_TARGETS = Object.freeze([
     parallax: 439.0,
     det: 6,
     fov: 4,
-    why: 'A 250 K world 2.3 parsecs away that only shows up near 5 micrometres.',
+    why: 'About 250 K and 2.3 parsecs away; in SPHEREx it only shows up near 5 micrometres.',
   },
 ]);
 

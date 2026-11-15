@@ -4,7 +4,7 @@
 // Tests for identify.js. No network: every request goes to a fake fetch that answers with
 // hand-written samples shaped like SIMBAD's TAP CSV output.
 
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -15,6 +15,7 @@ import {
   clampRadius,
   displayName,
   identifyCone,
+  resetSimbadBreaker,
   identifyFromSynthetic,
   otypeLabel,
   parseCsv,
@@ -47,6 +48,9 @@ function response(body, { status = 200, contentType = 'text/csv' } = {}) {
 }
 
 /** A fetch that records calls and answers from a queue of functions or Responses. */
+// Every test starts with Strasbourg assumed reachable.
+beforeEach(() => resetSimbadBreaker());
+
 function fakeFetch(...answers) {
   const calls = [];
   const fn = async (url, init) => {
@@ -263,14 +267,15 @@ test('identifyCone reports clear errors with a retryable flag', async () => {
     });
   }
   assert.equal(never.calls.length, 0);
-  // Upstream 5xx: retryable, a single attempt.
+  // Upstream 5xx: retryable; Strasbourg and then the CfA mirror are tried once each.
   const down = fakeFetch(response('<html><head><title>502 Proxy Error</title></head></html>', { status: 502, contentType: 'text/html' }));
   await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: down }), (err) => {
     assert.equal(err.status, 502);
     assert.equal(err.retryable, true);
     assert.match(err.message, /SIMBAD answered HTTP 502: 502 Proxy Error/);
   });
-  assert.equal(down.calls.length, 1);
+  assert.equal(down.calls.length, 2);
+  resetSimbadBreaker();
   // Refused twice: not retryable.
   const refused = fakeFetch(response(VOTABLE_ERROR, { status: 400, contentType: 'text/xml' }));
   await fails(identifyCone(RA, DEC, 0.01, { fetchImpl: refused }), (err) => {

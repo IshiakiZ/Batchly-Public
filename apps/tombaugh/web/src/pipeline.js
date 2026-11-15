@@ -11,7 +11,7 @@ export const VIEW_INFO = [
   {
     id: 'passes',
     label: 'Passes',
-    hint: 'One deep frame per survey pass. Blink them: anything that moved or changed stands out.',
+    hint: 'One deep frame per survey pass, six months apart. Stars stay put; anything that moved or changed jumps. Click a source to measure it.',
     about:
       'SPHEREx returns to each spot roughly every six months. Here all exposures of one pass are aligned, background-matched and stacked into one deep frame, so the movie has one frame per pass. Stars stay put; anything that moved or changed brightness between passes jumps.',
     topic: 'flicker',

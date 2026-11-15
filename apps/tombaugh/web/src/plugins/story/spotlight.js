@@ -168,7 +168,12 @@ export function createSpotlight({ host, app = null, doc = globalThis.document, w
     const right = b ? b.right : (view && view.innerWidth) || 0;
     const top = b ? b.top : 0;
     node.classList.toggle('is-left', !!round && right > 0 && rect.x + rect.w > right * 0.7);
-    node.classList.toggle('is-inside', !round && rect.y - top < 34);
+    const need = Math.max(30, unit() * 3.2); // room a label needs above the ring
+    const bottom = b ? b.bottom : (view && view.innerHeight) || 0;
+    const above = rect.y - top >= need;
+    const below = !above && rect.y + rect.h + need <= bottom;
+    node.classList.toggle('is-below', !round && below);
+    node.classList.toggle('is-inside', !round && !above && !below);
   }
 
   function frame() {

@@ -255,6 +255,13 @@ async function boot() {
     onClearSource: () => select(null),
   });
 
+  let fieldSummary = null;
+  try {
+    fieldSummary = createFieldSummary(els.fieldsum);
+  } catch (err) {
+    console.warn('[tombaugh] field summary failed to start', err);
+  }
+
   let explainer = null;
   if (opt.explain && typeof opt.explain.createExplainer === 'function') {
     try {
@@ -352,11 +359,28 @@ async function boot() {
       return { kicker: 'Aligning', title: `Aligning ${det} exposures`, text: 'Resampling every exposure onto one north-up grid.' };
     }
     const why = L.label ? ` for ${L.label}` : '';
+    const waits = !L.label && !PARTIAL_VIEWS.includes(store.get().view);
     return {
       kicker: L.label ? 'Extra detector' : 'Step 2 of 2 · exposures',
-      title: `Loading ${det} exposures${why}`,
-      text: 'Each exposure is cut out around your position and aligned to a common north-up grid as it arrives. The movie starts as soon as there is something to show.',
+      title: `Loading ${L.total > 0 ? `${L.total} ` : ''}${det} exposures${why}`,
+      text: waits
+        ? `Each exposure is cut out around your position and aligned to one north-up grid. The ${viewLabel(store.get().view)} view needs all of them, so it appears when the last one is in.`
+        : 'Each exposure is cut out around your position and aligned to one north-up grid as it arrives. The movie starts as soon as two are in.',
     };
+  }
+
+  /** What the search found for the detector being loaded, for the loading card. */
+  function foundFor(L) {
+    const f = session.found;
+    if (!f || f.det !== L.det || !f.refs.length || L.phase === 'search' || L.phase === 'model') return null;
+    const passes = summarizePasses(f.refs);
+    let k = 0;
+    const groups = passes.map((p) => {
+      const states = [];
+      for (let i = 0; i < p.total; i++, k++) states.push(L.phase === 'align' ? 1 : L.states ? L.states[k] || 0 : 0);
+      return { label: p.label, dates: p.dates, total: p.total, states };
+    });
+    return { line: `Found ${foundLine(f.refs).replace(/:.*$/, '')}`, groups };
   }
 
   function renderStatus() {
@@ -391,6 +415,7 @@ async function boot() {
       done: determinate ? L.done : NaN,
       total: determinate ? L.total : NaN,
       sub,
+      found: foundFor(L),
     });
   }
 
@@ -403,6 +428,10 @@ async function boot() {
     L.total = report.total;
     L.failed = report.failed || 0;
     L.skipped = report.skipped || 0;
+    if (report.phase === 'frames' && Number.isInteger(report.index)) {
+      if (!L.states || L.states.length !== report.total) L.states = new Uint8Array(report.total);
+      L.states[report.index] = report.ok ? 1 : 2;
+    }
     renderStatus();
   }
 
@@ -451,6 +480,7 @@ async function boot() {
     session.loading = null;
     session.error = null;
     session.grid = null;
+    session.found = null;
     if (!keepSelection) {
       session.selection = null;
       panels.setSource(null);
@@ -468,6 +498,7 @@ async function boot() {
     session.key = targetKey(s);
     session.firstMovie = true;
     session.search = null;
+    setSimulated(false);
     session.gaia = { status: 'idle', stars: [], epoch: 2016.0 };
     layout.setScreen('console');
     if (landing) landing.hide();
@@ -475,6 +506,7 @@ async function boot() {
     updateSearchLine();
     updateCitation();
     controls.update({ coverage: null, passes: [], hop: 0, gaia: { status: 'idle', count: 0 } });
+    updateFieldSummary();
     emit('target', { ra: s.ra, dec: s.dec, name: s.name });
     startLoad();
     loadGaia();
@@ -531,13 +563,22 @@ async function boot() {
     player.setMovie([]);
     renderStatus();
     try {
-      const res = await loader.load({ ra: s.ra, dec: s.dec, fov: s.fov, det, subtractZodi: s.zodi, onPartial: (p) => onPartial(token, det, p) });
+      const res = await loader.load({
+        ra: s.ra,
+        dec: s.dec,
+        fov: s.fov,
+        det,
+        subtractZodi: s.zodi,
+        onPartial: (p) => onPartial(token, det, p),
+        onSearch: (found) => {
+          if (token === session.token) onSearchAnswer(found);
+        },
+      });
       if (token !== session.token) return;
       session.byDet.set(det, res);
       session.partial = null;
       session.grid = res.grid;
-      session.search = res.search;
-      session.retrievedAt = res.search && res.search.fetchedAt ? res.search.fetchedAt : new Date().toISOString();
+      if (session.search !== res.search) onSearchAnswer({ search: res.search, refs: res.refs, det });
       session.loading = null;
       renderStatus();
       updateCoverage();
@@ -562,11 +603,79 @@ async function boot() {
     }
   }
 
+  /** The search has answered: say what was found before the first exposure arrives. */
+  function onSearchAnswer({ search, refs, det }) {
+    session.search = search;
+    session.found = { refs: refs || [], det };
+    session.retrievedAt = search && search.fetchedAt ? search.fetchedAt : new Date().toISOString();
+    setSimulated(!!(search && search.simulated === true));
+    updateCoverage();
+    updateCitation();
+    updateFieldSummary();
+    updateAbout();
+    renderStatus();
+  }
+
+  /**
+   * A synthetic sky must never pass for an observation: a badge in the top bar, the word in every
+   * frame caption (which is also what an exported PNG carries) and in the page title.
+   */
+  function setSimulated(on) {
+    if (session.simulated === on) return;
+    session.simulated = on;
+    syncSimulatedBadge();
+    refreshCaptions();
+    updateFieldSummary();
+    if (hasTarget()) document.title = titleFor(store.get());
+  }
+
+  /** The badge shows for a simulated search answer, and when a plugin watermarks the captions as simulated. */
+  function syncSimulatedBadge() {
+    // Also when a plugin has marked the frame on screen itself (the practice sky leads its note with the word).
+    const frame = player.frame();
+    const marked = !!frame && !!frame.caption && /^\s*simulated/i.test(String(frame.caption.note || ''));
+    layout.setSimulated(session.simulated || marked || /simulat/i.test(session.captionNote));
+  }
+
+  /** Notes appended to every frame caption: the plugin note and the simulated-data word. */
+  function captionSuffix() {
+    const parts = [];
+    if (session.captionNote) parts.push(session.captionNote);
+    if (session.simulated && !/simulated/i.test(session.captionNote)) parts.push(SIMULATED_WORD);
+    return parts.join(' · ');
+  }
+
+  /** "showing N of M exposures" when the archive listed more than the proxy passed on. */
+  function thinningNote() {
+    const cov = coverageCounts();
+    if (!cov) return '';
+    const det = store.get().det;
+    const listed = cov.listed[det] || 0;
+    const all = cov.counts[det] || 0;
+    return all > listed ? `showing ${listed.toLocaleString('en-US')} of ${all.toLocaleString('en-US')} exposures` : '';
+  }
+
+  function dataNotes() {
+    const notes = [];
+    const search = session.search;
+    if (search && search.complete === false) notes.push('The exposure index is still being built; more frames may appear later.');
+    const thin = thinningNote();
+    if (thin) notes.push(`Crowded field: ${thin} of detector D${store.get().det}, spread evenly over the passes.`);
+    return notes;
+  }
+
   function coverageCounts() {
     const search = session.search;
     if (!search) return null;
     const counts = {};
-    if (search.counts && typeof search.counts === 'object') {
+    if (Array.isArray(search.counts)) {
+      // [{ det, total, returned }]: `total` exposures cover the spot, `returned` were listed.
+      for (const c of search.counts) {
+        const det = Number(c && c.det);
+        const n = Number(c && (c.total ?? c.count));
+        if (det >= 1 && det <= 6 && Number.isFinite(n)) counts[det] = n;
+      }
+    } else if (search.counts && typeof search.counts === 'object') {
       for (const [key, value] of Object.entries(search.counts)) {
         const det = Number(String(key).replace(/\D/g, ''));
         const n = typeof value === 'number' ? value : value && Number(value.total ?? value.count);
@@ -614,11 +723,17 @@ async function boot() {
 
   function afterLoad(det) {
     const s = store.get();
-    // Record the visit on the shared sky map, once per target.
+    // Record the visit on the shared sky map: once per target per session, only when at least one
+    // frame really loaded, and never in the way (fire and forget, failures ignored).
+    const data = session.byDet.get(det);
     const fogKey = `${Number(s.ra).toFixed(3)},${Number(s.dec).toFixed(3)}`;
-    if (session.fogMarked !== fogKey) {
-      session.fogMarked = fogKey;
-      api.fogMark(s.ra, s.dec).catch(() => {});
+    if (data && data.frames.length > 0 && !session.fogMarked.has(fogKey) && typeof api.fogMark === 'function') {
+      session.fogMarked.add(fogKey);
+      try {
+        Promise.resolve(api.fogMark(s.ra, s.dec)).catch(() => {});
+      } catch {
+        // ignored
+      }
     }
     if (session.selection) measureSelection();
     scheduleModel(det);
@@ -743,7 +858,7 @@ async function boot() {
     if (!data || !data.layers.length) return null;
     let entry = { model: null, candidates: [] };
     try {
-      entry = pipeline.prepareResidual(lib, data.layers, data.grid);
+      entry = timed(`prepareResidual (sky model fit) with ${data.layers.length} layers`, () => pipeline.prepareResidual(lib, data.layers, data.grid));
     } catch (err) {
       console.warn('[tombaugh] sky model failed', err);
     }
@@ -874,7 +989,7 @@ async function boot() {
             ctx.layersByDet = layersByDet();
           }
         }
-        movie = pipeline.buildMovie(view, ctx, lib);
+        movie = timed(`buildMovie(${view}${ctx.perExposure && view === 'residual' ? ', every exposure' : ''}) with ${data.layers.length} layers of ${data.grid.n} x ${data.grid.n}`, () => pipeline.buildMovie(view, ctx, lib));
       }
     } catch (err) {
       if (isCancelled(err) || stale()) return;
@@ -886,6 +1001,7 @@ async function boot() {
     movie.key = session.key;
     movie.det = s.det;
     movie.partial = !complete;
+    decorateCaptions(movie.frames);
     session.movie = movie;
     ghostCache = new WeakMap();
     flagCache = new WeakMap();
@@ -917,6 +1033,8 @@ async function boot() {
       }
       if (partial && player.frameCount() === 0 && !reducedMotion() && !explicitT) autoplay = true;
       player.setMovie(movie.frames, { index, autoplay, keepBlinkPair: partial });
+      // Reduced motion: the movie starts paused, so make Play the obvious next step.
+      if (first && !autoplay && !explicitT && movie.frames.length > 1 && reducedMotion()) player.setCallToAction(true);
     }
     renderStatus();
     controls.update({
@@ -954,6 +1072,7 @@ async function boot() {
   function renderFrame(frame) {
     if (!frame) return;
     const s = store.get();
+    const t0 = DEBUG ? performance.now() : 0;
     try {
       const rgba = frame.rgb || frame.rgba ? rgbaOf(frame) : null;
       if (rgba) viewer.setRgb(rgba);
@@ -973,6 +1092,109 @@ async function boot() {
       console.warn('[tombaugh] frame failed to draw', err);
     }
     updateOverlays();
+    updateFrameSummary(frame);
+    syncSimulatedBadge();
+    if (DEBUG) {
+      const ms = performance.now() - t0;
+      if (ms > 8 && !debugSeen.has(`slow-frame:${s.view}`)) {
+        debugSeen.add(`slow-frame:${s.view}`);
+        console.info(`[tombaugh debug] renderFrame (${s.view}, stretch ${s.stretch}) took ${ms.toFixed(1)} ms; the budget for an instant switch is 8 ms`);
+      }
+    }
+  }
+
+  /**
+   * Put the session-wide notes (the plugin note, SIMULATED) into the caption of every frame of
+   * the current movie, so the viewer, the player line, an exported PNG and every plugin that reads
+   * `frame.caption` all carry them. They lead the note line, where an ellipsis cannot cut them off.
+   */
+  function decorateCaptions(frames) {
+    const extra = captionSuffix();
+    for (const frame of frames || []) {
+      if (!frame) continue;
+      if (frame.captionBase === undefined) frame.captionBase = frame.caption || { title: '', date: '', wave: '', note: '' };
+      const base = frame.captionBase;
+      frame.caption = extra ? { ...base, note: [extra, base.note].filter(Boolean).join(' · ') } : base;
+    }
+  }
+
+  function refreshCaptions() {
+    if (!session.movie) return;
+    decorateCaptions(session.movie.frames);
+    player.refresh();
+    const frame = player.frame();
+    if (frame) {
+      try {
+        viewer.setCaption(frame.caption || null);
+      } catch {
+        // optional
+      }
+    }
+  }
+
+  // ---- field summary --------------------------------------------------------------------------
+  function updateFieldSummary() {
+    if (!fieldSummary) return;
+    const s = store.get();
+    if (!hasTarget()) {
+      fieldSummary.update(null);
+      return;
+    }
+    const search = session.search;
+    const refs = search && Array.isArray(search.frames) ? search.frames : [];
+    const releases = new Set();
+    for (const ref of refs) if (ref.release) releases.add(String(ref.release).toLowerCase());
+    for (const data of session.byDet.values()) for (const f of data.frames) if (f.release) releases.add(String(f.release).toLowerCase());
+    const notes = dataNotes();
+    if (session.epochNote) notes.unshift(`Centre: ${session.epochNote}.`);
+    try {
+      fieldSummary.update({
+        name: s.name || '',
+        coord: fmtCoord(s.ra, s.dec),
+        det: s.det,
+        fov: s.fov,
+        refs,
+        refsKey: session.key,
+        searching: !search && !session.error,
+        releases: [...releases].sort(),
+        notes,
+        simulated: session.simulated,
+      });
+    } catch (err) {
+      console.warn('[tombaugh] field summary', err);
+    }
+  }
+
+  function updateFrameSummary(frame) {
+    if (!fieldSummary) return;
+    try {
+      if (!frame) {
+        fieldSummary.setFrame(null);
+        return;
+      }
+      const s = store.get();
+      const ids = new Set();
+      for (const layer of Array.isArray(frame.layers) ? frame.layers : []) if (layer && layer.frame && layer.frame.id) ids.add(layer.frame.id);
+      let span = frameWaveSpan(frame, pipeline.layerWave);
+      let label = ids.size > 1 ? `Wavelengths in this frame (${ids.size} exposures)` : 'Wavelength of this frame';
+      if (!span && s.view === 'lens' && lib.LENSES) {
+        const lens = lib.LENSES.find((l) => l.id === s.lens) || lib.LENSES[0];
+        if (lens && Array.isArray(lens.band)) {
+          span = [lens.band[0], lens.band[1]];
+          label = `Band of the ${lens.label} lens`;
+        }
+      }
+      if (!span) {
+        const r = pipeline.DETECTOR_RANGES.find((d) => d.det === s.det);
+        if (r && !pluginViews.has(s.view) && s.view !== 'lens') {
+          span = [r.min, r.max];
+          label = `Detector D${s.det} band`;
+        }
+      }
+      fieldSummary.setFrame({ ids: ids.size ? ids : null, span, label });
+    } catch (err) {
+      console.warn('[tombaugh] field summary', err);
+    }
   }
 
   function flagsFor(frame) {
@@ -1107,7 +1329,7 @@ async function boot() {
     if (!sel) return;
     const data = currentData();
     try {
-      const spec = pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec);
+      const spec = timed('measureSpectrum', () => pipeline.measureSpectrum(lib, allFrames(), sel.ra, sel.dec));
       sel.spectrum = spec.points;
       sel.binned = spec.binned;
       sel.lightCurve = spec.curve;
@@ -1124,10 +1346,12 @@ async function boot() {
     if (data && data.layers.length && !data.partial) {
       try {
         const frame = player.frame();
-        sel.motion = pipeline.measureMotion(lib, data.layers, data.grid, sel.ra, sel.dec, {
-          stars: session.gaia.stars,
-          startMjd: frame && Number.isFinite(frame.mjd) ? frame.mjd : null,
-        });
+        sel.motion = timed('measureMotion', () =>
+          pipeline.measureMotion(lib, data.layers, data.grid, sel.ra, sel.dec, {
+            stars: session.gaia.stars,
+            startMjd: frame && Number.isFinite(frame.mjd) ? frame.mjd : null,
+          }),
+        );
       } catch (err) {
         console.warn('[tombaugh] motion measurement failed', err);
       }
@@ -1153,7 +1377,8 @@ async function boot() {
     const topic = pv || !vinfo ? '' : s.view === 'passes' && hasTopic('passes') ? 'passes' : vinfo.topic;
     const notes = movie ? [...(movie.notes || [])] : [];
     const search = session.search;
-    if (search && search.complete === false) notes.push('The exposure index for this part of the sky is still being built, so more exposures may appear later.');
+    notes.push(...dataNotes());
+    if (session.simulated) notes.push('This is a simulated sky, generated for testing and practice. Nothing shown here was observed by SPHEREx.');
     const cov = coverageCounts();
     const rows = [];
     if (s.name) rows.push(['Target', s.name]);
@@ -1169,16 +1394,17 @@ async function boot() {
       if (data.failed) text += `, ${data.failed} failed`;
       if (data.skipped) text += `, ${data.skipped} not in the archive`;
       rows.push(['Exposures', text]);
-      if (cov && cov.counts[s.det] > (cov.listed[s.det] || 0)) {
-        rows.push(['', `showing ${cov.listed[s.det] || 0} of ${cov.counts[s.det].toLocaleString('en-US')} (crowded field, thinned)`]);
-      }
+      if (thinningNote()) rows.push(['', thinningNote()]);
       const passes = movie && movie.passes && movie.passes.length ? movie.passes : pipeline.describePasses(lib, data.layers);
       rows.push(['Passes', passes.map((p) => `${p.label} (${p.layers.length})`).join(', ')]);
       const releases = [...new Set(data.frames.map((f) => f.release).filter(Boolean))];
       if (releases.length) rows.push(['Release', releases.map((x) => String(x).toUpperCase()).join(', ')]);
       rows.push(['Field', `${s.fov} arcmin, ${data.grid.n} × ${data.grid.n} px at ${data.grid.scale}″`]);
     }
-    if (search && search.source) rows.push(['Search', search.source === 'index' ? 'Tombaugh exposure index' : 'IRSA TAP']);
+    if (search && search.source) {
+      const sources = { index: 'Tombaugh exposure index', tap: 'IRSA TAP', irsa: 'IRSA TAP', synthetic: 'synthetic sky (simulated)', practice: 'practice sky (simulated)' };
+      rows.push(['Search', sources[String(search.source).toLowerCase()] || String(search.source)]);
+    }
     if (session.gaia.status === 'ready') rows.push(['Gaia DR3', `${session.gaia.stars.length} stars within ${(GAIA_RADIUS_DEG * 60).toFixed(0)} arcmin`]);
     panels.setAbout({
       view: s.view,
@@ -1343,6 +1569,47 @@ async function boot() {
     return { ra, dec };
   }
 
+  /**
+   * "Somewhere nobody has looked": ask the shared sky map which patches have been opened and go
+   * to the centre of an unopened one away from the galactic plane (the fog module's own rule).
+   * If the map cannot be read within a few seconds, a random position does the job.
+   */
+  let surpriseBusy = false;
+  async function surprise() {
+    if (surpriseBusy) return;
+    surpriseBusy = true;
+    let pick = null;
+    const choose = opt.fogmap && opt.fogmap.chooseUnopenedCell;
+    if (typeof choose === 'function' && typeof api.fog === 'function') {
+      const busy = (on) => {
+        try {
+          if (landing && landing.setBusy) landing.setBusy(on, on ? 'Looking for a patch nobody has opened…' : '');
+        } catch {
+          // optional
+        }
+      };
+      busy(true);
+      try {
+        const counts = await Promise.race([
+          api.fog(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+        ]);
+        pick = choose(counts) || null;
+      } catch {
+        pick = null;
+      }
+      busy(false);
+    }
+    surpriseBusy = false;
+    if (pick && Number.isFinite(pick.ra) && Number.isFinite(pick.dec)) {
+      goTo({ ra: pick.ra, dec: pick.dec, name: '' });
+      toasts.show(pick.why || (pick.count === 0 ? 'Nobody has opened this patch of sky with Tombaugh before.' : 'One of the least visited patches of sky.'), { timeout: 5200 });
+      return;
+    }
+    const p = randomPosition();
+    goTo({ ra: p.ra, dec: p.dec, name: '' });
+  }
+
   function buildLandingFallback() {
     const status = h('p', { class: 'landing-status', 'aria-live': 'polite' });
     const input = h('input', {
@@ -1423,10 +1690,7 @@ async function boot() {
             targets: tourTargets,
             onPick: (t) => pickTarget(t),
             onSearch: (text) => handleSearch(text),
-            onSurprise: () => {
-              const p = randomPosition();
-              goTo({ ra: p.ra, dec: p.dec, name: '' });
-            },
+            onSurprise: () => surprise(),
             parseCoord: lib.parseCoord,
             onExplain: explainer ? (topic) => explain(topic) : undefined,
           });
@@ -1542,8 +1806,9 @@ async function boot() {
       h(
         'p',
         { class: 'panel-note' },
-        'Images: SPHEREx Level 2, served by IRSA. Star positions: Gaia DR3. Tombaugh is an independent project by team Missing Mass for NASA Space Apps 2026; its code was written with an AI model, and it is not an official NASA product.',
+        'All code in this tool was written by an AI system (Claude) under the direction of team Missing Mass. Data: NASA SPHEREx via IRSA. Not affiliated with or endorsed by NASA.',
       ),
+      h('p', { class: 'panel-note' }, 'Star positions: Gaia DR3. Built for NASA Space Apps 2026. Version ', h('span', { class: 'num' }, VERSION), '.'),
     );
   }
 
@@ -1583,6 +1848,10 @@ async function boot() {
     } catch {
       toasts.show('The shared map of visited patches could not be loaded.', { kind: 'alert' });
     }
+  }
+
+  function closeSkyMap() {
+    layout.closeDialog(els.mapDialog);
   }
 
   els.btnShare.addEventListener('click', () => share());
@@ -1700,7 +1969,7 @@ async function boot() {
 
   function titleFor(s) {
     if (!hasTarget()) return 'Tombaugh: a blink comparator for the 102-color sky';
-    return `${s.name || fmtCoord(s.ra, s.dec).deg} · Tombaugh`;
+    return `${s.name || fmtCoord(s.ra, s.dec).deg}${session.simulated ? ' (simulated sky)' : ''} · Tombaugh`;
   }
 
   // ---- embed credit ---------------------------------------------------------------------------
@@ -1823,6 +2092,61 @@ async function boot() {
     openModal: (spec) => layout.openModal(spec || {}),
     /** Re-draw overlays (for plugins whose addOverlay output changed). */
     refreshOverlays: () => updateOverlays(),
+
+    /**
+     * Replace the data service (an object with the interface of createApi()). Loads in flight
+     * are cancelled, everything fetched through the old service is dropped, and the current
+     * target is loaded again. Passing the object already in use reloads through it. Emits 'api'.
+     */
+    setApi(next) {
+      if (!next || typeof next.search !== 'function' || typeof next.cutout !== 'function') return false;
+      api = next;
+      app.api = next;
+      loader.setApi(next);
+      emit('api', { api: next });
+      if (hasTarget()) startTarget();
+      return true;
+    },
+    /**
+     * Measure the source at a sky position, exactly as a click on the image there does.
+     * -> Promise of the selection (as app.selection()), or of null when no movie is showing.
+     */
+    selectAt(pos) {
+      const ra = pos ? Number(pos.ra) : NaN;
+      const dec = pos ? Number(pos.dec) : NaN;
+      if (!Number.isFinite(ra) || !Number.isFinite(dec) || !player.frameCount()) return Promise.resolve(null);
+      try {
+        select({ ra, dec, label: pos.label ? String(pos.label) : '' });
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      return Promise.resolve(app.selection());
+    },
+    /** Show arbitrary points in the spectrum panel (same shapes as the spectrum plot) and open it. */
+    showSpectrum({ points = [], binned = [], title = '', colorBy = undefined, note = '' } = {}) {
+      panels.setSource(null);
+      panels.setSpectrum({ points, binned, title: title || 'Spectrum', colorBy, heading: title || 'Spectrum', note: note || `${points.length} point${points.length === 1 ? '' : 's'} supplied by a tool, not measured from a click on this image.` });
+      layout.selectTab('spectrum', { reveal: true });
+    },
+    /** An extra note for every frame caption (and so for exported images); null or '' removes it. */
+    setCaptionNote(text) {
+      const next = text === null || text === undefined ? '' : String(text).trim().slice(0, 80);
+      if (next === session.captionNote) return;
+      session.captionNote = next;
+      syncSimulatedBadge();
+      refreshCaptions();
+    },
+    /** Open the all-sky map of visited patches. */
+    showFog: () => {
+      if (opt.fogmap && typeof opt.fogmap.createFogMap === 'function') openSkyMap();
+    },
+    openSkyMap: () => app.showFog(),
+    closeSkyMap: () => closeSkyMap(),
+    /** Open a side panel by id ('spectrum', 'lightcurve', 'motion', 'candidates', 'about' or a plugin panel). */
+    showPanel(id) {
+      layout.selectTab(String(id), { reveal: true });
+      return layout.currentTab() === String(id);
+    },
   };
   try {
     window.tombaugh = app;

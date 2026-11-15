@@ -336,6 +336,7 @@ export function createHandler(options = {}) {
   const cutoutInflight = new Map();
   const searchJobs = new Map(); // search key -> { url, at }
   const synthFrames = new Map(); // synthetic frame id -> { ref, ra, dec } from the last searches
+  const synthFields = []; // centres of the synthetic fields that were searched, newest last
   const indexMemo = new Map(); // decoded exposure-index directories, kept while the isolate lives
   const layoutMemo = new Map(); // header sizes per processing version and detector (s3cutout.js)
   const limitUpstream = createLimiter(maxUpstream);
@@ -380,6 +381,8 @@ export function createHandler(options = {}) {
       await latency(6);
       const sky = synth.syntheticSky(ra4, dec4);
       rememberSynthetic(sky, ra4, dec4);
+      synthFields.push({ ra: ra4, dec: dec4 });
+      while (synthFields.length > 64) synthFields.shift();
       const frames = (sky.frameRefs || []).map(publicRef).sort((a, b) => a.mjd - b.mjd);
       return jsonResponse({ ra, dec, cached: false, fetchedAt: new Date(now()).toISOString(), frames });
     }
@@ -782,7 +785,15 @@ export function createHandler(options = {}) {
     if (backend === 'synthetic') {
       const synth = await synthModule();
       await latency(2);
-      const sky = synth.syntheticSky(roundTo(ra, 4), roundTo(dec, 4));
+      // The fake sky is built around a field centre, so look the click up in the field it
+      // belongs to: the most recently searched one within half a degree.
+      let centre = null;
+      for (let i = synthFields.length - 1; i >= 0 && !centre; i--) {
+        const f = synthFields[i];
+        const dra = (((ra - f.ra + 540) % 360) - 180) * Math.cos((dec * Math.PI) / 180);
+        if (Math.hypot(dra, dec - f.dec) < 0.5) centre = f;
+      }
+      const sky = centre ? synth.syntheticSky(centre.ra, centre.dec) : synth.syntheticSky(roundTo(ra, 4), roundTo(dec, 4));
       const mjd = numberParam(params, 'mjd', { fallback: NaN });
       return jsonResponse({ ...identifyFromSynthetic(sky, ra, dec, radius, { mjd }), simulated: true, cached: false });
     }

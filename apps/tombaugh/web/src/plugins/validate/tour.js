@@ -27,6 +27,17 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 export const TOUR_DEFAULTS = Object.freeze({ idleMs: 90000, maxMs: 300000, settleMs: 1500, gaiaWaitMs: 8000 });
 
 const FOVS = [2, 4, 6, 10];
+/** The detector that holds the 3.3 um methane band (2.42 to 3.82 um). */
+const METHANE_DET = 4;
+
+/**
+ * Detectors to load on top of a target's own for the tour: the methane detector for the cold
+ * brown dwarfs, so that the report can say whether the 3.3 um band is there.
+ */
+export function extraDetectors(target) {
+  if (!target || !(target.kind === 'pair' || target.kind === 'cold')) return [];
+  return target.det === METHANE_DET ? [] : [METHANE_DET];
+}
 /** A source selected further than this from the field centre is measured instead of the centre. */
 const SELECTION_MIN_ARCSEC = 10;
 /** A named target is accepted as a table entry when the field centre is within this of it. */
@@ -311,6 +322,8 @@ export async function measureLoaded(app, opts = {}) {
  *   signal         AbortSignal; the tour stops at the next step and returns what it has
  *   now            MJD used to place the targets (default: today), as the shell does
  *   idleMs, maxMs, settleMs, gaiaWaitMs   see TOUR_DEFAULTS
+ *   extraDets(target) -> number[]         detectors to load besides the target's own (default:
+ *                                         extraDetectors, the methane detector for brown dwarfs)
  *   onStatus({ phase: 'load' | 'frames' | 'measure', index, total, target, count?, loadTotal?, step?, done?, steps? })
  *   onResult(measurement, index)   after each target, also for one without data
  * @returns {Promise<{ results: object[], total: number, cancelled: boolean }>}
@@ -381,6 +394,31 @@ export async function runTour(app, opts = {}) {
     if (!got.ok) {
       push({ noData: true, target: label, det, reason: goError ? `the app could not go there (${goError})` : got.reason }, index);
       continue;
+    }
+    // Extra detectors (methane band): loaded after the target's own, which stays loaded. A
+    // detector that brings nothing is not an error; the spectrum rows then say "not covered".
+    const extras = (typeof opts.extraDets === 'function' ? opts.extraDets(t) : extraDetectors(t)) || [];
+    const canSwitch = det !== null && app.store && typeof app.store.set === 'function';
+    for (const extra of canSwitch ? extras : []) {
+      if (aborted() || !(extra >= 1 && extra <= 6) || extra === det) continue;
+      say({ phase: 'load', index, total, target: label, det: extra });
+      const more = waitForData(app, {
+        det: extra, signal, idleMs: opts.idleMs, maxMs: opts.maxMs, settleMs: opts.settleMs,
+        onProgress: (p) => say({ phase: 'frames', index, total, target: label, det: extra, count: p.count, loadTotal: p.total }),
+      });
+      try {
+        app.store.set({ det: extra });
+      } catch {
+        // the wait below times out and the tour goes on without this detector
+      }
+      await more;
+    }
+    if (canSwitch && extras.length && !aborted()) {
+      try {
+        if (safe(() => app.store.get().det, det) !== det) app.store.set({ det });
+      } catch {
+        // the measurement names its detector itself
+      }
     }
     await waitForGaia(app, isNum(opts.gaiaWaitMs) ? opts.gaiaWaitMs : TOUR_DEFAULTS.gaiaWaitMs, signal);
     if (aborted()) break;

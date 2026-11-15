@@ -59,7 +59,8 @@ function rollToPc(rollDeg) {
  * frames), mover / variable (false to leave them out), moverPm ([pmra, pmdec] mas/yr),
  * moverParallax (mas), variableFactor (brightness of the variable in the second pass relative
  * to the others), moverFactor (the same for the central star, 1 = constant), badPixels (false to
- * leave out flagged hot pixels).
+ * leave out flagged hot pixels), moverBand ({ center, sigma, depth } in um: an absorption band cut
+ * into the central star's spectrum, like methane at 3.3 um).
  *
  * Returns { grid, frames, gaia: { epoch, stars }, truth, target }:
  *   frames   native Frame objects as api.js decodeFrame gives them
@@ -73,6 +74,7 @@ export function makeFakeField(options = {}) {
     ra0 = 150.0, dec0 = 20.0, fov = 4, dets = [3], passMjds = [60836, 61018, 61200],
     exposuresPerPass = 8, seed = 11, nStars = 14, noise = true, mover = true, variable = true,
     moverPm = [-800, 10360], moverParallax = 0, variableFactor = 2, badPixels = true, moverFactor = 1,
+    moverBand = null,
   } = options;
   const rng = mulberry32(seed);
   const grid = makeGrid(ra0, dec0, fov);
@@ -104,6 +106,7 @@ export function makeFakeField(options = {}) {
       parallax: moverParallax || null, alpha: -0.6,
       scaleAt: moverFactor !== 1 ? (mjd) => (passMjds.length > 1 && Math.abs(mjd - passMjds[1]) < 40 ? moverFactor : 1) : null,
     });
+    if (moverBand && moverBand.depth > 0) src.band = { center: 3.3, sigma: 0.12, ...moverBand };
     sources.push(src);
     const total = Math.hypot(moverPm[0], moverPm[1]);
     truth.mover = {
@@ -182,7 +185,8 @@ export function makeFakeField(options = {}) {
           const [px, py] = w.skyToPix(pos.ra, pos.dec);
           if (!(px > -reach && px < nPix + reach && py > -reach && py < nPix + reach)) continue;
           const atWave = waveCenter * (1 - 0.0006 * (py - (nPix - 1) / 2));
-          const flux = src.flux * Math.pow(atWave / 1.6, src.alpha) * (src.scaleAt ? src.scaleAt(mjd) : 1);
+          const band = src.band ? 1 - src.band.depth * Math.exp(-0.5 * ((atWave - src.band.center) / src.band.sigma) ** 2) : 1;
+          const flux = src.flux * Math.pow(atWave / 1.6, src.alpha) * (src.scaleAt ? src.scaleAt(mjd) : 1) * band;
           const cx = Math.round(px);
           const cy = Math.round(py);
           for (let y = Math.max(0, cy - reach); y <= Math.min(nPix - 1, cy + reach); y++) {

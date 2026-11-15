@@ -6,8 +6,10 @@
 //
 //   spectrumToNotes(points, opts)   -> { notes, duration, median, kind: 'spectrum' }
 //     points: [{ wave (um), flux_uJy, err_uJy }]. One note per point, short wavelengths first.
-//     time      wavelength, linearly: 0.75 um at 0 s to 5 um at 4 s, so a given wavelength
-//               always sounds at the same moment whatever the source
+//     time      wavelength, linearly, from the first to the last measured point. With all six
+//               detectors loaded that is 0.75 um at 0 s to 5 um at 4 s; with fewer the sweep
+//               is proportionally shorter but never under 2.5 s, so a single detector's 17
+//               channels can still be told apart
 //     pitch     flux relative to the spectrum's own median, on a log scale, snapped to a
 //               pentatonic scale over three octaves: the median sits mid-range, four times
 //               brighter is the top note, four times fainter (or anything at or below zero)
@@ -25,7 +27,7 @@
 //   describeSpectrum(points), describeLightCurve(points) -> one or two plain sentences for
 //     screen readers and for anyone who would rather read than listen.
 
-export const SWEEP = Object.freeze({ waveMin: 0.75, waveMax: 5.0, seconds: 4 });
+export const SWEEP = Object.freeze({ waveMin: 0.75, waveMax: 5.0, seconds: 4, minSeconds: 2.5 });
 
 /** Major pentatonic, semitones above the root. Any two notes of it sound fine together. */
 export const PENTATONIC = Object.freeze([0, 2, 4, 7, 9]);
@@ -71,7 +73,7 @@ export function snrToGain(snr) {
   return MIN_GAIN + (1 - MIN_GAIN) * clamp(Math.log10(Math.max(1, snr)) / Math.log10(30), 0, 1);
 }
 
-/** Seconds into the sweep at which a wavelength sounds. Increasing in wavelength, clamped. */
+/** Seconds into the full 0.75 to 5 um sweep at which a wavelength sounds. Increasing, clamped. */
 export function waveToTime(wave, sweep = SWEEP) {
   if (!isNum(wave)) return 0;
   const f = (wave - sweep.waveMin) / (sweep.waveMax - sweep.waveMin);
@@ -172,7 +174,8 @@ function localContinuum(pts, i) {
 
 /**
  * spectrumToNotes(points, { sweep = SWEEP, span = FLUX_SPAN, maxNotes = 128 })
- * -> { kind: 'spectrum', notes, duration, median }
+ * -> { kind: 'spectrum', notes, duration, median, waveMin, waveMax, seconds }
+ * waveMin..waveMax is the measured range, swept in `seconds`; duration adds the last note's tail.
  * note = { t, dur, freq, gain, step, timbre, wave, flux, snr, dip }
  * `dip` marks a point well below its surroundings; such notes use a triangle wave and ring a
  * little longer, so an absorption band stands out as well as dropping in pitch.
@@ -183,10 +186,15 @@ export function spectrumToNotes(points, { sweep = SWEEP, span = FLUX_SPAN, maxNo
   let ref = median(positive);
   if (!(ref > 0)) ref = 1;
   const notes = [];
+  const waveMin = pts.length ? pts[0].wave : sweep.waveMin;
+  const waveMax = pts.length ? pts[pts.length - 1].wave : sweep.waveMax;
+  const covered = clamp((waveMax - waveMin) / (sweep.waveMax - sweep.waveMin), 0, 1);
+  const seconds = clamp(sweep.seconds * covered, Math.min(sweep.seconds, sweep.minSeconds ?? sweep.seconds), sweep.seconds);
+  const timeOf = (wave) => (waveMax > waveMin ? ((wave - waveMin) / (waveMax - waveMin)) * seconds : 0);
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
-    const t = waveToTime(p.wave, sweep);
-    const next = i + 1 < pts.length ? waveToTime(pts[i + 1].wave, sweep) - t : 0.2;
+    const t = timeOf(p.wave);
+    const next = i + 1 < pts.length ? timeOf(pts[i + 1].wave) - t : 0.2;
     const step = ratioToStep(p.flux / ref, span);
     // An error estimated from the scatter is good enough to judge a dip, not to set loudness.
     const snr = p.err !== null && !p.estimated ? p.flux / p.err : null;
@@ -206,7 +214,7 @@ export function spectrumToNotes(points, { sweep = SWEEP, span = FLUX_SPAN, maxNo
     });
   }
   const last = notes[notes.length - 1];
-  return { kind: 'spectrum', notes, duration: last ? Math.max(sweep.seconds, last.t + last.dur) : 0, median: ref };
+  return { kind: 'spectrum', notes, duration: last ? last.t + last.dur : 0, median: ref, waveMin, waveMax, seconds };
 }
 
 /** Splits time-sorted items with .mjd into survey passes at gaps longer than gapDays. */

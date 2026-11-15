@@ -236,6 +236,7 @@ export function install(app, opts = {}) {
           runner.poke();
           runner.refreshCaption();
           respot();
+          tag();
         }),
       ),
     );

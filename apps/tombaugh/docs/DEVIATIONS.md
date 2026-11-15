@@ -536,3 +536,326 @@ No contract signature was changed. Notes for whoever wires the module:
   with the real layout and RICE-compressed FLAGS) and `makeFakeSurvey` (week directories of exposures
   with per-detector headers perturbed by a few arcsec and arcmin, missing exposures and detectors),
   plus fault injection and a count of round trips.
+
+## plugin-inject (`web/src/plugins/inject/`)
+
+- **Extra exports beyond the brief.** `blackbody.js`: `solarFlux_uJy`, `lambertPhase`,
+  `methaneTransmission`, `fluxParts_uJy` (thermal and reflected separately), `scaledSpectrum`,
+  `presetById`. `inject.js`: `ujyPerMJySr`, `effectiveFwhmArcsec`, `circularMotion`, `trackOnGrid`,
+  `addGaussian`, `referenceWave`, `erf`. `recover.js`: `recoverMany`, `planFakes`, `analyticLimit_uJy`,
+  `limitDetail`, `limitSentences`, `passIndices`, `passPositions`, `wilson`, `seededRandom`,
+  `formatFlux`, `formatTimes`. `index.js` also exports the pure helpers `buildInjectedMovie`,
+  `plantedSentences`, `chooseSpot`, `curveSvg`, `formatDistance`, `formatAngle`, `logScale` so they
+  are tested in Node.
+- **Albedo is the geometric albedo.** `reflectedFlux_uJy` is `p * F_sun(r) * (R/delta)^2 * phase`, with
+  the Sun as a 5772 K blackbody and a Lambert phase function (1 at opposition).
+- **Planet X preset is 7.4 microJy at 4.5 um, not the 0.02 microJy the brief used as an example.**
+  A 4 Earth-radius body at 500 AU with a grey geometric albedo of 0.4 reflects 7.43 microJy at 4.5 um
+  (25 at 2.0 um); its own heat at 45 K is 2e-20 microJy. The panel sentences are computed from
+  `blackbody.js`, so they quote this number. Real ice giants are much darker than 0.4 in the methane
+  bands, so the preset caveat says the estimate is generous.
+- **Cold brown dwarf preset has an "atmospheric window" term.** A 250 K, Jupiter-radius blackbody at
+  474,000 AU gives 3.7 microJy at 4.5 um. The brief says "very roughly 50 microJy"; from memory (not
+  checked, no network) the measured Spitzer [4.5] and W2 magnitudes of WISE 0855 correspond to a few
+  hundred microJy. The preset therefore radiates at a 400 K brightness temperature between 3.9 and
+  5.2 um (`model.window`), which gives 450 microJy at 4.5 um, plus a methane dip at 3.3 um. Remove
+  `window` from the preset to get the bare blackbody. The number should be checked against the
+  literature before it is quoted anywhere.
+- **Injected PSF is broadened on reprojected layers.** `injectIntoLayers` takes `nativePixArcsec`
+  (default 0). The plugin passes 6.15 when the layers come from reprojected frames, so the planted
+  Gaussian has FWHM 10.4 arcsec (7.5 arcsec PSF, native pixel box and bilinear kernel added in
+  quadrature), which is what a real point source looks like on the 3.075 arcsec grid. No photon noise
+  is added for the planted flux, and the variance planes are shared with the input, not copied.
+- **Reference wavelength.** Brightness is quoted at 4.5 um only when the loaded detector reaches it;
+  otherwise at the middle of the loaded band, and the panel says which.
+- **What counts as recovered.** At the known position: 5 sigma or more in a pass residual, or in the
+  shift-and-stack of the residual layers along the true track; or the blind candidate list flags it
+  (positive, same pass, within 2.5 px). The result carries `method` `'residual' | 'stack' |
+  'candidate' | 'none'`. The stack significance is calibrated with the robust scatter of the same
+  shifted stack within 12 px of the landing pixel, not with `stack.noise`.
+- **Sweep.** Ten fakes are planted at once per flux step, at the same seeded positions every step,
+  each moving as a body on a circular orbit at the chosen distance. Positions where the untouched data
+  already "detects" something are excluded first (`excluded` in the result). The flux range grows by
+  factors of two (up to four times each way) until the curve spans 0 to 1. The limit is the 50 percent
+  point of the monotone (pool-adjacent-violators) curve, interpolated in log flux. Intervals are Wilson
+  1 sigma.
+- **Marker.** The planted source is drawn with marker kind `'simulated'` and label `SIMULATED`, not
+  `'candidate'`, so nobody can read it as a detection. Frame titles start with `SIMULATED` and the
+  caption note is `SIMULATED SOURCE planted as a test. Not a detection.`
+- **CSS** is injected by JS (`inject.css.js`, one `<style id="tbj-inject-css">`, all classes `tbj-`).
+- **Observation about core, not changed.** `dialSweep` in `core/distance.js` calibrates with the scatter
+  of the unshifted full-frame SNR map. On residual layers that scatter was about 0.25 in my synthetic
+  runs (the sky model removes the per-pixel mean), which would inflate `peakSnr` three to four times.
+  `recover.js` does not use it.
+
+## plugin-story
+
+- Extra files in `web/src/plugins/story/` beyond the list in the brief: `adapter.js` (story actions
+  -> `app` calls, Node-testable), `adapter.test.js` (adapter and pure helpers), `demo.e2e.mjs`
+  (Playwright run of `demo.html`; not a `node --test` file).
+- Extra action `{ type: 'url', show? }` (shows the address of the current view as a chip, for shot
+  7 of the demo script, because a tab recording does not include the browser's address bar) and
+  extra condition `'loaded'` (a movie exists and the detector reported `complete`, or 1.5 s without
+  `frames`/`movie` events). `goTo` takes an optional `state` that is applied in the same task.
+  `blink` and `wait` are expanded by the runner itself (blink = `times` frame flips first/last);
+  the shell player's own blink mode is not used because `app` does not expose it.
+- Step fields beyond the brief: `then` (actions that run once `waitFor` holds), `key: true`
+  ("press Space to continue"), `caption.fallback` (used when a `{placeholder}` has no value or the
+  wait timed out, so a caption never quotes a number the tool did not show).
+- `select`: `app.selectAt({ ra, dec })` is used when the shell provides it (it does not today);
+  otherwise a `pointerdown`/`pointerup` pair is dispatched on `app.viewer.canvas` at the position
+  computed from `app.grid()` and `app.viewer.getView()`. `panel`, `fog` and closing an explainer
+  fall back to shell element ids (`#tab-<id>`, `#btn-map`, `#map-dialog`, `.tbx-explain
+  .tbx-iconbtn`) because `app` has no hooks for them; `app.showPanel(id)`, `app.openSkyMap()`,
+  `app.closeSkyMap()` are used if they ever exist.
+- Spotlight on a sky position is a DOM ring placed with `app.grid()` + `app.viewer`; the
+  `app.addOverlay` marker is only the fallback when the viewer cannot be measured (both at once
+  would be two marks on one star).
+- Recording mode hides shell chrome by the shell's class names (`.topbar`, `.modebar`,
+  `.modeopts`, `.controls`, `.toolrow`, `.tabs`, `.cite`, `.toasts`) and overrides `--viewer-size`
+  and `.console` height. In recording mode the end card is held after the 29 s until a key or
+  click (clean tail for the recording); outside it the card goes after its two seconds.
+- End card follows the brief (link, "Data: NASA SPHEREx via IRSA", "Missing Mass"), which is one
+  line more than docs/DEMO-SCRIPT.md's "the link and the team, nothing more". The link is
+  `window.TOMBAUGH_LIVE_URL` if set, else host + path of the page; captions use the script's
+  wording shortened to nine words, split over 8 captions (titles See it / Measure it / Know it).
+- Not verified: the plugin was run against `demo.html` (stand-in app) only, not against the real
+  shell with the dev server, and it is not yet listed in `web/src/plugins/index.js`. The recording
+  layout and the element-id fallbacks above should be checked once in the real page.
+
+## plugin-identify-sonify, addendum (final state)
+
+- **CSS prefixes:** identify uses `.tbi-*` (style id `tbi-identify-css`), sonify uses `.tbsn-*` (style
+  id `tbsn-sonify-css`). Sonify started as `.tbs-*` and was renamed because the story plugin owns that
+  prefix and its `.tbs-controls { position: absolute }` broke the Listen panel in the real shell.
+- **Spectrum sweep follows the measured range.** With all six detectors loaded it is the task's
+  0.75 um at 0 s to 5 um at 4 s. With fewer detectors the sweep covers only the measured wavelengths,
+  proportionally shorter but never under 2.5 s (a single detector's 17 channels were otherwise played
+  in 0.7 s after a silent lead-in). The plan carries `waveMin`, `waveMax`, `seconds`.
+- **Outliers in a spectrum.** Points measured in different passes of a varying or moving source stand
+  apart from their neighbours. `describeSpectrum` leaves such points out and says so; `classify`
+  despikes only when the light curve varies by 3 sigma and 10 percent, because a real CO or CO2 band
+  can be one channel wide.
+- **`faded-by-motion` hint** replaces `variable` when the measured motion carries the source 3 arcsec
+  or more over the light curve: a fixed aperture loses a moving source, which looks like fading.
+- **Unfinished, outside my files:** in the synthetic backend `handleIdentify` (`proxy/src/handler.js`)
+  builds `syntheticSky(roundTo(ra, 4), roundTo(dec, 4))` around the clicked position, not the field
+  centre, so every click returns that fresh sky's "Synthetic high proper-motion star" at about
+  0.1 arcsec and the empty state never shows. It needs the field centre (the entry remembered from
+  `/search`, as the cutout handler does). The live SIMBAD path is not affected.
+- **Not verified:** nothing here has run against live SIMBAD (no network). Audio was checked through
+  scheduled-note counts and a fake AudioContext, not by ear.
+
+## local-mode
+
+Folders `web/src/local/` and `web/src/plugins/datasource/`.
+
+- **The 's3' adapter is gone.** `localapi.js` first composed the direct backend itself (expindex +
+  s3cutout + encode). `createHandler({ backend: 's3' })` now exists, so that section was deleted:
+  both local backends are the proxy's own handler. What `localapi.js` still adds for `'s3'` is
+  `withIndexSource()`, a read-through layer on the cache for keys under `index/`, because the
+  handler reads the exposure index from its cache and a browser has no copy of it.
+- **Direct search needs a public copy of the index. Not configured anywhere yet.** `createLocalApi`
+  takes `indexSource` (a URL prefix such that `<prefix>/index/v1/manifest.json` exists, or a function
+  `(key) -> bytes`), and `createPageApi` reads `window.TOMBAUGH_INDEX`. The 16-byte `TBC1` prefix of
+  the Supabase cache objects is stripped if present. Without an index the handler falls back to IRSA
+  TAP, which did not answer from a browser here; the search then fails with a 503 that says what is
+  missing. Direct cutouts do not need the index.
+- **Extra exports and options.** `mode.js`: `chooseDataSource` also takes `directAllowed`; further
+  exports `parseSourceParam`, `withSourceParam`, `probeBucket`, `failoverVerdict`, `createPageApi`,
+  `SOURCES`. `createAutoApi` returns the api facade with a `dataSource` controller on it (`current`,
+  `use`, `onChange`, `lastChange`, `sources`, `probe`, `cache`, ...). `?source=` also accepts
+  `remote`, `s3`, `synthetic` as aliases. Practice is never chosen automatically.
+- **Failover is committed only after it worked.** A failed proxy search is repeated on the direct
+  source; the page moves to direct only if that repeat succeeds, otherwise the original error is
+  thrown (with `directError` attached). In direct mode the shared sky map (`fog`, `fogMark`) still
+  goes to the proxy while it is not known to be down; in practice mode nothing leaves the page and
+  fog marks stay in the browser's cache.
+- **IndexedDB layout.** Database `tombaugh`, store `cache` with `{ u8, type, t }` as specified, plus
+  a second store `cache-meta` (`{ k, n, a, t, type }`) so sizes and last use can be listed without
+  reading every payload. One object larger than a quarter of the cap is not stored. On a quota error
+  the cap is halved once; any other storage error switches to memory for the rest of the visit
+  (`stats().fallback` says why).
+- **`baseUrl` is `local:s3` or `local:synthetic` in the local modes.** Code that builds URLs from
+  `app.api.baseUrl` instead of calling api methods will not work there.
+- **Shell hooks not present yet** (`web/src/main.js` still calls `createApi(resolveApiBase())` and has
+  no `app.setApi`). Until then the plugin wraps `app.api` in place, so a change of source applies to
+  requests made after it; frames already on screen stay, and the panel says so. `?source=` in the
+  URL and the automatic failover on a dead proxy only take full effect with the `createPageApi` line
+  in the shell.
+- **SIMULATED marking by the plugin.** It writes the note from `practiceCaptionNote()` into
+  `app.movie().frames[i].caption.note` and puts a badge on `app.viewer.element`. The shell has its
+  own marking from `search.simulated`; the two do not double up (the note is idempotent).
+- **Answer markers** use marker kind `'target'` with labels `Planted: ...`; there is no dedicated
+  kind for an answer key.
+- **Not verified against the real services:** a direct search and cutout in a browser against the
+  real bucket and a real index; Gaia, CDS and IRSA calls made from the page in direct mode (they
+  depend on those services allowing cross-origin requests). The one-byte bucket probe did get a 206
+  from the real bucket in headless Chromium.
+- **`practice.js` has no test file of its own**; it is exercised by the demo page only.
+- **Demo page** carries the header as an HTML comment and must be served from the repository root
+  (or by `proxy/dev-server.mjs`), because it imports `proxy/src`.
+
+## crosscheck (tools/crosscheck, clients/python, docs/CROSSCHECK.md)
+
+- **Nothing in the brief was dropped.** All seven checks run from `tools/crosscheck/run.sh`; results are in
+  `docs/CROSSCHECK.md`. No defect was found in another module, so there is no `docs/crosscheck-findings.md`;
+  the observations are section 5 of `docs/CROSSCHECK.md`.
+- **Added beyond the brief:** `selftest.py` (puts 27 known faults into a temporary copy of the code and
+  confirms the checks fail; the repository is not touched); check 4L (`c4_live.py`: `fetch_frame` over
+  HTTP against `proxy/dev-server.mjs` on 127.0.0.1:18787 with the synthetic backend, off with
+  `CROSSCHECK_LIVE=0`); a reverse FITS check (a file written by Astropy, read by `fits.js`); checks of
+  `focalplane.js`, `time.js`, `parseCoord`/`formatCoord` and the grid functions.
+- **Python client extras:** `wcs_header`, `citation`, `DEFAULT_BAD_MASK`, `FLAG_BITS`, and a WAVELENGTH
+  image HDU plus alternate WCS `A` (detector pixels) in `to_hdulist`. The DOIs are copied from
+  `web/src/ui/citation.js`; if they change there, change `DOI_MISSION` / `DOI_RELEASES` in `tombaugh.py`.
+- **Not part of `npm test`.** The cross-check needs Python with numpy and astropy, so it is run by hand:
+  `PYTHON=/path/to/venv/bin/python tools/crosscheck/run.sh`. `reproject` is optional (one row).
+- **Tolerances are tighter than asked** (0.001 mas and 1e-6 pixel instead of 1 mas and 1e-3 pixel) because
+  the agreement allows it.
+
+## plugin-validate (web/src/plugins/validate, tools/validate-synthetic.mjs)
+
+- **Extra files in the plugin folder.** Besides the files in the brief there are `tour.js` (everything
+  the panel does with `app`, without DOM: `collectContext`, `waitForData`, `measureLoaded`, `runTour`),
+  `tour.test.js`, `fakefield.js` (a made-up field with a known answer, through the real
+  `core/reproject.js`) and `fakeapp.js` (the fake `app` for tests and `demo.html`). `index.js` holds
+  `meta`, `install` and the pure helpers `scatterSvg`, `scatterRange`, `tally`, `summaryText`.
+- **`measureField(ctx)` next to `measureTarget(ctx)`** in `measure.js`. It runs the field-star tests
+  first and passes their scatter (at least 0.05 arcsec) to `measureTarget` as the error floor of each
+  pass position; alone, `measureTarget` uses 0.15 arcsec. The result is the measurement plus `field`.
+- **The "catalogue" column for motion is not the raw catalogue proper motion.** It is a straight line
+  fitted through the catalogue track (proper motion and parallax) at the dates of the passes, so that
+  measured and expected are the same kind of number. For Barnard's Star the two differ by tens of
+  mas/yr because of parallax.
+- **Which catalogue.** An explicit `ctx.catalogue`, else a Gaia match within 8 arcsec of the target
+  (not accepted for a fast known target whose Gaia motion disagrees), else the entry of
+  `core/targets.js`, else none; then the rows carry no sigma and say so.
+- **Error floors.** Positions: field-star scatter in quadrature. Brightness: 1 percent per pass mean
+  (`DEFAULT_PHOT_FLOOR`). Null test: weighted mean with its error, plus the robust scatter of single
+  stars; it needs at least 3 stars with Gaia motion under 50 mas/yr.
+- **Noise rows are computed twice:** on the layers as displayed, and on the same frames reprojected
+  with `variance: 'propagate'`. See docs/VALIDATION-FINDINGS.md, item 1.
+- **`toJson` returns an object,** not a string; `JSON.stringify` it. Non-finite numbers become null.
+- **"Measure this field" measures the selected source** when one is selected more than 10 arcsec from
+  the field centre, and says so above the buttons; otherwise the field centre. The tour never uses
+  the selection.
+- **The tour sets detector and field size through `app.store.set`** before `app.goTo`, because the
+  public `goTo` takes only position and name. For the two brown dwarfs it also loads D4 (the 3.3 um
+  band) and then switches back. Waiting: 90 s without a new exposure or 300 s in all, then the target
+  is reported as "no data" (or measured on what arrived, marked "Partial data").
+- **`install(app, options)`** takes an optional second argument (waiting times, target list) for the
+  demo and tests; the shell passes none. Panel order 70.
+- **Not done or not verified.** The panel was verified in headless Chromium against the fake app
+  (`demo.html`), not inside the real shell and not on real SPHEREx data. Clipboard and download have
+  fallbacks (a selectable text box) for sandboxed frames; the fallback path itself was not exercised in
+  a sandboxed frame. `tools/validate-synthetic.mjs` covers D3 and D4 of one tile per run, 6 arcmin.
+- **Sources contain UTF-8 characters** (minus sign, multiplication sign, plus-minus, micro, arrow) in
+  string literals of `report.js`, `measure.js`, `index.js` and the script.
+
+## moving (Solar system: follow a moving body)
+
+Files: `proxy/src/horizons.js`, `proxy/src/horizons.test.js`, `web/src/plugins/moving/`
+(`index.js`, `bodies.js`, `track.js`, `comoving.js`, `moving.css.js`, `demo.html` and three test files).
+
+- **`proxy/src/horizons.js` exports more than the brief asked for.** Besides `horizonsEphemeris` and
+  `horizonsCommand`: `ephemerisRoute(params, opts)` (returns `{ status, body }`, never throws),
+  `validateBody`, `planRequest`, `buildHorizonsUrl`, `parseHorizonsText`, `HorizonsError` and the
+  constants. Error codes beyond AMBIGUOUS (409) and NOT_FOUND (404): BAD_REQUEST (400), UNSUPPORTED
+  (400; Triton, Charon, Sun, Moon, Earth) and UPSTREAM (502, retryable).
+- **Start and end are rounded outward to whole UTC days,** so START_TIME and STOP_TIME are plain
+  dates. The step is in whole minutes and is widened until the table has at most 3000 rows; the
+  answer carries the step actually used. Spans over 3660 days are refused.
+- **Command table.** Planets 499 to 899 are accepted as well as the listed bodies. An integer of
+  1000 or more gets a trailing `;` (small body); below 1000 it is passed as a major-body id.
+  `horizonsEphemeris` takes an optional `cache` (`get`/`put`); nothing is cached without it.
+- **Geocentric positions.** CENTER is `500@399`. SPHEREx is in low Earth orbit; the difference is
+  under one pixel beyond about 2 AU and is larger for a near-Earth object, which this tool does not
+  correct. The panel footer says so.
+- **Chiron has kind `centaur`,** a kind the brief did not list.
+- **Assumed client hooks.** The plugin calls `app.api.ephemeris(body, startMjd, endMjd, stepHours,
+  { signal })` and `app.api.track(samples, { dets, maxPerDet, signal })` when they exist, and
+  otherwise fetches `GET {api.baseUrl}/ephemeris` and `POST {api.baseUrl}/track` itself. If the
+  shell's methods take other arguments, remove them or adapt `createMovingService` in `index.js`.
+- **`/track` unavailable.** When `/track` fails and the path spans under 0.5 degree, the plugin falls
+  back to `app.api.search` at the middle of the track and says so. On a 503 it shows a plain message
+  that a real body needs the live data service. The hypothetical body needs no `/ephemeris` (its
+  track is the parallax model of `core/distance.js`) but still needs exposures from `/track` or the
+  search fallback.
+- **At most 360 exposures are loaded** (`MAX_EXPOSURES`), thinned evenly per visit and detector; the
+  plan says how many were found and how many will be loaded.
+- **The view `comoving` is built on the shell's grid dimensions** (`ctx.grid.n`, `ctx.grid.scale`)
+  because the shell calls `viewer.setGrid(data.grid)`. Each frame carries `frame.grid`, a
+  body-centred grid (`{ ra0: 0, dec0: 0, comoving: true }`): offsets from the body, not sky
+  coordinates. The shell's cursor readout under this view therefore shows the loaded target's
+  coordinates, which are not the body's. Not fixed; it needs a shell change.
+- **The shell builds plugin views only when a target is loaded.** "Open in the viewer" calls
+  `app.goTo` at the body's mid-track position when there is none, then sets `view: 'comoving'`.
+  To refresh the view after a new stack the plugin calls `app.rebuildView?.('comoving')`, and without
+  that hook switches the store view to `passes` and back.
+- **Stars are removed only when the body moves more than a star's width between exposures.** Within
+  one visit of a slow body (Sedna, Eris) the stars barely shift, so they are smeared rather than
+  clipped; across visits they clip away. The star-fixed comparison stack is not clipped, on purpose.
+- **Signal-to-noise is empirical:** an aperture at the centre against the scatter of the same
+  aperture on a lattice of empty positions in the stack. The upper limit for an undetected body is
+  three times that scatter, in microJy. It assumes the body is where the ephemeris puts it.
+- **Band depths next to a strong emission feature** (CO next to CO2 in a comet) can read as a small
+  false absorption, because the continuum is taken from both flanks.
+- **Not done or not verified.** `index.js` has no unit tests for its DOM code; it was verified in
+  headless Chromium against the fake app in `demo.html` (plan, load, stack, spectrum, comparison,
+  errors, phone width, keyboard), not inside the real shell, not against real Horizons and not on
+  real SPHEREx data. The Horizons parser was tested against text in the documented format, written
+  by hand. The integrator still has to add `moving` to the plugin list.
+
+## ui-polish (web/ except plugins/ and local/: hooks for plugins, field summary, polish pass)
+
+- **New `app` members (all additive):** `setApi(api)` (also reloads when handed the object already in use;
+  emits `'api'`), `selectAt({ ra, dec, label? })` -> Promise of `app.selection()` (null when no movie is
+  showing), `showSpectrum({ points, binned, title, colorBy, note? })`, `setCaptionNote(textOrNull)`,
+  `showFog()`, plus the aliases the story plugin looks for: `openSkyMap()`, `closeSkyMap()`, `showPanel(id)`.
+- **Captions are decorated in place.** The caption note of every frame of the current movie gets the
+  session notes in front (`setCaptionNote` text, then `SIMULATED` when `/search` said `simulated: true`);
+  the undecorated caption is kept as `frame.captionBase`. In front, because the viewer and the player
+  line shorten a long note with an ellipsis at the end. An exported PNG carries it because the viewer
+  draws the caption into the export.
+- **Simulated badge** shows when `/search` has `simulated: true`, when the caption note set through
+  `setCaptionNote` contains "simulated", or when the frame on screen has a note that starts with
+  "SIMULATED" (how the practice sky marks its frames).
+- **`/search` extras:** `counts` is read as `[{ det, total, returned }]` (the live function) or as an
+  object keyed by detector. Thinning gives "showing N of M exposures" in the field summary and in About
+  this view; `complete === false` gives "The exposure index is still being built; more frames may appear
+  later." in both places.
+- **`api.ephemeris` / `api.track`** accept `signal` inside their options object or as a trailing
+  `{ signal }`. `track` sends `content-type: application/json` (a CORS preflight; the proxy answers OPTIONS).
+- **Loader:** `load({ onSearch })` is called once when the search has answered; `'frames'` progress
+  reports carry `index` and `ok`; `setApi(api)` cancels and drops the caches.
+- **Fog:** `chooseUnopenedCell(counts, { random })` is a new pure export of `web/src/fog/fogmap.js` (the
+  rule the map's own button uses, which now calls it). "Somewhere nobody has looked" on the start page
+  waits at most 5 s for `api.fog()` and then falls back to a random position. `fogMark` is sent once per
+  target (to 0.001 deg) per session, only after a load with at least one frame.
+- **Field summary** (`web/src/ui/fieldsummary.js`, `#fieldsum`): pinned under the measurement panels on
+  desktop, first block of the side column when the panels are stacked. Below 960 px of window height
+  only the selected detector's row of the pass strip is shown, so the plots keep their room.
+- **Scrolling strips:** the view-mode control and the panel tabs scroll sideways with a fade and an arrow
+  button at the overflowing edge (`makeScrollStrip` in layout.js); the active item is always revealed.
+- **Focus:** a mouse or touch click on a segmented control (view, detector, field, stretch, colormap)
+  hands focus to `#viewer`, so the arrow keys and Space keep driving the movie; keyboard use keeps focus.
+- **Blink A/B pickers are hidden on desktop windows under 812 px high** (the viewer is then narrower than
+  the transport row); Blink uses the first and last pass, as in the embed.
+- **Class-prefix collision:** the validate plugin's stylesheet uses `.tbv` / `.tbv-btn`, the prefix of the
+  image viewer, and is injected later, so it restyled the viewer root and blanked its toolbar icons.
+  `web/styles.css` now pins the viewer's own values with `#viewer ...` rules. The plugin should rename
+  its prefix; the override can then go.
+- **Plugin panels on stacked layouts:** `layout.addTab` called `onShow` before returning the handle, so
+  every plugin panel failed to render under 1100 px ("Cannot access 'handle' before initialization").
+  The first call is now deferred by a microtask.
+- **`node --test web/` fails on Node 22.23 before any test runs** ("Cannot find module .../web": a directory
+  argument is not expanded). `node --test "web/**/*.test.js"` runs everything.
+- **Not done in this pass** (seen, not fixed): the date labels of a trail can still overlap when every
+  candidate position is taken (`placeTag` in overlays.js falls back to the first anchor instead of
+  dropping the label); the player line under the timeline still shortens a long note at the end; the
+  readout next to the plugin tool buttons is squeezed to a few characters under about 420 px of viewer
+  width; a missing plugin file is still a browser-logged 404 on the dev server (the page itself only
+  warns); no `og:image` (scrapers do not take data URIs); the per-view "About" texts, the Escape /
+  focus-return audit of the controls sheet and the `?debug=1` timings were wired but not reviewed view
+  by view.

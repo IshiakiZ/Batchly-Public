@@ -1,7 +1,7 @@
 // Tombaugh - SPHEREx blink comparator. Apache-2.0.
 // AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
 
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -14,8 +14,12 @@ import {
   parseSimbadCsv,
   resolveBuiltin,
   resolveName,
+  resetResolveBreaker,
 } from './resolve.js';
 import { UpstreamError } from './irsa.js';
+
+// Every test starts with Strasbourg assumed reachable.
+beforeEach(() => resetResolveBreaker());
 
 // Hand-written in the layout Sesame returns for "-oxp/SNV".
 const SESAME_BARNARD = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -209,7 +213,14 @@ test('resolveName falls back to the built-in table when Sesame is down or slow',
   const a = await resolveName('barnards star', { fetchImpl: down.fetchImpl });
   assert.equal(a.source, 'builtin (approximate)');
   assert.equal(a.ra, 269.452075);
-  assert.equal(down.calls.length, 1); // SIMBAD is not tried for a built-in target
+  // Sesame answered with an error page: SIMBAD and then its CfA mirror are tried before the table.
+  assert.deepEqual(down.calls.map((c) => new URL(c.url).hostname), ['cds.unistra.fr', 'simbad.cds.unistra.fr', 'simbad.harvard.edu']);
+  // While Strasbourg is marked as down, the next name goes straight to the mirror.
+  const next = fetchByHost({ 'simbad.harvard.edu': () => new Response('main_id,ra,dec,pmra,pmdec,plx_value\n"* alf Lyr",279.23473479,38.78368896,200.94,286.23,130.23\n', { status: 200 }) });
+  const vega = await resolveName('Vega', { fetchImpl: next.fetchImpl });
+  assert.equal(vega.source, 'simbad (CfA mirror)');
+  assert.equal(next.calls.length, 1);
+  resetResolveBreaker();
 
   const slow = fetchByHost({ 'cds.unistra.fr': hang });
   const b = await resolveName('WISE 0855-0714', { fetchImpl: slow.fetchImpl, timeoutMs: 20 });
@@ -245,7 +256,7 @@ test('resolveName returns null for unknown names and throws when the services ar
 
   const dead = fetchByHost({});
   await assert.rejects(resolveName('Vega', { fetchImpl: dead.fetchImpl }), (e) => e instanceof UpstreamError && e.retryable === true);
-  assert.equal(dead.calls.length, 2);
+  assert.equal(dead.calls.length, 2); // Sesame gave no answer at all, so straight to the CfA mirror
 
   assert.equal(await resolveName('', { fetchImpl: dead.fetchImpl }), null);
   assert.equal(await resolveName('   ', { fetchImpl: dead.fetchImpl }), null);

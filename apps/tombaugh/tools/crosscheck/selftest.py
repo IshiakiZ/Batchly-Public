@@ -67,7 +67,7 @@ FAULTS = [
      "web/src/core/ephemeris.js", "return [xe, ye * ce - ze * se, ye * se + ze * ce];",
      "return [xe, ye * ce - ze * se, -ye * se + ze * ce];", ["6"], False),
     ("ephemeris: TT - UTC left out (Earth 69 s behind, about 2000 km)",
-     "web/src/core/ephemeris.js", "const jde = mjd + 2400000.5 + TT_MINUS_UTC_DAYS;", "const jde = mjd + 2400000.5;", ["6"], True),
+     "web/src/core/ephemeris.js", "const jde = mjd + 2400000.5 + TT_MINUS_UTC_DAYS;", "const jde = mjd + 2400000.5;", ["6"], False),
     ("ephemeris: obliquity wrong by 0.4 arcsec",
      "web/src/core/ephemeris.js", "export const OBLIQUITY_J2000_DEG = 23.4392911111;", "export const OBLIQUITY_J2000_DEG = 23.4394022222;", ["6"], True),
     ("ephemeris: parallaxOffset adds the Earth instead of subtracting it",

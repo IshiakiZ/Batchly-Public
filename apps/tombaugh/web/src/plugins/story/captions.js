@@ -90,6 +90,7 @@ export function createCaptions(opts = {}) {
   mark.setAttribute('aria-hidden', 'true');
   const tag = el('div', 'tbs-tag');
   tag.hidden = true;
+  tag.setAttribute('data-testid', 'story-tag');
 
   const band = el('div', 'tbs-band');
   band.hidden = true;
@@ -111,7 +112,7 @@ export function createCaptions(opts = {}) {
   const hair = el('div', 'tbs-hair');
   const hairFill = el('i');
   hair.append(hairFill);
-  band.append(urlBox, bandIn, hintEl, hair);
+  band.append(bandIn, tag, hintEl, hair);
 
   const status = el('div', 'tbs-status');
   status.hidden = true;
@@ -124,7 +125,7 @@ export function createCaptions(opts = {}) {
   statusBar.append(statusFill);
   status.append(statusMain, statusSub, statusBar);
 
-  frame.append(guide, mark, tag, band, status);
+  frame.append(guide, mark, urlBox, band, status);
 
   const card = el('div', 'tbs-card');
   card.hidden = true;
@@ -228,9 +229,11 @@ export function createCaptions(opts = {}) {
     layout();
   }
 
-  function announce(parts) {
+  let spoken = '';
+  function announce(parts, extra) {
     if (!live) return;
-    liveEl.textContent = parts.filter(Boolean).join('. ');
+    if (parts) spoken = parts.filter(Boolean).join('. ');
+    liveEl.textContent = [spoken, extra].filter(Boolean).join(' ');
   }
 
   function restartIn(node) {
@@ -302,7 +305,7 @@ export function createCaptions(opts = {}) {
       else hintEl.append(doc.createTextNode(part.text));
     }
     hintEl.hidden = false;
-    announce([message]);
+    announce(null, message);
   }
 
   function setStatus(info) {
@@ -348,7 +351,6 @@ export function createCaptions(opts = {}) {
   function setTag(value) {
     tag.textContent = value || '';
     tag.hidden = !value;
-    layer.classList.toggle('has-tag', !!value);
   }
 
   setRecording(recording);

@@ -30,6 +30,7 @@ PY="${PYTHON:-python3}"
 NODE="${NODE:-node}"
 export NODE
 export CROSSCHECK_OUT="${CROSSCHECK_OUT:-$ROOT/tmp/crosscheck}"
+export PYTHONDONTWRITEBYTECODE=1
 
 if ! "$PY" -c "import numpy, astropy" 2>/dev/null; then
   echo "crosscheck: $PY has no numpy/astropy. Create a virtual environment, pip install numpy astropy," >&2

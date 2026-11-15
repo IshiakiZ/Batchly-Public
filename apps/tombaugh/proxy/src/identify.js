@@ -20,6 +20,9 @@
 import { UpstreamError } from './irsa.js';
 
 export const SIMBAD_TAP_SYNC = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync';
+// The CfA mirror of SIMBAD. Used when Strasbourg is unreachable (it was, for hours, on the
+// night this was written: HTTP 404 "Page unavailable" from every CDS service).
+export const SIMBAD_TAP_MIRROR = 'https://simbad.harvard.edu/simbad/sim-tap/sync';
 export const SIMBAD_PAGE = 'https://simbad.cds.unistra.fr/simbad/sim-id';
 export const IDENTIFY_MIN_RADIUS = 0.001;
 export const IDENTIFY_MAX_RADIUS = 0.1;
@@ -476,8 +479,45 @@ async function readText(response) {
   return text;
 }
 
-/** One POST to SIMBAD under one timeout that covers the headers and the body. */
+// When Strasbourg failed (rather than refused the query), go straight to the mirror for a while.
+let cdsDownUntil = 0;
+const CDS_BREAKER_MS = 10 * 60 * 1000;
+
+/** True when the failure says "this server is down or missing", not "this query is wrong". */
+function serverTrouble(err) {
+  if (!(err instanceof UpstreamError)) return true;
+  if (err.kind === 'timeout' || err.kind === 'network') return true;
+  if (err.kind !== 'http') return false;
+  const status = err.upstreamStatus;
+  return status >= 500 || status === 404 || status === 403 || status === 408 || status === 429;
+}
+
+/** SIMBAD at Strasbourg, then its CfA mirror when Strasbourg is in trouble. */
 async function simbadCsv(query, fetchImpl, timeoutMs) {
+  if (Date.now() >= cdsDownUntil) {
+    try {
+      return await simbadCsvAt(SIMBAD_TAP_SYNC, query, fetchImpl, timeoutMs);
+    } catch (err) {
+      if (!serverTrouble(err)) throw err;
+      cdsDownUntil = Date.now() + CDS_BREAKER_MS;
+    }
+  }
+  try {
+    return await simbadCsvAt(SIMBAD_TAP_MIRROR, query, fetchImpl, timeoutMs);
+  } catch (err) {
+    // The mirror failing too must not hide Strasbourg for ten minutes.
+    if (serverTrouble(err)) cdsDownUntil = 0;
+    throw err;
+  }
+}
+
+/** For tests: forget that Strasbourg was down. */
+export function resetSimbadBreaker() {
+  cdsDownUntil = 0;
+}
+
+/** One POST to a SIMBAD TAP endpoint under one timeout that covers the headers and the body. */
+async function simbadCsvAt(endpoint, query, fetchImpl, timeoutMs) {
   const ms = Math.max(1, Number.isFinite(timeoutMs) ? timeoutMs : 8000);
   const controller = new AbortController();
   let timer = null;
@@ -495,7 +535,7 @@ async function simbadCsv(query, fetchImpl, timeoutMs) {
     }, ms);
   });
   const work = (async () => {
-    const response = await fetchImpl(SIMBAD_TAP_SYNC, {
+    const response = await fetchImpl(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'text/csv, text/plain, */*' },
       body: tapBody(query),
@@ -539,7 +579,7 @@ async function simbadCsv(query, fetchImpl, timeoutMs) {
 function queryRefused(err) {
   if (!(err instanceof UpstreamError)) return false;
   if (err.kind === 'parse') return true;
-  return err.kind === 'http' && err.upstreamStatus >= 400 && err.upstreamStatus < 500 && err.upstreamStatus !== 408 && err.upstreamStatus !== 429;
+  return err.kind === 'http' && err.upstreamStatus >= 400 && err.upstreamStatus < 500 && ![403, 404, 408, 429].includes(err.upstreamStatus);
 }
 
 /**

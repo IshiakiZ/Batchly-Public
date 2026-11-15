@@ -54,12 +54,16 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
   let ticks = [];
   let groupEls = [];
   let dragging = false;
+  let cta = false;
 
   // ---- DOM ------------------------------------------------------------------------------------
   const btnPrev = iconButton('Previous frame (left arrow)', ICON.prev, () => step(-1));
+  btnPrev.dataset.testid = 'prev';
   const btnPlay = iconButton('Play (space)', ICON.play, () => toggle(), 'btn-play');
   btnPlay.setAttribute('aria-pressed', 'false');
+  btnPlay.dataset.testid = 'play';
   const btnNext = iconButton('Next frame (right arrow)', ICON.next, () => step(1));
+  btnNext.dataset.testid = 'next';
 
   const speedSel = h('select', { class: 'select', 'aria-label': 'Playback speed', onchange: () => setSpeed(speedSel.value) });
   for (const s of SPEEDS) speedSel.append(h('option', { value: s.value }, s.label));
@@ -93,7 +97,7 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
   const capTitle = h('span', { class: 'caption-title' });
   const capMeta = h('span', { class: 'caption-meta' });
   const capNote = h('span', { class: 'caption-note' });
-  const caption = h('div', { class: 'caption', 'aria-live': 'off' }, capTitle, capMeta, capNote, count);
+  const caption = h('div', { class: 'caption', 'aria-live': 'off', 'data-testid': 'caption' }, capTitle, capMeta, capNote, count);
   const credit = h('div', { class: 'embed-credit' });
 
   clear(container);
@@ -228,6 +232,11 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
     btnPlay.setAttribute('aria-label', playLabel);
     btnPlay.title = playLabel;
     btnPlay.disabled = !many;
+    btnPlay.setAttribute('aria-disabled', String(!many));
+    // A movie that starts paused (reduced motion) gets a filled Play button until it is first played.
+    btnPlay.classList.toggle('btn-solid', many && !playing && cta);
+    for (const b of [btnPrev, btnNext]) b.title = many ? b.getAttribute('aria-label') : 'Only one frame in this view, nothing to step through';
+    speedSel.title = many ? 'Playback speed' : 'Only one frame in this view';
     btnPrev.disabled = !many;
     btnNext.disabled = !many;
     speedSel.disabled = !many;
@@ -283,6 +292,7 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
   function play() {
     if (frames.length < 2 || playing) return;
     playing = true;
+    cta = false;
     refreshTransport();
     schedule();
     emitState();
@@ -424,6 +434,15 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
     setSpeed,
     isPlaying: () => playing,
     isBlinking: () => blink,
+    /** Re-read the captions of the current frames (they were edited in place). */
+    refresh() {
+      refreshCaption();
+    },
+    /** Make Play the obvious next step (used when a movie starts paused). */
+    setCallToAction(on) {
+      cta = !!on;
+      refreshTransport();
+    },
     setCredit(node) {
       clear(credit);
       if (node) credit.append(node);

@@ -69,7 +69,8 @@ try {
   await page.waitForSelector('[data-testid="story-caption"].is-on');
   const first = await page.textContent('[data-testid="story-caption"] .tbs-text');
   check(/one patch of sky/.test(first), `the tour opens with its first caption ("${first}")`);
-  check((await page.textContent('[data-testid="story-live"]')).includes('one patch of sky'), 'the caption is announced to screen readers');
+  const spoken = await page.textContent('[data-testid="story-live"]');
+  check(spoken.startsWith('Welcome. This is one patch of sky'), `the caption is announced to screen readers ("${spoken}")`);
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await page.waitForFunction(() => document.querySelector('[data-testid="story-spotlight"]').style.opacity === '1');
@@ -136,6 +137,7 @@ try {
   await shot(film, 'caption-flicker');
   await at(7.0, t0);
   check(await film.evaluate(() => document.querySelector('[data-testid="story-spotlight"]').style.opacity === '1'), 'the spotlight is on the star');
+  check((await film.textContent('[data-testid="story-tag"]')) === 'Synthetic data', 'a stand-in picture is labelled "Synthetic data"');
   await shot(film, 'caption-passes');
   await at(11.0, t0);
   await shot(film, 'caption-residual');
@@ -148,15 +150,19 @@ try {
   await at(21.0, t0);
   await shot(film, 'caption-lens');
   await at(23.4, t0);
-  check((await film.textContent('[data-testid="story-url"]')).length > 5, 'the address chip is shown');
+  const address = await film.textContent('[data-testid="story-url"]');
+  check(/view=lens/.test(address) && !/story=|record=/.test(address), `the address chip shows the link to this view ("${address}")`);
   await shot(film, 'caption-link');
   await at(26.0, t0);
   check(await film.evaluate(() => document.querySelector('#map-dialog').open), 'the sky map is open');
-  check(await film.evaluate(() => {
-    const band = document.querySelector('[data-testid="story-caption"]').getBoundingClientRect();
-    const el = document.elementFromPoint(band.left + band.width / 2, band.top + band.height / 2);
-    return !!el && !!el.closest('.tbs-layer');
-  }), 'the caption stays above the sky map dialog');
+  // Is the caption really painted above the modal dialog? Compare the band with and without the layer.
+  const clip = { x: 40, y: 610, width: 600, height: 90 };
+  const withLayer = await film.screenshot({ clip });
+  await film.evaluate(() => (document.querySelector('.tbs-layer').style.visibility = 'hidden'));
+  const withoutLayer = await film.screenshot({ clip });
+  await film.evaluate(() => (document.querySelector('.tbs-layer').style.visibility = ''));
+  check(!withLayer.equals(withoutLayer), 'the caption is painted above the sky map dialog');
+  check(await film.evaluate(() => /12,288/.test(document.querySelector('#map-count').textContent) && document.querySelector('#map-count').getBoundingClientRect().bottom < document.querySelector('[data-testid="story-caption"]').getBoundingClientRect().top), 'the count of opened patches is not hidden behind the caption');
   await shot(film, 'caption-map');
   await at(28.2, t0);
   check(await film.locator('[data-testid="story-card"].is-end.is-on').count() === 1, 'the end card is up');

@@ -17,7 +17,7 @@ export const CSS = `
   --tbs-u: 8px; --tbs-fx: 0px; --tbs-fy: 0px; --tbs-fw: 100vw; --tbs-fh: 100vh;
 }
 .tbs-layer *, .tbs-layer *::before, .tbs-layer *::after { box-sizing: border-box; }
-.tbs-layer p { margin: 0; padding: 0; }
+:where(.tbs-layer) :where(p) { margin: 0; padding: 0; }
 .tbs-layer [hidden] { display: none !important; }
 .tbs-frame { position: absolute; left: var(--tbs-fx); top: var(--tbs-fy); width: var(--tbs-fw); height: var(--tbs-fh); }
 
@@ -51,11 +51,12 @@ export const CSS = `
   border-radius: 2px; font-family: Consolas, "Lucida Console", Menlo, monospace; font-size: 0.92em; text-align: center;
 }
 .tbs-url {
-  position: absolute; left: calc(var(--tbs-u) * 5); right: calc(var(--tbs-u) * 5); bottom: calc(100% + var(--tbs-u) * 1.4);
+  position: absolute; left: calc(var(--tbs-u) * 5); right: calc(var(--tbs-u) * 5); bottom: calc(var(--tbs-u) * 10.6);
   display: flex; pointer-events: none;
 }
+.tbs-layer.is-recording .tbs-url { bottom: auto; top: calc(var(--tbs-u) * 0.75); left: calc(var(--tbs-u) * 17); right: calc(var(--tbs-u) * 2); }
 .tbs-url span {
-  max-width: 100%; padding: calc(var(--tbs-u) * 0.7) calc(var(--tbs-u) * 1.3); background: #171715;
+  max-width: 100%; padding: calc(var(--tbs-u) * 0.45) calc(var(--tbs-u) * 1.2); background: #171715;
   border: max(2px, calc(var(--tbs-u) * 0.18)) solid #E53C27; border-radius: 2px;
   font-family: Consolas, "Lucida Console", Menlo, monospace; font-size: max(12px, calc(var(--tbs-u) * 1.9)); line-height: 1.25;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: tbs-in 150ms ease-out both;
@@ -87,6 +88,7 @@ export const CSS = `
 .tbs-card.is-end .tbs-card__word { font-size: calc(var(--tbs-u) * 6); }
 .tbs-card.is-end .tbs-card__tag { font-size: calc(var(--tbs-u) * 2.4); margin-top: calc(var(--tbs-u) * 1.2); color: rgba(247, 242, 231, 0.88); }
 .tbs-card.is-end .tbs-card__rule { margin: calc(var(--tbs-u) * 2.6) 0 0; }
+.tbs-card.is-end .tbs-card__url { margin-top: calc(var(--tbs-u) * 2.6); }
 
 /* ---- small furniture ---- */
 .tbs-mark {
@@ -95,8 +97,8 @@ export const CSS = `
   font-size: max(11px, calc(var(--tbs-u) * 1.7)); letter-spacing: 0.14em; line-height: 1;
 }
 .tbs-tag {
-  position: absolute; right: calc(var(--tbs-u) * 2); top: calc(var(--tbs-u) * 1.4); padding: 0.3em 0.7em;
-  background: rgba(23, 23, 21, 0.9); border: 1px solid rgba(247, 242, 231, 0.5); border-radius: 2px;
+  position: absolute; right: calc(var(--tbs-u) * 5); top: calc(var(--tbs-u) * 1.5); padding: 0.3em 0.7em;
+  border: 1px solid rgba(247, 242, 231, 0.5); border-radius: 2px; color: rgba(247, 242, 231, 0.9);
   font-family: Consolas, "Lucida Console", Menlo, monospace; font-size: max(11px, calc(var(--tbs-u) * 1.4)); letter-spacing: 0.06em; text-transform: uppercase;
 }
 .tbs-status {
@@ -113,7 +115,6 @@ export const CSS = `
   position: absolute; right: calc(var(--tbs-fx) + 12px); top: calc(var(--tbs-fy) + 12px);
   display: flex; align-items: center; gap: 10px; pointer-events: auto;
 }
-.tbs-layer.has-tag .tbs-controls { top: calc(var(--tbs-fy) + var(--tbs-u) * 1.4 + 40px); }
 .tbs-keys { padding: 5px 9px; background: rgba(23, 23, 21, 0.9); border-radius: 2px; font-size: 12px; color: rgba(247, 242, 231, 0.86); white-space: nowrap; }
 .tbs-stop {
   appearance: none; height: 32px; padding: 0 14px; background: #171715; color: #F7F2E7; border: 1px solid rgba(247, 242, 231, 0.6);
@@ -186,6 +187,12 @@ html.tbs-recording .console { height: calc(100vh - var(--tbs-band-h, 120px)); mi
 html.tbs-recording .stage { padding-top: calc(var(--tbs-top, 40px) + 12px); }
 html.tbs-recording .side { padding-top: var(--tbs-top, 40px); }
 html.tbs-recording.tbs-running, html.tbs-recording.tbs-running * { cursor: none !important; }
+html.tbs-recording.tbs-running :focus-visible { outline-color: transparent !important; }
+/* A modal dialog (the sky map) sits above the band instead of behind it. */
+html.tbs-recording dialog[open] {
+  margin-top: calc(var(--tbs-top, 40px) + 8px); margin-bottom: auto;
+  max-height: calc(100vh - var(--tbs-band-h, 120px) - var(--tbs-top, 40px) - 20px);
+}
 
 @keyframes tbs-in { from { opacity: 0; transform: translateY(calc(var(--tbs-u) * 0.6)); } to { opacity: 1; transform: none; } }
 .tbs-layer.is-still *, .tbs-layer.is-still *::before, .tbs-layer.is-still *::after { animation: none !important; transition: none !important; }

@@ -297,7 +297,20 @@ export function createLightCurvePlot(container) {
 
     if (!state.hasData) {
       svgEl('path', { d: `M${left + 0.5} ${top}V${bottom + 0.5}H${W - right}`, class: 'tbp-axis' }, gAxes);
-      svgEl('text', { x: px((left + W - right) / 2), y: px((top + bottom) / 2 + 4), 'text-anchor': 'middle', class: 'tbp-empty', text: LIGHTCURVE_EMPTY_TEXT }, svg);
+      // Wrapped to the plot width (about 7 px per character), so it is never clipped on a phone.
+      const maxChars = Math.max(14, Math.floor((W - left - right - 16) / 7));
+      const lines = [];
+      let cur = '';
+      for (const word of LIGHTCURVE_EMPTY_TEXT.split(' ')) {
+        if (cur && `${cur} ${word}`.length > maxChars) {
+          lines.push(cur);
+          cur = word;
+        } else cur = cur ? `${cur} ${word}` : word;
+      }
+      if (cur) lines.push(cur);
+      const cx = px((left + W - right) / 2);
+      const t = svgEl('text', { x: cx, y: px((top + bottom) / 2 + 4 - (lines.length - 1) * 9), 'text-anchor': 'middle', class: 'tbp-empty' }, svg);
+      lines.forEach((line, i) => svgEl('tspan', { x: cx, dy: i ? 18 : 0, text: line }, t));
       return;
     }
 

@@ -526,7 +526,12 @@ export async function indexBuildStep(cache, target, opts = {}) {
   const result = (part, done) => ({ release, dir, part, parts, n, done });
 
   const meta = await getJson(cache, metaKeyOf(release, dir));
-  if (meta && meta.version === version && meta.n === n && meta.parts === parts) return result(-1, true);
+  if (meta && meta.version === version && meta.n === n && meta.parts === parts) {
+    // Finished earlier. If the caller got here the manifest may have lost this directory (two
+    // workers finishing at once overwrite each other's manifest), so merge it again.
+    if (opts.updateManifest !== false) await mergeIntoManifest(cache, [meta]);
+    return result(-1, true);
+  }
 
   const have = [];
   let k = 0;

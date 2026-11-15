@@ -26,7 +26,7 @@ function cone(ra, dec, radius) {
 }
 
 /**
- * The three services. `columns` maps our field names to the CSV column names of that service
+ * The services, in the order they are asked. `columns` maps our field names to the CSV column names of that service
  * (lower case). `timeoutMs` is the default per-service timeout.
  */
 export const GAIA_PROVIDERS = [
@@ -38,6 +38,19 @@ export const GAIA_PROVIDERS = [
     query: (ra, dec, radius, limit) =>
       `SELECT TOP ${limit} source_id, ra, dec, pmra, pmdec, parallax, phot_g_mean_mag ` +
       'FROM gaiadr3.gaia_source ' +
+      `WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), ${cone(ra, dec, radius)}) AND phot_g_mean_mag IS NOT NULL ` +
+      'ORDER BY phot_g_mean_mag',
+  },
+  {
+    // GAVO's "lite" copy of DR3 (Heidelberg). It answered in 2.5 s on a night when ESA, VizieR
+    // and IRSA were all down.
+    name: 'gavo',
+    endpoint: 'https://dc.g-vo.org/tap/sync',
+    timeoutMs: 15000,
+    columns: { id: 'source_id', ra: 'ra', dec: 'dec', pmra: 'pmra', pmdec: 'pmdec', parallax: 'parallax', gmag: 'phot_g_mean_mag' },
+    query: (ra, dec, radius, limit) =>
+      `SELECT TOP ${limit} source_id, ra, dec, pmra, pmdec, parallax, phot_g_mean_mag ` +
+      'FROM gaia.dr3lite ' +
       `WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), ${cone(ra, dec, radius)}) AND phot_g_mean_mag IS NOT NULL ` +
       'ORDER BY phot_g_mean_mag',
   },
@@ -134,8 +147,12 @@ export async function gaiaCone(ra, dec, radius, opts = {}) {
   }
   const r = Math.min(GAIA_MAX_RADIUS, Math.max(0.0005, Number.isFinite(radius) ? radius : 0.1));
   const limit = Math.max(1, Math.min(GAIA_MAX_STARS, Math.floor(opts.limit || GAIA_MAX_STARS)));
+  // A staggered race: the next service is asked as soon as the previous one fails, or after
+  // `hedgeMs` without an answer (default 3 s), and the first good answer wins. One dead archive
+  // then costs three seconds, not its whole timeout.
+  const hedgeMs = Number.isFinite(opts.hedgeMs) ? Math.max(0, opts.hedgeMs) : 3000;
   let lastError = null;
-  for (const provider of providers) {
+  const ask = async (provider) => {
     const t0 = Date.now();
     try {
       const text = await tapSyncCsv(provider.endpoint, provider.query(ra, dec, r, limit), {
@@ -149,8 +166,37 @@ export async function gaiaCone(ra, dec, radius, opts = {}) {
     } catch (err) {
       lastError = err instanceof UpstreamError ? err : new UpstreamError(`Gaia (${provider.name}) failed: ${err && err.message}`);
       log(`gaia: ${provider.name} failed after ${Date.now() - t0} ms: ${lastError.message}`);
+      return null;
     }
-  }
+  };
+  const answer = await new Promise((resolve) => {
+    let next = 0;
+    let pending = 0;
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    const start = () => {
+      if (settled || next >= providers.length) return;
+      const provider = providers[next++];
+      pending += 1;
+      if (timer) clearTimeout(timer);
+      timer = next < providers.length ? setTimeout(start, hedgeMs) : null;
+      ask(provider).then((result) => {
+        pending -= 1;
+        if (result) finish(result);
+        else if (next < providers.length) start();
+        else if (pending === 0) finish(null);
+      });
+    };
+    if (providers.length === 0) finish(null);
+    else start();
+  });
+  if (answer) return answer;
   if (lastError && lastError.kind !== 'timeout') {
     throw new UpstreamError(`No Gaia service answered (last: ${lastError.message})`, { kind: lastError.kind, status: 502 });
   }

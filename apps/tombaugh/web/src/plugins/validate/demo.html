@@ -76,7 +76,7 @@
   // moves and varies the way the target table says the real one does.
   const RECIPES = {
     barnard: { seed: 5 },
-    'eps-indi-b': { seed: 9, hideFromGaia: true },
+    'eps-indi-b': { seed: 9, hideFromGaia: true, moverBand: { center: 3.3, sigma: 0.12, depth: 0.6 }, exposuresPerPass: 12 },
     wise0855: null,
     'rw-aur': { seed: 13, moverFactor: 1.6 },
     'r-dra': { seed: 21, moverFactor: 0.45 },
@@ -98,6 +98,7 @@
       const field = makeFakeField({
         ra0: mid.ra, dec0: mid.dec, fov: request.fov, dets: [request.det], passMjds: PASSES, seed: recipe.seed,
         moverPm: [known.pmra, known.pmdec], moverParallax: known.parallax, moverFactor: recipe.moverFactor || 1,
+        moverBand: recipe.moverBand || null, exposuresPerPass: recipe.exposuresPerPass || 8,
         variable: false, nStars: request.fov > 4 ? 26 : 14,
       });
       if (recipe.hideFromGaia) field.gaia.stars = field.gaia.stars.filter((s) => s.id !== 'fake-mover');

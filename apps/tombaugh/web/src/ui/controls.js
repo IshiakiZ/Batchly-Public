@@ -5,7 +5,7 @@
 // view, stretch, colormap and the overlay switches. Every control reads from and writes to the
 // store; nothing here touches the data.
 
-import { h, clear } from './layout.js';
+import { h, clear, makeScrollStrip } from './layout.js';
 import { VIEW_INFO, DETECTOR_RANGES, fmtDistance } from '../pipeline.js';
 import { FOVS, STRETCHES } from '../state.js';
 
@@ -34,7 +34,7 @@ export function sliderFromDist(d) {
  * A radio-style segmented control with roving focus and arrow keys.
  * options: [{ value, label, title }] -> { el, set(value), setDisabled(value, reason), setAllDisabled(reason) }
  */
-export function makeSeg({ label, options, value, onChange, className = 'seg', grid = false }) {
+export function makeSeg({ label, options, value, onChange, className = 'seg', grid = false, afterPointer = null, testIdPrefix = '' }) {
   const el = h('div', { class: className, role: 'radiogroup', 'aria-label': label });
   const buttons = new Map();
   let current = value;
@@ -60,13 +60,17 @@ export function makeSeg({ label, options, value, onChange, className = 'seg', gr
         class: 'seg-btn',
         role: 'radio',
         title: opt.title || null,
-        onclick: () => {
+        onclick: (e) => {
           if (btn.disabled) return;
           if (opt.value !== current) onChange(opt.value);
+          // A mouse or touch click (not Enter/Space, which report detail 0) hands the keyboard
+          // back to the viewer, so the arrow keys and Space keep driving the movie.
+          if (e && e.detail > 0 && afterPointer) afterPointer();
         },
       },
       opt.label,
     );
+    if (testIdPrefix) btn.dataset.testid = `${testIdPrefix}${opt.value}`;
     btn.dataset.value = String(opt.value);
     btn.dataset.baseTitle = opt.title || '';
     buttons.set(opt.value, btn);
@@ -189,16 +193,29 @@ export function createControls({ layout, store, lib = {} }) {
 
   // ---- view mode ------------------------------------------------------------------------------
   clear(els.viewSeg);
+  const focusViewer = () => {
+    try {
+      if (els.viewer && els.controls && !els.controls.classList.contains('is-open')) els.viewer.focus({ preventScroll: true });
+    } catch {
+      // optional
+    }
+  };
   const viewSeg = makeSeg({
     label: 'View mode',
     className: 'seg seg-modes',
     options: VIEW_INFO.map((v) => ({ value: v.id, label: v.label, title: v.hint })),
     value: store.get().view,
     onChange: (view) => store.set({ view, t: 0 }),
+    afterPointer: focusViewer,
+    testIdPrefix: 'view-',
   });
   els.viewSeg.replaceWith(viewSeg.el);
   viewSeg.el.id = 'view-seg';
   els.viewSeg = viewSeg.el;
+  // With plugin views the row can be wider than its box: it scrolls, with a fade and an arrow at
+  // the overflowing edge, and the active mode is always brought into view.
+  const viewStrip = makeScrollStrip(viewSeg.el, { label: 'view modes' });
+  const revealView = () => viewStrip.reveal(viewSeg.button(store.get().view));
   if (!lenses.length || !lib.lensImage) viewSeg.setDisabled('lens', 'Spectral lenses are not available in this build');
   if (!lib.fitSkyModel || !lib.residualLayer) viewSeg.setDisabled('residual', 'Predicted-sky subtraction is not available in this build');
   if (!lib.predictedTrack || !lib.shiftAndStack) viewSeg.setDisabled('distance', 'The distance dial is not available in this build');
@@ -212,6 +229,7 @@ export function createControls({ layout, store, lib = {} }) {
     options: detRanges.map((d) => ({ value: d.det, label: `D${d.det}`, title: `Detector ${d.det}: ${d.min.toFixed(2)}–${d.max.toFixed(2)} ${MICRON}` })),
     value: store.get().det,
     onChange: (det) => store.set({ det, t: 0 }),
+    afterPointer: focusViewer,
   });
 
   const fovValue = h('span', { class: 'ctl-value' });
@@ -220,6 +238,7 @@ export function createControls({ layout, store, lib = {} }) {
     options: FOVS.map((f) => ({ value: f, label: `${f}′`, title: `${f} arcminutes across` })),
     value: store.get().fov,
     onChange: (fov) => store.set({ fov }),
+    afterPointer: focusViewer,
   });
 
   const stretchSeg = makeSeg({
@@ -227,6 +246,7 @@ export function createControls({ layout, store, lib = {} }) {
     options: STRETCHES.map((s) => ({ value: s, label: s, title: { asinh: 'asinh: faint detail and bright stars together', linear: 'linear: brightness as measured', log: 'log: strongest compression', sqrt: 'square root: gentle compression' }[s] })),
     value: store.get().stretch,
     onChange: (stretch) => store.set({ stretch }),
+    afterPointer: focusViewer,
   });
 
   const cmapSeg = makeSeg({
@@ -234,6 +254,7 @@ export function createControls({ layout, store, lib = {} }) {
     options: cmapNames.map((c) => ({ value: c, label: c, title: `${c} colormap` })),
     value: store.get().colormap,
     onChange: (colormap) => store.set({ colormap }),
+    afterPointer: focusViewer,
   });
 
   const gaiaSwitch = makeSwitch({
@@ -441,6 +462,7 @@ export function createControls({ layout, store, lib = {} }) {
 
     if (optsView !== s.view) buildModeOpts(s.view);
     else refreshModeOpts();
+    revealView();
   }
 
   store.subscribe(refresh);
@@ -458,6 +480,7 @@ export function createControls({ layout, store, lib = {} }) {
       extraViews.set(id, { id, label: label || id, title: title || '' });
       viewSeg.add({ value: id, label: label || id, title: title || '' });
       viewSeg.set(store.get().view);
+      revealView();
       if (store.get().view === id) buildModeOpts(id);
       return true;
     },
