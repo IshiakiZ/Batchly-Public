@@ -17,7 +17,7 @@ export const SONIFY_CSS = `
   --tbsn-rule: rgba(247, 242, 231, 0.14);
   --tbsn-raised: rgba(247, 242, 231, 0.05);
   --tbsn-num: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
-  --tbsn-txt: Arial, Helvetica, sans-serif;
+  --tbsn-txt: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   display: grid;
   gap: 12px;
   min-width: 0;

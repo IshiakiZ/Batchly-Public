@@ -11,8 +11,8 @@
   --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-head: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-num: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, Menlo, monospace;
-  --font-mark: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif;
-  --ground: #0b0b0d;
+  --font-mark: var(--font-head);
+  --ground: #050509;
   --muted: #b4b1a8;
   --rule: rgba(255, 255, 255, 0.1);
   --rule-strong: rgba(255, 255, 255, 0.2);
@@ -21,11 +21,12 @@
   --topbar-h: 68px;
   --r-card: 26px;
   --r-tile: 16px;
-  /* The rim of a piece of glass: a hairline all round, light on top, shade below. */
-  --rim: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  --rim-low: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 1px 0.5px rgba(255, 255, 255, 0.34), inset 0 -1px 0.5px rgba(0, 0, 0, 0.34);
-  --drop: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.28);
-  --drop-low: 0 1px 2px rgba(0, 0, 0, 0.4), 0 3px 10px rgba(0, 0, 0, 0.2);
+  /* The edge of a piece of glass: one sharp line of light along the top and the left, no outline. */
+  --rim: inset 1px 1px 0 rgba(255, 255, 255, 0.3);
+  --rim-low: inset 1px 1px 0 rgba(255, 255, 255, 0.28);
+  /* A slight shadow underneath. */
+  --drop: 0 3px 6px rgba(0, 0, 0, 0.32);
+  --drop-low: 0 2px 3px rgba(0, 0, 0, 0.36);
   /* What a piece of glass is filled with when the canvas cannot draw it. */
   --fill: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
   --fill-card: rgba(30, 30, 33, 0.72);
@@ -48,7 +49,7 @@ html[data-embed="1"] body { background: var(--ink); }
 .backdrop { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; pointer-events: none; }
 html[data-screen="boot"] .backdrop, html[data-screen="landing"] .backdrop, html[data-embed="1"] .backdrop, html:not([data-backdrop="on"]) .backdrop { display: none; }
 
-.wordmark { font-family: var(--font-mark); }
+.wordmark { font-family: var(--font-mark); font-weight: 700; }
 .status-title, .empty-title, .about h3, .fs-name, .dialog-title, .panel-title, .simple-name, .simple-title {
   font-family: var(--font-head); font-weight: 700; letter-spacing: -0.015em;
 }
@@ -81,7 +82,7 @@ html[data-backdrop="on"] .tab, html[data-backdrop="on"] .chip, html[data-backdro
 .btn-solid {
   border: 0; font-weight: 600; color: #111;
   background: linear-gradient(180deg, #fffdf8, #ece6d8);
-  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 1px 1px 0 #fff, 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 .btn-solid:hover { background: linear-gradient(180deg, #fff, #f4efe3); }
 .btn-solid:active { transform: scale(0.97); }
@@ -95,7 +96,7 @@ html[data-backdrop="on"] .tab, html[data-backdrop="on"] .chip, html[data-backdro
 .seg-btn:hover { background: rgba(255, 255, 255, 0.07); }
 .seg-btn[aria-checked="true"], .seg-btn[aria-pressed="true"] {
   color: #fff; font-weight: 600; background: rgba(255, 255, 255, 0.17);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .seg-btn[aria-checked="true"]::after, .seg-btn[aria-pressed="true"]::after { display: none; }
 
@@ -103,14 +104,22 @@ html[data-backdrop="on"] .tab, html[data-backdrop="on"] .chip, html[data-backdro
 .topbar, html[data-mode="simple"] .topbar {
   height: calc(var(--topbar-h) - 14px); margin: 10px 14px 0; padding: 0 12px 0 24px; border-radius: 999px; column-gap: 24px;
 }
-.wordmark { font-size: 17px; letter-spacing: 0.16em; }
+.wordmark { font-size: 16px; letter-spacing: 0.24em; }
+/* The search box sits in the true middle of the bar: name on the left, buttons on the right. */
+@media (min-width: 1100px) {
+  .topbar, html[data-mode="simple"] .topbar { grid-template-columns: minmax(0, 1fr) minmax(260px, 520px) minmax(0, 1fr); }
+  .topbar > .brand { grid-column: 1; grid-row: 1; justify-self: start; }
+  .topbar > .search { grid-column: 2; grid-row: 1; }
+  .topbar > .sim-badge { grid-column: 1; grid-row: 1; justify-self: end; }
+  .topbar > .top-actions { grid-column: 3; grid-row: 1; justify-self: end; }
+}
 .tagline { font-size: 11px; letter-spacing: 0; }
 .search-input {
   height: 36px; padding: 0 16px; border-radius: 999px; font-family: var(--font-text); font-size: 14px;
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.16), inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: var(--rim-low), var(--drop-low);
 }
 html[data-mode="simple"] .search-input { border-radius: 999px; }
-.search-input:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55), inset 0 1px 2px rgba(0, 0, 0, 0.45); }
+.search-input:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55), var(--drop-low); }
 .search-field .btn, html[data-mode="simple"] .search-field .btn { height: 36px; border-radius: 999px; padding: 0 18px; }
 .search-pop { top: 44px; border: 0; border-radius: 20px; padding: 16px 18px; background: rgba(34, 34, 38, 0.6); box-shadow: var(--rim), var(--drop); -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6); }
 .sim-badge { border-radius: 999px; }
@@ -176,9 +185,10 @@ html[data-mode="simple"] .player .btn-play::after { font-size: 13px; font-weight
 .player-transport { gap: 6px; }
 .timeline { height: 38px; border-radius: 10px; }
 .tl-label { border-left: 0; padding-left: 2px; font-size: 11.5px; font-weight: 500; }
-.tl-ticks { height: 18px; border-bottom: 0; background: rgba(255, 255, 255, 0.07); border-radius: 999px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1); padding: 0 6px; align-items: center; height: 8px; }
+.tl-ticks { height: 18px; border-bottom: 0; background: rgba(255, 255, 255, 0.07); border-radius: 999px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4); padding: 0 6px; align-items: center; height: 8px; }
 .tl-tick::before { bottom: 50%; height: 4px; width: 4px; margin-left: -2px; margin-bottom: -2px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); }
 .tl-tick.is-wide::before { width: 4px; margin-left: -2px; }
+.tl-tick::before { transition: none; }
 .tl-tick.is-live::before { height: 14px; width: 14px; margin-left: -7px; margin-bottom: -7px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.3); }
 .tl-group { gap: 7px; }
 
@@ -199,13 +209,22 @@ html[data-mode="advanced"] .console { column-gap: 0; }
 .ctl-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
 .ctl .seg-btn { padding: 0 4px; }
 .det-grid { border: 0; gap: 4px; border-radius: 0; }
-.det-grid .seg-btn, .det-grid .seg-btn:nth-child(n) { border: 0; border-radius: 10px; height: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.1); }
-.det-grid .seg-btn[aria-checked="true"], .det-grid .seg-btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.2); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35); }
+.det-grid .seg-btn, .det-grid .seg-btn:nth-child(n) { border: 0; border-radius: 10px; height: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: none; }
+.det-grid .seg-btn[aria-checked="true"], .det-grid .seg-btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.2); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35); }
 .switch { min-height: 34px; font-size: 13px; }
-.switch-track { flex: 0 0 38px; width: 38px; height: 22px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.16); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
-.switch-track::after { top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
-.switch[aria-checked="true"] .switch-track { background: var(--signal); }
-.switch[aria-checked="true"] .switch-track::after { transform: translateX(16px); background: #fff; }
+/* The wide-thumb glass switch of the Batchly site: a pill that slides, green when on. */
+.switch-track { flex: 0 0 52px; width: 52px; height: 24px; border: 0; border-radius: 999px; background: rgba(120, 120, 128, 0.32); box-shadow: none; transition: background-color 220ms ease; }
+.switch-track::after {
+  top: 2px; left: 2px; width: 31px; height: 20px; border-radius: 999px; background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: transform 300ms cubic-bezier(0.3, 1.35, 0.5, 1), background-color 160ms ease;
+}
+.switch:hover .switch-track, .switch[aria-checked="true"] .switch-track { border: 0; }
+.switch[aria-checked="true"] .switch-track { background: #30d158; }
+.switch[aria-checked="true"] .switch-track::after { transform: translateX(17px); background: #fff; }
+/* Pressed, the thumb lifts into clear glass, as it does there. */
+.switch:active .switch-track::after { transform: scale(1.14); background: rgba(255, 255, 255, 0.5); -webkit-backdrop-filter: blur(3px) saturate(1.6); backdrop-filter: blur(3px) saturate(1.6); }
+.switch[aria-checked="true"]:active .switch-track::after { transform: translateX(17px) scale(1.14); background: rgba(255, 255, 255, 0.5); }
 select.select {
   height: 32px; padding: 0 30px 0 14px; border: 0; border-radius: 999px; font-size: 12.5px; background-color: rgba(255, 255, 255, 0.07);
   box-shadow: var(--rim-low), var(--drop-low); background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
@@ -240,7 +259,7 @@ html[data-backdrop="on"][data-mode="advanced"] .side { background: transparent; 
 .tab:hover, html[data-backdrop="on"] .tab:hover { background: rgba(255, 255, 255, 0.07); }
 .tab[aria-selected="true"], html[data-backdrop="on"] .tab[aria-selected="true"] {
   font-weight: 600; color: #fff; background: rgba(255, 255, 255, 0.17);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 .tab[aria-selected="true"]::after { display: none; }
 .side .strip-arrow { top: 8px; bottom: 8px; }
@@ -253,7 +272,7 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
 .cand, .chip { border-radius: var(--r-tile); }
 
 /* ------------------------------------------------------------ the sky page */
-.skyhome-brand .wordmark { font-size: 20px; letter-spacing: 0.18em; }
+.skyhome-brand .wordmark { font-size: 19px; letter-spacing: 0.26em; }
 .skyhome-tag { font-size: 14px; font-weight: 500; letter-spacing: -0.005em; opacity: 0.8; }
 .skyhome-top { padding-top: 18px; }
 .skyhome-input { font-size: 16px; letter-spacing: -0.01em; }
@@ -265,7 +284,7 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
 .skyhome-hint { font-weight: 500; border-radius: 999px; }
 .skyhome-card { border-radius: 999px; padding: 10px 10px 10px 24px; }
 .skyhome-card-name { font-weight: 600; letter-spacing: -0.015em; }
-.skyhome-go { height: 44px; border-radius: 999px; font-weight: 600; border: 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 2px 10px rgba(229, 60, 39, 0.4); }
+.skyhome-go { height: 44px; border-radius: 999px; font-weight: 600; border: 0; box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.4); }
 .skyhome-menu, .picklist { border-radius: 24px; }
 /* The sky page's glass: backdrop.js draws each piece on the canvas under the controls, bending the
    sky behind it. Here: the rim, the shadow and how a press feels. Without the canvas they are frosted. */

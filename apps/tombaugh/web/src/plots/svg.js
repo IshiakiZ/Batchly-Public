@@ -23,7 +23,7 @@ export const STONE = '#77766E';
 export const SIGNAL = '#E53C27';
 
 export const FONT_NUM = 'Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace';
-export const FONT_TXT = 'Arial, Helvetica, sans-serif';
+export const FONT_TXT = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
 
 /** Survey-pass colours. The first three are colour-blind safe against each other for scattered
  * marks on Ink (checked for all pairs under protan/deutan simulation); the fourth is told apart

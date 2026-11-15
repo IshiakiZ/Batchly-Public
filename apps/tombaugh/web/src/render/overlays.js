@@ -17,7 +17,7 @@ import { formatValue, mjdToIso } from './viewmath.js';
 
 export const BRAND = { ink: '#171715', paper: '#F7F2E7', signal: '#E53C27', stone: '#77766E' };
 export const FONT_MONO = 'Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace';
-export const FONT_SANS = 'Arial, Helvetica, sans-serif';
+export const FONT_SANS = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
 /** The interface type of the page, for text that should read as part of it (Simple mode's caption). */
 export const FONT_UI = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif';
 

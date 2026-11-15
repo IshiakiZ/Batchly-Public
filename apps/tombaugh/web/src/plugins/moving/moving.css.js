@@ -19,7 +19,7 @@ export const MOVING_CSS = `
   --tbm-raised: var(--ink-raised, #1E1E1B);
   --tbm-sunken: var(--ink-sunken, #11110F);
   --tbm-num: var(--font-num, Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", monospace);
-  --tbm-text: var(--font-text, Arial, Helvetica, sans-serif);
+  --tbm-text: var(--font-text, -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif);
   color: var(--tbm-paper);
   font-family: var(--tbm-text);
   font-size: 13px;
@@ -72,7 +72,7 @@ export const MOVING_CSS = `
 
 .tbm-card { border: 1px solid var(--tbm-rule); border-radius: 4px; background: var(--tbm-raised); padding: 11px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .tbm-card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.tbm-name { font-family: var(--font-head, "Arial Black", Arial, sans-serif); font-size: 15px; font-weight: 900; letter-spacing: 0.01em; }
+.tbm-name { font-family: var(--font-head, -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif); font-size: 15px; font-weight: 700; letter-spacing: 0.01em; }
 .tbm-kind { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tbm-muted); }
 .tbm-kind-hypo { color: var(--tbm-signal); }
 .tbm-look { color: var(--tbm-muted); }

@@ -34,7 +34,7 @@ export const DATASOURCE_CSS = `
   text-transform: uppercase;
 }
 .tbd-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
-.tbd-now-label { font: 900 15px/1.25 "Arial Black", Arial, Helvetica, sans-serif; }
+.tbd-now-label { font: 900 15px/1.25 "Arial Black", -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; }
 .tbd-muted { color: var(--_muted); }
 .tbd-num { font-family: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace; }
 

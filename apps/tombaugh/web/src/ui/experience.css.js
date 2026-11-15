@@ -26,8 +26,8 @@ export const CSS = `
   --tbx-raise: #1E1E1B;
   --tbx-line: rgba(247, 242, 231, 0.13);
   --tbx-line-strong: rgba(247, 242, 231, 0.30);
-  --tbx-display: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif;
-  --tbx-text: Arial, Helvetica, sans-serif;
+  --tbx-display: -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
+  --tbx-text: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   --tbx-mono: Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
   --tbx-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   box-sizing: border-box;
@@ -115,7 +115,7 @@ export const CSS = `
   margin: 0;
   margin-right: -0.17em;
   font-family: var(--tbx-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: clamp(36px, 5.3vw, 78px);
   line-height: 0.96;
   letter-spacing: 0.17em;
@@ -183,7 +183,7 @@ export const CSS = `
   background: var(--tbx-signal);
   color: var(--tbx-ink);
   font-family: var(--tbx-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -334,7 +334,7 @@ export const CSS = `
 .tbx-card__name, .tbx-card__blurb, .tbx-card__why { display: block; }
 .tbx-card__name {
   font-family: var(--tbx-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: 15px;
   line-height: 1.25;
   letter-spacing: 0.02em;
@@ -414,7 +414,7 @@ export const CSS = `
 .tbx-explain__title {
   margin: 10px 0 0;
   font-family: var(--tbx-display);
-  font-weight: 900;
+  font-weight: 700;
   font-size: 19px;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -513,7 +513,7 @@ export const CSS = `
 .tbx-help.is-open .tbx-help__backdrop { opacity: 1; }
 .tbx-help.is-open .tbx-help__panel { opacity: 1; transform: none; }
 .tbx-help__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.tbx-help__title { margin: 0; font-family: var(--tbx-display); font-weight: 900; font-size: 17px; letter-spacing: 0.04em; }
+.tbx-help__title { margin: 0; font-family: var(--tbx-display); font-weight: 700; font-size: 17px; letter-spacing: 0.04em; }
 .tbx-help__list {
   display: grid;
   grid-template-columns: auto 1fr;

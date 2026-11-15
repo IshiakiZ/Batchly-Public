@@ -21,7 +21,7 @@ export const VALIDATE_CSS = `
   --tbq-rule-strong: rgba(247, 242, 231, 0.3);
   --tbq-raised: rgba(247, 242, 231, 0.05);
   --tbq-num: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
-  --tbq-txt: Arial, Helvetica, sans-serif;
+  --tbq-txt: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   display: grid;
   gap: 14px;
   min-width: 0;

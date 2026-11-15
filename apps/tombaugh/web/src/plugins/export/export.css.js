@@ -20,8 +20,8 @@ export const EXPORT_CSS = `
   --_rule: var(--rule, rgba(247, 242, 231, 0.14));
   --_rule-strong: var(--rule-strong, rgba(247, 242, 231, 0.3));
   --_hover: var(--hover, rgba(247, 242, 231, 0.07));
-  --_head: var(--font-head, "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif);
-  --_text: var(--font-text, Arial, Helvetica, sans-serif);
+  --_head: var(--font-head, -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif);
+  --_text: var(--font-text, -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif);
   --_num: var(--font-num, Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace);
 }
 .tbe {
@@ -41,7 +41,7 @@ export const EXPORT_CSS = `
   width: 64px; height: 64px; display: block; background: var(--_sunken);
   border: 1px solid var(--_rule-strong); image-rendering: pixelated;
 }
-.tbe-what { font-family: var(--_head); font-weight: 900; font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
+.tbe-what { font-family: var(--_head); font-weight: 700; font-size: 15px; line-height: 1.2; overflow-wrap: anywhere; }
 .tbe-sub { margin-top: 4px; font-family: var(--_num); font-size: 12px; color: var(--_muted); overflow-wrap: anywhere; }
 
 /* sections */

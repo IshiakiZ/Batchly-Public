@@ -21,7 +21,7 @@ export const PLOT_CSS = `
   --_muted: var(--tbp-muted, rgba(247, 242, 231, 0.66));
   --_raised: var(--tbp-raised, #23231F);
   --_num: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
-  --_txt: Arial, Helvetica, sans-serif;
+  --_txt: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   display: block;
   margin: 0;
   padding: 0;

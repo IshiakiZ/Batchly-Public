@@ -19,7 +19,7 @@ export const IDENTIFY_CSS = `
   --tbi-rule: rgba(247, 242, 231, 0.14);
   --tbi-raised: rgba(247, 242, 231, 0.05);
   --tbi-num: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
-  --tbi-txt: Arial, Helvetica, sans-serif;
+  --tbi-txt: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   display: grid;
   gap: 18px;
   min-width: 0;

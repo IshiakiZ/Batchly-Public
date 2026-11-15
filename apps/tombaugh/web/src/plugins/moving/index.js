@@ -52,7 +52,7 @@ const SIGNAL = '#E53C27';
 const STONE = '#77766E';
 const MUTED = '#ADA99E';
 const FONT_NUM = 'Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", monospace';
-const FONT_TXT = 'Arial, Helvetica, sans-serif';
+const FONT_TXT = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
 const TOOL_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3">'
   + '<ellipse cx="8" cy="8" rx="6.5" ry="3" transform="rotate(-24 8 8)"/><circle cx="12.6" cy="5.2" r="1.5" fill="currentColor" stroke="none"/></svg>';
 

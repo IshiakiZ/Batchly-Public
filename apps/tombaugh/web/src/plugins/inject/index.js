@@ -277,7 +277,7 @@ export function curveSvg(data, { width = 340, height = 214 } = {}) {
   const head = `<svg class="tbj-chart" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Fraction of planted bodies recovered against brightness">`;
   if (!pts.length) {
     return `${head}<rect x="${m.l}" y="${m.t}" width="${w}" height="${h}" fill="none" stroke="${STONE}" stroke-opacity="0.5"/>`
-      + `<text x="${m.l + w / 2}" y="${m.t + h / 2}" fill="${PAPER}" fill-opacity="0.68" font-family="Arial, Helvetica, sans-serif" font-size="12" text-anchor="middle">No result yet</text></svg>`;
+      + `<text x="${m.l + w / 2}" y="${m.t + h / 2}" fill="${PAPER}" fill-opacity="0.68" font-family="-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif" font-size="12" text-anchor="middle">No result yet</text></svg>`;
   }
   let lo = Math.log10(pts[0].flux_uJy), hi = lo;
   for (const p of pts) { lo = Math.min(lo, Math.log10(p.flux_uJy)); hi = Math.max(hi, Math.log10(p.flux_uJy)); }
@@ -302,7 +302,7 @@ export function curveSvg(data, { width = 340, height = 214 } = {}) {
     out.push(`<line x1="${f1(x)}" x2="${f1(x)}" y1="${m.t + h}" y2="${m.t + h + 4}" stroke="${STONE}" stroke-width="1"/>`);
     out.push(`<text x="${f1(x)}" y="${m.t + h + 15}" fill="${PAPER}" fill-opacity="0.68" font-family="${NUM}" font-size="10" text-anchor="middle">${label}</text>`);
   }
-  out.push(`<text x="${m.l + w / 2}" y="${height - 6}" fill="${PAPER}" fill-opacity="0.68" font-family="Arial, Helvetica, sans-serif" font-size="11" text-anchor="middle">brightness at ${esc(Number(refWave.toFixed(2)))} µm, µJy</text>`);
+  out.push(`<text x="${m.l + w / 2}" y="${height - 6}" fill="${PAPER}" fill-opacity="0.68" font-family="-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif" font-size="11" text-anchor="middle">brightness at ${esc(Number(refWave.toFixed(2)))} µm, µJy</text>`);
   // blind candidate-list curve
   const blind = pts.filter((p) => isNum(p.blindCompleteness));
   if (blind.length > 1) {
@@ -336,11 +336,11 @@ export function curveSvg(data, { width = 340, height = 214 } = {}) {
     if (anchor === 'start' && m.l + w - x < room && x - m.l >= room) anchor = 'end';
     const ty = top ? m.t + 11 : m.t + h - 8;
     out.push(`<line x1="${f1(x)}" x2="${f1(x)}" y1="${m.t}" y2="${m.t + h}" stroke="${PAPER}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="1 3"/>`);
-    out.push(`<text x="${f1(x + (anchor === 'start' ? 5 : -5))}" y="${ty}" fill="${PAPER}" fill-opacity="0.85" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="${anchor}">${esc(text)}</text>`);
+    out.push(`<text x="${f1(x + (anchor === 'start' ? 5 : -5))}" y="${ty}" fill="${PAPER}" fill-opacity="0.85" font-family="-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif" font-size="10" text-anchor="${anchor}">${esc(text)}</text>`);
   } else if (isNum(cmp)) {
     const left = cmp < lo;
     const x = left ? m.l + 5 : m.l + w - 5;
-    out.push(`<text x="${x}" y="${left ? m.t + 11 : m.t + h - 8}" fill="${PAPER}" fill-opacity="0.85" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="${left ? 'start' : 'end'}">${left ? '← ' : ''}${esc(data.compare.label)}, ${esc(formatFlux(data.compare.flux_uJy))} µJy${left ? '' : ' →'}</text>`);
+    out.push(`<text x="${x}" y="${left ? m.t + 11 : m.t + h - 8}" fill="${PAPER}" fill-opacity="0.85" font-family="-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif" font-size="10" text-anchor="${left ? 'start' : 'end'}">${left ? '← ' : ''}${esc(data.compare.label)}, ${esc(formatFlux(data.compare.flux_uJy))} µJy${left ? '' : ' →'}</text>`);
   }
   // the limit
   if (data.limit && data.limit.status === 'ok') {

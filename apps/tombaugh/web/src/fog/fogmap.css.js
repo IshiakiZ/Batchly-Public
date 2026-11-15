@@ -86,9 +86,9 @@ export const FOG_CSS = `
   line-height: 1.5;
 }
 .tb-fog-readout .tb-fog-deg { color: var(--fog-dim); }
-.tb-fog-readout .tb-fog-state { font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.tb-fog-readout .tb-fog-state { font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-size: 14px; }
 .tb-fog-readout .tb-fog-state.is-new { color: var(--fog-paper); font-weight: 700; }
-.tb-fog-readout .tb-fog-hint { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: var(--fog-dim); }
+.tb-fog-readout .tb-fog-hint { font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-size: 13px; color: var(--fog-dim); }
 .tb-fog-legend {
   display: flex;
   flex-wrap: wrap;

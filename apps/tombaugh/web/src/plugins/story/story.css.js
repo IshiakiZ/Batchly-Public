@@ -13,7 +13,7 @@ export const CSS = `
   position: fixed; inset: 0; z-index: 2147483000; margin: 0; padding: 0; border: 0;
   width: 100%; height: 100%; max-width: none; max-height: none; overflow: hidden;
   background: transparent; color: #F7F2E7; pointer-events: none;
-  font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.3; text-align: left;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-size: 14px; line-height: 1.3; text-align: left;
   --tbs-u: 8px; --tbs-fx: 0px; --tbs-fy: 0px; --tbs-fw: 100vw; --tbs-fh: 100vh;
 }
 .tbs-layer *, .tbs-layer *::before, .tbs-layer *::after { box-sizing: border-box; }
@@ -34,7 +34,7 @@ export const CSS = `
 .tbs-words { min-width: 0; }
 .tbs-words.is-in { animation: tbs-in 150ms ease-out both; }
 .tbs-title {
-  font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif; font-weight: 900;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-weight: 700;
   font-size: max(11px, calc(var(--tbs-u) * 1.7)); line-height: 1.15; letter-spacing: 0.1em; text-transform: uppercase;
   margin-bottom: calc(var(--tbs-u) * 0.4);
 }
@@ -70,7 +70,7 @@ export const CSS = `
   display: flex; flex-direction: column; justify-content: center; padding: 0 calc(var(--tbs-u) * 9);
 }
 .tbs-card__word {
-  font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif; font-weight: 900;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-weight: 700;
   font-size: calc(var(--tbs-u) * 9); line-height: 1; letter-spacing: 0.1em; margin-left: -0.04em;
 }
 .tbs-card__rule { width: calc(var(--tbs-u) * 9); height: max(3px, calc(var(--tbs-u) * 0.5)); margin: calc(var(--tbs-u) * 2.6) 0 calc(var(--tbs-u) * 2.2); background: #E53C27; }
@@ -82,7 +82,7 @@ export const CSS = `
 .tbs-card__lines { margin-top: calc(var(--tbs-u) * 2.2); display: grid; gap: calc(var(--tbs-u) * 0.6); }
 .tbs-card__line { font-size: calc(var(--tbs-u) * 2.2); line-height: 1.25; color: rgba(247, 242, 231, 0.88); }
 .tbs-card__line.is-team {
-  font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   font-size: calc(var(--tbs-u) * 1.9); color: #F7F2E7;
 }
 .tbs-card.is-end .tbs-card__word { font-size: calc(var(--tbs-u) * 6); }
@@ -93,7 +93,7 @@ export const CSS = `
 /* ---- small furniture ---- */
 .tbs-mark {
   position: absolute; left: calc(var(--tbs-u) * 2); top: calc(var(--tbs-u) * 1.6);
-  font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif; font-weight: 900;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-weight: 700;
   font-size: max(11px, calc(var(--tbs-u) * 1.7)); letter-spacing: 0.14em; line-height: 1;
 }
 .tbs-tag {
@@ -150,7 +150,7 @@ export const CSS = `
 .tbs-spot__label {
   position: absolute; left: 0; bottom: calc(100% + 6px); padding: 0.28em 0.6em; background: #171715; color: #F7F2E7;
   border-left: max(2px, calc(var(--tbs-u) * 0.2)) solid #E53C27;
-  font-family: Arial, Helvetica, sans-serif; font-weight: bold; font-size: max(12px, calc(var(--tbs-u) * 1.5)); line-height: 1.2; white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif; font-weight: bold; font-size: max(12px, calc(var(--tbs-u) * 1.5)); line-height: 1.2; white-space: nowrap;
 }
 .tbs-spot.is-round .tbs-spot__label { left: calc(100% + 8px); bottom: auto; top: 50%; transform: translateY(-50%); }
 .tbs-spot.is-round.is-left .tbs-spot__label { left: auto; right: calc(100% + 8px); border-left: 0; border-right: max(2px, calc(var(--tbs-u) * 0.2)) solid #E53C27; }

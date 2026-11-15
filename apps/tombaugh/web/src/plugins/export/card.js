@@ -27,8 +27,8 @@ export const STONE = '#77766E';
 const PAPER_SOFT = 'rgba(247, 242, 231, 0.78)';
 const RULE = 'rgba(247, 242, 231, 0.22)';
 
-const FONT_HEAD = '"Arial Black", "Arial Bold", Arial, Helvetica, sans-serif';
-const FONT_TEXT = 'Arial, Helvetica, sans-serif';
+const FONT_HEAD = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
+const FONT_TEXT = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
 const FONT_NUM = 'Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace';
 
 const clean = (v) => (v === null || v === undefined ? '' : String(v).replace(/\s+/g, ' ').trim());

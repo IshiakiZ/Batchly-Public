@@ -93,26 +93,44 @@ float fieldAt(vec2 q, float t) {
   w += 0.2 * vec2(sin(w.y * 3.1 - t * 0.09 + 1.3), cos(w.x * 2.7 + t * 0.07 + 2.1));
   return sin(w.x * 1.9 + t * 0.08) + sin(w.y * 2.3 - t * 0.06) + 0.6 * sin((w.x + w.y) * 1.4 + t * 0.05);
 }
-// The ground at p (CSS px, y down). soft 0..1 is how frosted the view is: lines widen and fade.
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+// One depth of stars: a grid of cells (CSS px), some holding one star. soft spreads and dims them.
+vec3 starLayer(vec2 p, float cell, float chance, float bright, float soft, float t) {
+  vec2 id = floor(p / cell);
+  float h = hash21(id);
+  float h2 = fract(h * 57.31);                  // two more numbers from the one hash: cheap
+  float h3 = fract(h * 113.7);
+  vec2 pos = (id + 0.5 + (vec2(h2, h3) - 0.5) * 0.7) * cell;
+  float size = mix(0.7, 1.3, h3) + soft * 4.0;
+  float d = length(p - pos);
+  float core = 1.0 - smoothstep(0.0, size, d);
+  float glow = exp(-d * d / (size * size * 9.0)) * 0.16;
+  float twinkle = 0.82 + 0.18 * sin(t * (0.2 + h * 0.4) + h * 50.0);
+  float lum = step(1.0 - chance, h) * bright * (0.2 + 0.8 * h2 * h2) * twinkle * (core + glow) / (1.0 + soft * 5.0);
+  return mix(vec3(0.76, 0.84, 1.0), vec3(1.0, 0.9, 0.8), h3) * lum;
+}
+// The ground at p (CSS px, y down): deep space. A dark field, two faint clouds of colour (violet
+// and blue) that shift over minutes, and three depths of small stars drifting very slowly.
+// soft 0..1 is how frosted the view is.
 vec3 ground(vec2 p, float soft) {
   vec2 q = p / uRes.y;
-  float t = uTime;
+  float t = uTime * 0.22;
   float ar = uRes.x / uRes.y;
   float f = fieldAt(q, t);
   vec2 a = vec2(ar * (0.84 + 0.05 * sin(t * 0.06)), 0.0 + 0.06 * cos(t * 0.05));
   vec2 b = vec2(ar * (0.04 + 0.05 * cos(t * 0.055)), 1.0 + 0.05 * sin(t * 0.06));
-  vec2 c = vec2(ar * (0.5 + 0.2 * sin(t * 0.03)), 0.5 + 0.2 * cos(t * 0.037));
-  vec3 col = vec3(0.036, 0.037, 0.046);
-  col += vec3(0.90, 0.26, 0.17) * 0.085 * exp(-dot(q - a, q - a) * 1.3);
-  col += vec3(0.25, 0.40, 0.80) * 0.17 * exp(-dot(q - b, q - b) * 1.2);
-  col += vec3(0.97, 0.95, 0.91) * 0.03 * exp(-dot(q - c, q - c) * 2.4);
-  col += vec3(0.97, 0.95, 0.91) * 0.03 * smoothstep(-0.6, 2.4, f);
-  float n = f * 2.4;
-  float fw = max(fwidth(n), 0.0005);
-  float d = abs(fract(n - 0.5) - 0.5);
-  float line = 1.0 - smoothstep(0.0, fw * (0.9 + soft * 7.0), d);
-  float major = 1.0 - smoothstep(0.0, fw * (1.4 + soft * 7.0), abs(fract(n * 0.25 - 0.5) - 0.5) * 4.0);
-  col += vec3(0.97, 0.95, 0.91) * (0.06 * line + 0.06 * major) * (1.0 - 0.72 * soft);
+  vec3 col = vec3(0.016, 0.015, 0.024);
+  col += vec3(0.56, 0.30, 0.98) * 0.105 * exp(-dot(q - a, q - a) * 1.3);
+  col += vec3(0.22, 0.30, 0.85) * 0.085 * exp(-dot(q - b, q - b) * 1.2);
+  col += vec3(0.60, 0.42, 0.95) * 0.016 * smoothstep(-0.6, 2.4, f);
+  vec2 drift = vec2(0.55, 0.2) * uTime;      // CSS px a second for the nearest stars
+  col += starLayer(p + drift, 150.0, 0.55, 0.8, soft, uTime);
+  col += starLayer(p + drift * 0.55 + 31.0, 84.0, 0.5, 0.46, soft, uTime);
+  col += starLayer(p + drift * 0.28 + 77.0, 46.0, 0.45, 0.26, soft, uTime);
   return col;
 }
 float grain(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453) - 0.5; }
@@ -192,7 +210,6 @@ void main() {
   vec2 g = vec2(sdRound(o + e.xy, hs, uRadius) - sdRound(o - e.xy, hs, uRadius), sdRound(o + e.yx, hs, uRadius) - sdRound(o - e.yx, hs, uRadius));
   vec2 n = g / max(length(g), 0.0001);          // points out of the glass
   float bevel = max(1.0, min(uOpt.x, min(hs.x, hs.y)));
-  float k = 1.0 - clamp(-d / bevel, 0.0, 1.0);   // 1 at the rim, 0 on the flat face
   // The glass is a low dome: its face bends the view a little, its round edge bends it hard.
   // The bend reaches further in than the bevel you can see, as it does in a real lens.
   float zone = max(1.0, min(bevel * 2.4, min(hs.x, hs.y)));
@@ -200,17 +217,19 @@ void main() {
   float slope = s * s * s / sqrt(1.0 - 0.96 * s * s);
   // The edge shows what lies further in, squeezed: a line behind the glass breaks at the rim.
   vec2 off = -n * slope * zone * uOpt.y * 0.32;
-  // No branch here: the three samples meet where the edge ends, so no seam shows. Red and blue
-  // bend by different amounts, so a star near the rim grows a thin colour fringe.
-  vec3 col = vec3(ground(p + off * 1.2, uOpt.z).r, ground(p + off, uOpt.z).g, ground(p + off * 0.8, uOpt.z).b);
-  col = col * uGain * (1.0 + 0.35 * min(slope, 2.0)) + uOpt.w;
+  // Red and blue bend by different amounts, so a star near the rim grows a thin colour fringe.
+  // On the flat face nothing bends: one look is enough there (and three times cheaper).
+  vec3 col;
+  if (slope > 0.004) {
+    col = vec3(ground(p + off * 1.2, uOpt.z).r, ground(p + off, uOpt.z).g, ground(p + off * 0.8, uOpt.z).b);
+  } else {
+    col = ground(p, uOpt.z);
+  }
+  col = col * uGain * (1.0 + 0.12 * min(slope, 2.0)) + uOpt.w;
   col += vec3(0.022) * (0.5 - o.y / max(hs.y, 1.0) * 0.5); // the face catches a little more light at the top
-  vec2 L = normalize(vec2(-0.55, -0.83));        // toward the light: up and to the left
-  float lit = max(dot(n, L), 0.0);
-  float back = max(dot(n, -L), 0.0);
-  col += vec3(1.0, 0.98, 0.95) * ((0.46 * lit + 0.20 * back) * pow(k, 5.0) + (0.09 * lit + 0.03) * pow(k, 2.0));
-  col += vec3(0.035) * pow(k, 4.0);
-  col -= vec3(0.03) * back * k * (1.0 - k) * 4.0; // a thin shade inside the far edge
+  // One sharp line of light along the top and the left edge, and nothing round the rest.
+  float lit = smoothstep(0.15, 0.75, max(-n.x, -n.y));
+  col += vec3(1.0, 0.98, 0.95) * 0.2 * lit * (1.0 - smoothstep(0.0, 1.4, -d));
   col += grain(gl_FragCoord.xy) / 255.0;
   gl_FragColor = vec4(col * aa, aa) * uFade;
 }`;

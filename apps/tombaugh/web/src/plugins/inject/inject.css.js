@@ -20,7 +20,7 @@ export const INJECT_CSS = `
   --tbj-rule-strong: rgba(247, 242, 231, 0.3);
   --tbj-raised: rgba(247, 242, 231, 0.05);
   --tbj-num: Consolas, "Cascadia Mono", Menlo, "DejaVu Sans Mono", monospace;
-  --tbj-txt: Arial, Helvetica, sans-serif;
+  --tbj-txt: -apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   display: grid;
   gap: 16px;
   min-width: 0;

@@ -57,7 +57,7 @@ const SIGNAL = '229, 60, 39';
 const STONE = '119, 118, 110';
 const DEEP = '#0c0c0b'; // the unopened sky: a shade darker than Ink
 const MONO = 'Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace';
-const SANS = 'Arial, Helvetica, sans-serif';
+const SANS = '-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, Inter, Roboto, Helvetica Neue, Arial, sans-serif';
 const LIT_LEVELS = 10;
 const D2R = Math.PI / 180;
 
