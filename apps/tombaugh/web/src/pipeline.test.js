@@ -463,7 +463,25 @@ test('measureMotion follows a source from pass to pass and compares it with Gaia
   assert.equal(out.gaia.star, star);
   assert.equal(out.gaia.total, 18000);
 
-  assert.deepEqual(measureMotion({}, layers, GRID, ra, dec), { track: [], measured: null, gaia: null, saturated: false });
+  assert.equal(out.catalogue, null, 'no table given, no catalogue comparison');
+
+  // A named object Gaia does not list: the matched Gaia star is a slow one that happens to be
+  // near, so the published motion from the table is offered beside it, and `gaia` is untouched.
+  const slow = { ra, dec, pmra: 12, pmdec: -5 };
+  const named = { name: 'Test dwarf', ra, dec, epoch: 2000, pmra: -18500, pmdec: 300, parallax: 0 };
+  const pick = { ...lib, matchGaia: (list) => list[0] || null };
+  const withTable = measureMotion(pick, layers, GRID, ra, dec, { stars: [slow], known: [named, { name: 'Slow star', ra, dec, pmra: 5, pmdec: 5 }], startMjd: 60801 });
+  assert.equal(withTable.gaia.star, slow);
+  assert.equal(withTable.catalogue.name, 'Test dwarf');
+  assert.ok(Math.abs(withTable.catalogue.total - Math.hypot(18500, 300)) < 1e-6);
+  // When the Gaia star matched is that same object, Gaia's value stands alone.
+  const same = measureMotion(pick, layers, GRID, ra, dec, { stars: [star], known: [named], startMjd: 60801 });
+  assert.equal(same.gaia.star, star);
+  assert.equal(same.catalogue, null);
+  // A table of slow stars only adds nothing.
+  assert.equal(measureMotion(pick, layers, GRID, ra, dec, { stars: [slow], known: [{ name: 'Slow star', ra, dec, pmra: 5, pmdec: 5 }] }).catalogue, null);
+
+  assert.deepEqual(measureMotion({}, layers, GRID, ra, dec), { track: [], measured: null, gaia: null, catalogue: null, saturated: false });
   const noFit = measureMotion(gridLib, layers.slice(0, 3), GRID, ra, dec);
   assert.equal(noFit.track.length, 1);
   assert.equal(noFit.measured, null, 'one pass gives a position but no motion');

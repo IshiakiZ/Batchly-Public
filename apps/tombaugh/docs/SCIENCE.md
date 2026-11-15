@@ -388,7 +388,10 @@ clicks.
 3. **Compare.** The nearest Gaia DR3 source is moved from epoch 2016.0 to each observation date
    with the standard model of uniform space motion, applied as a vector so that it is exact for a
    10 arcsec/yr star over a decade, plus the parallax for Earth's position on that date. That is
-   the expected track. The motion meter shows the measured vector beside Gaia's.
+   the expected track. The motion meter shows the measured vector beside Gaia's. For a fast
+   named object that Gaia does not list (some brown dwarfs), it shows the published motion from
+   the built-in target table instead and labels it "catalogue"; a fit under 3 sigma that has
+   the catalogued size and direction is reported as consistent, never as a detection.
 
 **Saturated stars.** A star with a masked core cannot be centroided at its peak. Its position is
 taken from the unsaturated light around the flagged core (`centroidWings` in

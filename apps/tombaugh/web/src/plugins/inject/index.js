@@ -322,13 +322,21 @@ export function curveSvg(data, { width = 340, height = 214 } = {}) {
   if (cmpInside) {
     // The curve runs along the bottom at the faint end and along the top at the bright end, so
     // the label goes where the curve is not.
+    // The curve rises to the right, so the free corners are the top left and the bottom right:
+    // a label at the top reads leftward from its line, one at the bottom rightward, unless the
+    // plot edge leaves no room for it.
     const x = X(data.compare.flux_uJy);
-    const anchor = x > m.l + w * 0.7 ? 'end' : 'start';
     let nearest = pts[0];
     for (const p of pts) if (Math.abs(Math.log10(p.flux_uJy) - cmp) < Math.abs(Math.log10(nearest.flux_uJy) - cmp)) nearest = p;
-    const ty = nearest.completeness > 0.5 ? m.t + h - 8 : m.t + 11;
+    const top = !(nearest.completeness > 0.5);
+    const text = `${data.compare.label}, ${formatFlux(data.compare.flux_uJy)} µJy`;
+    const room = text.length * 5.4 + 8;
+    let anchor = top ? 'end' : 'start';
+    if (anchor === 'end' && x - m.l < room) anchor = 'start';
+    if (anchor === 'start' && m.l + w - x < room && x - m.l >= room) anchor = 'end';
+    const ty = top ? m.t + 11 : m.t + h - 8;
     out.push(`<line x1="${f1(x)}" x2="${f1(x)}" y1="${m.t}" y2="${m.t + h}" stroke="${PAPER}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="1 3"/>`);
-    out.push(`<text x="${f1(x + (anchor === 'start' ? 5 : -5))}" y="${ty}" fill="${PAPER}" fill-opacity="0.85" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="${anchor}">${esc(data.compare.label)}, ${esc(formatFlux(data.compare.flux_uJy))} µJy</text>`);
+    out.push(`<text x="${f1(x + (anchor === 'start' ? 5 : -5))}" y="${ty}" fill="${PAPER}" fill-opacity="0.85" font-family="Arial, Helvetica, sans-serif" font-size="10" text-anchor="${anchor}">${esc(text)}</text>`);
   } else if (isNum(cmp)) {
     const left = cmp < lo;
     const x = left ? m.l + 5 : m.l + w - 5;

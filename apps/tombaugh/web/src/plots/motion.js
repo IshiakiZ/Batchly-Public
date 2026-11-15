@@ -102,9 +102,12 @@ function normalizePm(pm) {
  * The one-line verdict.
  * @param {{ pmra:number, pmdec:number, total?:number, errTotal?:number }|null} measured mas/yr
  * @param {{ pmra:number, pmdec:number, total?:number }|null} gaia mas/yr, or null for no Gaia star
- * @param {{ passes?: number }} [opts] number of survey passes in the track, when known
+ * @param {{ passes?: number }} [opts] number of survey passes in the track, when known.
+ *   A `gaia` object with source 'catalogue' is a published motion from the target table, for an
+ *   object Gaia does not list; the sentence then says "the catalogue" instead of "Gaia".
  * @returns {{ kind:'few'|'agree'|'disagree'|'unexplained'|'static'|'measured', text:string,
- *   signal:boolean, sigma?:number, unit:'arcsec/yr'|'mas/yr' }}
+ *   signal:boolean, sigma?:number, weak?:boolean, unit:'arcsec/yr'|'mas/yr' }}
+ *   `weak` marks an agreement where the measurement alone is under 3 sigma.
  */
 export function motionVerdict(measured, gaia, opts = {}) {
   const m = normalizePm(measured);
@@ -113,6 +116,9 @@ export function motionVerdict(measured, gaia, opts = {}) {
   }
   const g = normalizePm(gaia);
   const gaiaPm = !!g && isNum(g.total);
+  const table = !!gaia && gaia.source === 'catalogue';
+  const Says = table ? 'The catalogue says' : 'Gaia says';
+  const says = table ? 'the catalogue says' : 'Gaia says';
   const hasErr = isNum(m.errTotal);
   // Quote arcsec/yr once anything on the line (value, Gaia, or the upper limit) reaches 0.1.
   const arcsec = Math.max(m.total + (hasErr ? 2 * m.errTotal : 0), gaiaPm ? g.total : 0) >= 100;
@@ -123,15 +129,32 @@ export function motionVerdict(measured, gaia, opts = {}) {
 
   if (!significant) {
     const upper = hasErr ? m.total + 2 * m.errTotal : NaN;
+    // Short of a detection by itself, yet the size and direction a catalogue says it should
+    // have, and that motion is large enough to show here: say both, and claim no more.
+    if (hasErr && gaiaPm && m.total >= 2 * m.errTotal && g.total >= 2 * m.errTotal
+      && isNum(m.pmra) && isNum(m.pmdec) && isNum(g.pmra) && isNum(g.pmdec)) {
+      const diff = Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec);
+      if (diff <= 2 * m.errTotal) {
+        const gv = mv.dec === null ? formatNumber(g.total * k, 4) : formatFixed(g.total * k, clamp(mv.dec + 1, 0, 4));
+        return {
+          kind: 'agree',
+          weak: true,
+          text: `Measured ${mv.text} ${unit}: ${(m.total / m.errTotal).toFixed(1)} sigma, short of a detection on its own. ${Says} ${gv}, in the same direction: consistent.`,
+          signal: false,
+          sigma: diff / m.errTotal,
+          unit,
+        };
+      }
+    }
     let text = hasErr
       ? `No motion detected: less than ${formatNumber(upper * k, 2)} ${unit} (2 sigma).`
       : 'No motion detected.';
     if (gaiaPm) {
       const gv = formatNumber(g.total * k, 2);
       if (!hasErr || g.total <= upper) {
-        return { kind: 'static', text: `${text} Gaia says ${gv}: too small to see here.`, signal: false, unit };
+        return { kind: 'static', text: `${text} ${Says} ${gv}: too small to see here.`, signal: false, unit };
       }
-      return { kind: 'disagree', text: `${text} Gaia says ${gv}: that should have shown up.`, signal: true, unit };
+      return { kind: 'disagree', text: `${text} ${Says} ${gv}: that should have shown up.`, signal: true, unit };
     }
     if (g) text += ' Gaia has a star here but lists no motion for it.';
     return { kind: 'static', text, signal: false, unit };
@@ -140,14 +163,14 @@ export function motionVerdict(measured, gaia, opts = {}) {
   const head = `Measured ${mv.text} ${unit}`;
   if (gaiaPm) {
     const gv = mv.dec === null ? formatNumber(g.total * k, 4) : formatFixed(g.total * k, clamp(mv.dec + 1, 0, 4));
-    if (!hasErr) return { kind: 'measured', text: `${head}; Gaia says ${gv}.`, signal: false, unit };
+    if (!hasErr) return { kind: 'measured', text: `${head}; ${says} ${gv}.`, signal: false, unit };
     const vector = isNum(m.pmra) && isNum(m.pmdec) && isNum(g.pmra) && isNum(g.pmdec);
     const diff = vector ? Math.hypot(m.pmra - g.pmra, m.pmdec - g.pmdec) : Math.abs(m.total - g.total);
     const sigma = diff / m.errTotal;
     if (sigma <= 3) {
       return {
         kind: 'agree',
-        text: `${head}; Gaia says ${gv}. Agreement within ${Math.max(0.1, sigma).toFixed(1)} sigma.`,
+        text: `${head}; ${says} ${gv}. Agreement within ${Math.max(0.1, sigma).toFixed(1)} sigma.`,
         signal: false,
         sigma,
         unit,
@@ -155,7 +178,7 @@ export function motionVerdict(measured, gaia, opts = {}) {
     }
     return {
       kind: 'disagree',
-      text: `${head}; Gaia says ${gv}. They differ by ${sigma >= 10 ? Math.round(sigma) : sigma.toFixed(1)} sigma.`,
+      text: `${head}; ${says} ${gv}. They differ by ${sigma >= 10 ? Math.round(sigma) : sigma.toFixed(1)} sigma.`,
       signal: true,
       sigma,
       unit,
@@ -522,7 +545,7 @@ export function createMotionMeter(container) {
     };
 
     row(2, 'MEASURED', m, accent, true);
-    row(80, 'GAIA DR3', g, STONE, false);
+    row(80, state.gaia && state.gaia.source === 'catalogue' ? 'CATALOGUE' : 'GAIA DR3', g, STONE, false);
   }
 
   // --- legend, verdict, labels ------------------------------------------------------------
@@ -543,7 +566,7 @@ export function createMotionMeter(container) {
         svgEl('path', { d: arrowHead(18, 6, 1, 0, 7), fill: accent }, s);
       }, 'fitted motion');
       if (state.gaia && isNum(state.gaia.pmra) && isNum(state.gaia.pmdec)) {
-        item((s) => svgEl('line', { x1: 3, x2: 15, y1: 6, y2: 6, stroke: STONE, 'stroke-opacity': 0.75, 'stroke-width': 6, 'stroke-linecap': 'round' }, s), 'Gaia DR3 prediction');
+        item((s) => svgEl('line', { x1: 3, x2: 15, y1: 6, y2: 6, stroke: STONE, 'stroke-opacity': 0.75, 'stroke-width': 6, 'stroke-linecap': 'round' }, s), state.gaia.source === 'catalogue' ? 'catalogue prediction' : 'Gaia DR3 prediction');
       }
     }
   }

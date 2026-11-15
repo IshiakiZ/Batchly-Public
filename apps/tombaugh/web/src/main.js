@@ -1373,6 +1373,7 @@ async function boot() {
         sel.motion = timed('measureMotion', () =>
           pipeline.measureMotion(lib, data.layers, data.grid, sel.ra, sel.dec, {
             stars: session.gaia.stars,
+            known: targets,
             startMjd: frame && Number.isFinite(frame.mjd) ? frame.mjd : null,
           }),
         );
@@ -1427,7 +1428,9 @@ async function boot() {
     panels.setLightCurve({ points: sel.lightCurve, title, note: lightCurveNote(sel) });
     panels.setMotion({
       measured: m ? m.measured : null,
-      gaia: m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
+      gaia: m && m.catalogue
+        ? { pmra: m.catalogue.pmra, pmdec: m.catalogue.pmdec, total: m.catalogue.total, source: 'catalogue' }
+        : m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
       track: m ? m.track : [],
       title,
       note: motionNote(sel, verdict),
@@ -1437,7 +1440,8 @@ async function boot() {
   }
 
   const LIGHTCURVE_NOTE = 'Brightness over time, relative to the source\u2019s own average spectrum, so that a change of wavelength is not mistaken for a change of brightness.';
-  const MOTION_NOTE = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion, compared with the proper motion Gaia lists for the nearest star.';
+  const MOTION_NOTE_SHORT = 'The source is centroided in the stack of each survey pass; a straight line through those positions gives its motion.';
+  const MOTION_NOTE = `${MOTION_NOTE_SHORT.slice(0, -1)}, compared with the proper motion Gaia lists for the nearest star.`;
 
   function lightCurveNote(sel) {
     const lc = sel.lightCurve || [];
@@ -1469,7 +1473,11 @@ async function boot() {
       }
       notes.push(`This source moves ${fmt(m.measured.total)} a year. The nearest Gaia star${sep} moves ${fmt(m.gaia.total)} a year, so it is not the same object: Gaia has no entry for what is moving here.`);
     }
+    if (m && m.catalogue) {
+      notes.push(`No Gaia star at this position matches ${m.catalogue.name || 'this object'}, so the comparison is with its published motion (SIMBAD values in the built-in target table).`);
+    }
     if (m && m.saturated) notes.push('The star saturates the detector, so its position in each pass is taken from the unsaturated light around the flagged core.');
+    if (m && m.catalogue) return `${notes.join(' ')} ${MOTION_NOTE_SHORT}`;
     return notes.length ? `${notes.join(' ')} ${MOTION_NOTE}` : MOTION_NOTE;
   }
 

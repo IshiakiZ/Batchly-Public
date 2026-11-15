@@ -466,6 +466,21 @@ test('motion verdict: agreement, disagreement, unexplained, static, too few pass
   assert.equal(differ.signal, true);
   assert.match(differ.text, /^Measured 5\.0 ± 0\.3 arcsec\/yr; Gaia says 10\.39\. They differ by \d+ sigma\.$/);
 
+  // an object Gaia does not list, compared with its published motion from the target table
+  const table = { pmra: 3960.9, pmdec: -2539.2, total: 4705, source: 'catalogue' };
+  const brown = motionVerdict({ pmra: 3650, pmdec: -2650, total: 4510, errTotal: 650 }, table, { passes: 3 });
+  assert.equal(brown.kind, 'agree');
+  assert.equal(brown.text, 'Measured 4.5 ± 0.7 arcsec/yr; the catalogue says 4.71. Agreement within 0.5 sigma.');
+  const faint = motionVerdict({ pmra: -2900, pmdec: 0, total: 2900, errTotal: 1200 }, { pmra: -2767.5, pmdec: 356.9, source: 'catalogue' }, { passes: 3 });
+  assert.equal(faint.kind, 'agree');
+  assert.equal(faint.weak, true);
+  assert.equal(faint.signal, false);
+  assert.equal(faint.text, 'Measured 2.9 ± 1.2 arcsec/yr: 2.4 sigma, short of a detection on its own. The catalogue says 2.79, in the same direction: consistent.');
+  // the same weak measurement pointing the other way is not an agreement
+  const away = motionVerdict({ pmra: 2900, pmdec: 0, total: 2900, errTotal: 1200 }, { pmra: -2767.5, pmdec: 356.9, source: 'catalogue' }, { passes: 3 });
+  assert.equal(away.kind, 'static');
+  assert.equal(away.text, 'No motion detected: less than 5.3 arcsec/yr (2 sigma). The catalogue says 2.8: too small to see here.');
+
   const alone = motionVerdict({ pmra: 3000, pmdec: 4000, total: 5000, errTotal: 300 }, null, { passes: 2 });
   assert.equal(alone.kind, 'unexplained');
   assert.equal(alone.signal, true);

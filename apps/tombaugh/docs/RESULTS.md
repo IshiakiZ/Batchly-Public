@@ -137,6 +137,14 @@ catalogue motion is 5.1 arcsec a year towards the south-east), and the brown-dwa
 Luhman 16, "Moved" (17.3 sigma), in a crowded Galactic-plane field where 19 patches on stars and
 4 at the edge were set aside.
 
+The Gaia stars loaded for that field hold no match for Luhman 16: the one nearest its position
+moves 14 milliarcsec a year. For fast named objects like this one the Motion tab therefore compares with
+the published motion in the built-in target table (SIMBAD values) and says so. Its centroid fit on
+Luhman 16 reads "Measured 3.1 ± 1.1 arcsec/yr: 2.7 sigma, short of a detection on its own. The
+catalogue says 2.79, in the same direction: consistent." The fit is weaker than the residual
+search because the pair is faint at 2 µm and the field is crowded. Where Gaia has the object
+(Barnard's Star, Epsilon Indi B), the Motion tab keeps using Gaia.
+
 ### On empty sky: the false-alarm test
 
 A search is only worth as much as its false-alarm rate, so the same search was run on fields

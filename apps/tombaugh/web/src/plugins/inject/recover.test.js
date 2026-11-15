@@ -514,6 +514,13 @@ test('curveSvg draws a self-contained chart in brand colours', async () => {
   // a comparison far off the scale becomes an arrow at the edge instead of stretching the axis
   const far = curveSvg({ points, limit: limitDetail(points), compare: { label: 'Dwarf planet', flux_uJy: 0.001 } });
   assert.ok(far.includes('← Dwarf planet, 0.0010 µJy'));
+  // the label keeps off the curve: leftward at the top where the curve is still low, rightward
+  // at the bottom where it has risen, and never off the edge of the plot
+  const label = (flux) => curveSvg({ points, compare: { label: 'Planet X', flux_uJy: flux } }, { width: 600 }).match(/text-anchor="(start|end)">Planet X/)[1];
+  assert.equal(label(60), 'end', 'faint side, room to the left');
+  assert.equal(label(11), 'start', 'faint side, at the left edge');
+  assert.equal(label(200), 'start', 'bright side, room to the right');
+  assert.equal(label(630), 'end', 'bright side, at the right edge');
 });
 
 // ---- things already in the frames, and candidate-list flags ------------------------------------

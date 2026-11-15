@@ -1324,10 +1324,17 @@ export function photometryTrack(lib, motion, verdict) {
 
 /**
  * Follow a source through the per-pass stacks, starting near (ra, dec), and fit its motion.
- * -> { track: [{ mjd, ra, dec, w }], measured: fitMotion result | null, gaia: { pmra, pmdec, total, star } | null }
+ * -> { track: [{ mjd, ra, dec, w }], measured: fitMotion result | null, gaia: { pmra, pmdec, total, star } | null,
+ *      catalogue: { pmra, pmdec, total, name, star } | null }
+ *
+ * `known` is a short list of named objects with a published motion ({ ra, dec, epoch, pmra,
+ * pmdec, parallax, name }), for the ones Gaia does not list: brown dwarfs are too red and too
+ * faint for it. When the source sits on one of them and the Gaia star matched here is not that
+ * same object, `catalogue` carries the published motion. It is for display only: `gaia` is left
+ * exactly as it was, so the aperture tracking and everything else that reads it is unchanged.
  */
-export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd = null, tolArcsec = 8 } = {}) {
-  const result = { track: [], measured: null, gaia: null, saturated: false };
+export function measureMotion(lib, layers, grid, ra, dec, { stars = [], known = [], startMjd = null, tolArcsec = 8 } = {}) {
+  const result = { track: [], measured: null, gaia: null, catalogue: null, saturated: false };
   if (!lib.centroid || !lib.gridSkyToPix || !lib.gridPixToSky || !layers || !layers.length) return result;
   const passes = describePasses(lib, normalizeLayers(lib, layers));
   if (!passes.length) return result;
@@ -1409,6 +1416,23 @@ export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd
       }
     } catch {
       result.gaia = null;
+    }
+  }
+  if (known && known.length && lib.matchGaia) {
+    const at = result.track.length ? result.track[0] : { ra, dec, mjd: passes[start].mjd };
+    try {
+      // Only motions large enough to see at this pixel scale: for a slow star the Gaia value
+      // is the better one, and a hand-typed table adds nothing.
+      const fast = known.filter((t) => t && Number.isFinite(t.pmra) && Number.isFinite(t.pmdec) && Math.hypot(t.pmra, t.pmdec) >= 300);
+      const k = lib.matchGaia(fast, at.ra, at.dec, at.mjd, tolArcsec);
+      if (k) {
+        const total = Math.hypot(k.pmra, k.pmdec);
+        const g = result.gaia;
+        const sameObject = !!g && g.total !== null && Math.hypot(g.pmra - k.pmra, g.pmdec - k.pmdec) <= Math.max(100, 0.25 * total);
+        if (!sameObject) result.catalogue = { pmra: k.pmra, pmdec: k.pmdec, total, name: k.name || '', star: k };
+      }
+    } catch {
+      result.catalogue = null;
     }
   }
   return result;
