@@ -215,74 +215,74 @@ function tableEl(doc, rows, caption) {
   for (const r of rows) {
     if (r.group !== group) {
       group = r.group;
-      body.append(h(doc, 'tr', { class: 'tbv-group' }, h(doc, 'th', { colspan: 4, scope: 'colgroup', text: group })));
+      body.append(h(doc, 'tr', { class: 'tbq-group' }, h(doc, 'th', { colspan: 4, scope: 'colgroup', text: group })));
     }
-    const sig = h(doc, 'td', { class: 'tbv-sig' });
-    if (r.flag) sig.append(h(doc, 'span', { class: 'tbv-flag', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'tbv-sr', text: 'More than 3 sigma: ' }));
+    const sig = h(doc, 'td', { class: 'tbq-sig' });
+    if (r.flag) sig.append(h(doc, 'span', { class: 'tbq-flag', 'aria-hidden': 'true' }), h(doc, 'span', { class: 'tbq-sr', text: 'More than 3 sigma: ' }));
     sig.append(r.sigmaText || '');
     body.append(h(doc, 'tr', r.flag ? { 'data-flag': '1' } : null,
       h(doc, 'th', { scope: 'row', text: r.label }),
       h(doc, 'td', { text: r.measured, colspan: r.reference ? null : 2 }),
-      r.reference ? h(doc, 'td', { class: 'tbv-ref', text: r.reference }) : null,
+      r.reference ? h(doc, 'td', { class: 'tbq-ref', text: r.reference }) : null,
       sig));
   }
-  return h(doc, 'table', { class: 'tbv-table' },
+  return h(doc, 'table', { class: 'tbq-table' },
     h(doc, 'caption', { text: caption }),
-    h(doc, 'colgroup', null, h(doc, 'col', { class: 'tbv-c-q' }), h(doc, 'col', { class: 'tbv-c-m' }), h(doc, 'col', { class: 'tbv-c-r' }), h(doc, 'col', { class: 'tbv-c-s' })),
+    h(doc, 'colgroup', null, h(doc, 'col', { class: 'tbq-c-q' }), h(doc, 'col', { class: 'tbq-c-m' }), h(doc, 'col', { class: 'tbq-c-r' }), h(doc, 'col', { class: 'tbq-c-s' })),
     h(doc, 'thead', null, h(doc, 'tr', null,
       h(doc, 'th', { scope: 'col', text: 'Quantity' }), h(doc, 'th', { scope: 'col', text: 'Measured' }),
-      h(doc, 'th', { scope: 'col', text: 'Catalogue' }), h(doc, 'th', { scope: 'col', class: 'tbv-th-s', title: 'Difference in sigma', 'aria-label': 'Difference in sigma', text: 'σ' }))),
+      h(doc, 'th', { scope: 'col', text: 'Catalogue' }), h(doc, 'th', { scope: 'col', class: 'tbq-th-s', title: 'Difference in sigma', 'aria-label': 'Difference in sigma', text: 'σ' }))),
     body);
 }
 
 function notesEl(doc, rows) {
   const notes = rows.filter((r) => r.note);
   if (!notes.length) return null;
-  return h(doc, 'details', { class: 'tbv-notes' },
+  return h(doc, 'details', { class: 'tbq-notes' },
     h(doc, 'summary', { text: `Notes on ${notes.length === 1 ? 'one row' : `${notes.length} rows`}` }),
     h(doc, 'ul', null, notes.map((r) => h(doc, 'li', null, h(doc, 'b', { text: `${r.label}: ` }), r.note))));
 }
 
 function cardEl(doc, m, index) {
   const name = (m.target && (m.target.name || m.target.id)) || `Target ${index + 1}`;
-  const card = h(doc, 'article', { class: 'tbv-card' });
-  const head = h(doc, 'div', { class: 'tbv-card-head' }, h(doc, 'h3', { class: 'tbv-name', text: name }));
+  const card = h(doc, 'article', { class: 'tbq-card' });
+  const head = h(doc, 'div', { class: 'tbq-card-head' }, h(doc, 'h3', { class: 'tbq-name', text: name }));
   card.append(head);
   if (m.noData) {
     const where = [coordText(m.target), isNum(m.det) ? `D${m.det}` : ''].filter(Boolean).join(' · ');
-    if (where) head.append(h(doc, 'p', { class: 'tbv-meta tbv-n', text: where }));
-    card.append(h(doc, 'p', { class: 'tbv-none', text: `No data: ${m.reason || 'no SPHEREx exposures arrived for this target'}. Nothing was measured.` }));
+    if (where) head.append(h(doc, 'p', { class: 'tbq-meta tbq-n', text: where }));
+    card.append(h(doc, 'p', { class: 'tbq-none', text: `No data: ${m.reason || 'no SPHEREx exposures arrived for this target'}. Nothing was measured.` }));
     return card;
   }
   const passes = m.passes || [];
   const nExp = passes.reduce((sum, p) => sum + (p.nExposures || 0), 0);
-  head.append(h(doc, 'p', { class: 'tbv-meta' },
-    h(doc, 'span', { class: 'tbv-n', text: [coordText(m.target), isNum(m.det) ? `D${m.det}` : ''].filter(Boolean).join(' · ') })));
+  head.append(h(doc, 'p', { class: 'tbq-meta' },
+    h(doc, 'span', { class: 'tbq-n', text: [coordText(m.target), isNum(m.det) ? `D${m.det}` : ''].filter(Boolean).join(' · ') })));
   if (passes.length) {
-    head.append(h(doc, 'p', { class: 'tbv-meta', text: `${nExp} exposures in ${passes.length} pass${passes.length === 1 ? '' : 'es'}: ${passes.map((p) => p.label).join(', ')}` }));
+    head.append(h(doc, 'p', { class: 'tbq-meta', text: `${nExp} exposures in ${passes.length} pass${passes.length === 1 ? '' : 'es'}: ${passes.map((p) => p.label).join(', ')}` }));
   }
-  if (m.quality && m.quality.synthetic) head.append(h(doc, 'p', { class: 'tbv-meta', text: 'Synthetic test frames, not observations.' }));
-  if (m.cancelled) card.append(h(doc, 'p', { class: 'tbv-none', text: 'Cancelled before it finished. The rows below are what was done by then.' }));
-  if (m.partial) card.append(h(doc, 'p', { class: 'tbv-none', text: `Partial data: ${m.partial}.` }));
+  if (m.quality && m.quality.synthetic) head.append(h(doc, 'p', { class: 'tbq-meta', text: 'Synthetic test frames, not observations.' }));
+  if (m.cancelled) card.append(h(doc, 'p', { class: 'tbq-none', text: 'Cancelled before it finished. The rows below are what was done by then.' }));
+  if (m.partial) card.append(h(doc, 'p', { class: 'tbq-none', text: `Partial data: ${m.partial}.` }));
   const rows = toRows(m);
   card.append(tableEl(doc, rows, `${name}: measured against catalogue`));
   const notes = notesEl(doc, rows);
   if (notes) card.append(notes);
 
   if (m.field) {
-    card.append(h(doc, 'h4', { class: 'tbv-sub', text: 'Field stars: the control' }));
+    card.append(h(doc, 'h4', { class: 'tbq-sub', text: 'Field stars: the control' }));
     const a = m.field.alignment || {};
     const nt = m.field.nullTest || {};
     const svg = scatterSvg(a);
-    const verdicts = h(doc, 'div', { class: 'tbv-verdicts' });
+    const verdicts = h(doc, 'div', { class: 'tbq-verdicts' });
     if (a.verdict) verdicts.append(h(doc, 'p', null, h(doc, 'b', { text: 'Alignment. ' }), a.verdict));
     if (nt.verdict) verdicts.append(h(doc, 'p', null, h(doc, 'b', { text: 'Null test. ' }), nt.verdict));
-    if (!a.verdict && !nt.verdict) verdicts.append(h(doc, 'p', { class: 'tbv-none', text: m.field.reason || a.reason || 'The field-star tests could not be run here.' }));
+    if (!a.verdict && !nt.verdict) verdicts.append(h(doc, 'p', { class: 'tbq-none', text: m.field.reason || a.reason || 'The field-star tests could not be run here.' }));
     if (svg) {
       const holder = h(doc, 'div');
       holder.innerHTML = svg; // numbers only, built by scatterSvg above
       const caption = `Each dot is one centroid minus its Gaia position. East is left; ticks every ${scatterTick(a)} arcsec. Dashed circle: 1 sigma, ${isNum(a.sigma) ? a.sigma.toFixed(2) : '?'} arcsec per axis.`;
-      card.append(h(doc, 'div', { class: 'tbv-field' }, h(doc, 'figure', { class: 'tbv-plot' }, holder, h(doc, 'figcaption', { text: caption })), verdicts));
+      card.append(h(doc, 'div', { class: 'tbq-field' }, h(doc, 'figure', { class: 'tbq-plot' }, holder, h(doc, 'figcaption', { text: caption })), verdicts));
     } else {
       card.append(verdicts);
     }
@@ -540,25 +540,25 @@ export function install(app, options = {}) {
   function render(container) {
     const count = tourTargets.length;
     const word = NUMBER_WORDS[count] || String(count);
-    const measure = h(doc, 'button', { type: 'button', class: 'tbv-btn tbv-btn-solid', text: 'Measure this field' });
-    const tour = h(doc, 'button', { type: 'button', class: 'tbv-btn', text: `Run the ${word} challenge target${count === 1 ? '' : 's'}`, disabled: !count });
-    const cancel = h(doc, 'button', { type: 'button', class: 'tbv-btn', text: 'Cancel', hidden: true });
-    const loaded = h(doc, 'p', { class: 'tbv-meta', text: TEXT.nothingLoaded });
-    const status = h(doc, 'p', { class: 'tbv-status', role: 'status', 'aria-live': 'polite' });
+    const measure = h(doc, 'button', { type: 'button', class: 'tbq-btn tbq-btn-solid', text: 'Measure this field' });
+    const tour = h(doc, 'button', { type: 'button', class: 'tbq-btn', text: `Run the ${word} challenge target${count === 1 ? '' : 's'}`, disabled: !count });
+    const cancel = h(doc, 'button', { type: 'button', class: 'tbq-btn', text: 'Cancel', hidden: true });
+    const loaded = h(doc, 'p', { class: 'tbq-meta', text: TEXT.nothingLoaded });
+    const status = h(doc, 'p', { class: 'tbq-status', role: 'status', 'aria-live': 'polite' });
     const fill = h(doc, 'span');
-    const bar = h(doc, 'div', { class: 'tbv-bar', role: 'progressbar', 'aria-label': 'Progress of the measurement', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': 0, hidden: true }, fill);
-    const resultsEl = h(doc, 'div', { class: 'tbv-results' });
-    const copy = h(doc, 'button', { type: 'button', class: 'tbv-btn tbv-btn-small', text: 'Copy report (Markdown)' });
-    const download = h(doc, 'button', { type: 'button', class: 'tbv-btn tbv-btn-small', text: 'Download JSON' });
-    const exportStatus = h(doc, 'p', { class: 'tbv-status', role: 'status', 'aria-live': 'polite' });
-    const copyBox = h(doc, 'textarea', { class: 'tbv-copybox', readonly: true, hidden: true, spellcheck: 'false', 'aria-label': 'The report as text' });
-    const exportBox = h(doc, 'div', { class: 'tbv-export', hidden: true },
-      h(doc, 'div', { class: 'tbv-actions' }, copy, download), exportStatus, copyBox,
-      h(doc, 'p', { class: 'tbv-how', text: TEXT.how }));
-    const root = h(doc, 'div', { class: 'tbv', 'aria-busy': 'false' },
-      h(doc, 'p', { class: 'tbv-lede', text: TEXT.lede }),
-      h(doc, 'div', { class: 'tbv-actions' }, measure, tour, cancel),
-      h(doc, 'div', { class: 'tbv-run' }, loaded, status, bar),
+    const bar = h(doc, 'div', { class: 'tbq-bar', role: 'progressbar', 'aria-label': 'Progress of the measurement', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': 0, hidden: true }, fill);
+    const resultsEl = h(doc, 'div', { class: 'tbq-results' });
+    const copy = h(doc, 'button', { type: 'button', class: 'tbq-btn tbq-btn-small', text: 'Copy report (Markdown)' });
+    const download = h(doc, 'button', { type: 'button', class: 'tbq-btn tbq-btn-small', text: 'Download JSON' });
+    const exportStatus = h(doc, 'p', { class: 'tbq-status', role: 'status', 'aria-live': 'polite' });
+    const copyBox = h(doc, 'textarea', { class: 'tbq-copybox', readonly: true, hidden: true, spellcheck: 'false', 'aria-label': 'The report as text' });
+    const exportBox = h(doc, 'div', { class: 'tbq-export', hidden: true },
+      h(doc, 'div', { class: 'tbq-actions' }, copy, download), exportStatus, copyBox,
+      h(doc, 'p', { class: 'tbq-how', text: TEXT.how }));
+    const root = h(doc, 'div', { class: 'tbq', 'aria-busy': 'false' },
+      h(doc, 'p', { class: 'tbq-lede', text: TEXT.lede }),
+      h(doc, 'div', { class: 'tbq-actions' }, measure, tour, cancel),
+      h(doc, 'div', { class: 'tbq-run' }, loaded, status, bar),
       resultsEl, exportBox);
     measure.addEventListener('click', guard(onMeasure));
     tour.addEventListener('click', guard(onTour));
