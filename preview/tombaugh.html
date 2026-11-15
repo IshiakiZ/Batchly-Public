@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T09:39:43.637Z, sources sha256 14c120ba978cddce.
+Single-file build of 111 modules, 2026-11-15T09:53:16.531Z, sources sha256 0a20206e880e3198.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -6700,7 +6700,7 @@ const built = await pluginView.build({ app, state: s, grid: data.grid, layers: d
 if (stale()) return;
 const passes = pipeline.describePasses(lib, data.layers);
 const frames = normalizePluginFrames(built, passes);
-movie = { view, frames, empty: frames.length ? null : `The ${pluginView.label} view has nothing to show for this field.`, notes: [], candidates: [], passes };
+movie = { view, frames, empty: frames.length ? null : pluginView.empty || `The ${pluginView.label} view has nothing to show for this field.`, notes: [], candidates: [], passes };
 } else {
 if (view === 'residual' && complete) {
 if (!session.models.has(s.det)) {
@@ -6980,8 +6980,9 @@ function updateOverlays() {
 const s = store.get();
 const frame = player.frame();
 const overlays = { gaia: null, flags: null, markers: [], trail: null };
+const ownSky = !pluginViews.has(s.view);
 if (frame && session.grid) {
-if (s.gaia && session.gaia.stars.length && lib.gridSkyToPix) {
+if (ownSky && s.gaia && session.gaia.stars.length && lib.gridSkyToPix) {
 try {
 overlays.gaia = ghostsFor(frame);
 } catch (err) {
@@ -6992,7 +6993,7 @@ if (s.flags) overlays.flags = flagsFor(frame);
 if (Array.isArray(frame.markers)) overlays.markers.push(...frame.markers);
 }
 const sel = session.selection;
-if (sel) {
+if (sel && ownSky) {
 overlays.markers.push({ ra: sel.ra, dec: sel.dec, kind: 'click', label: sel.label || '' });
 const track = sel.motion && sel.motion.track ? sel.motion.track : [];
 if (track.length >= 2) overlays.trail = track.map((p) => ({ ra: p.ra, dec: p.dec, mjd: p.mjd }));
@@ -7086,11 +7087,16 @@ console.warn('[tombaugh] motion measurement failed', err);
 const m = sel.motion;
 const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
 sel.identity = verdict.verdict;
-if (verdict.verdict === 'different' && (!sel.label || sel.label === 'Gaia star')) {
+const fast = !!(m && m.measured && m.measured.total > 500 && m.measured.total > 3 * Math.max(300, m.measured.errTotal || 0));
+if ((verdict.verdict === 'different' || (verdict.verdict === 'none' && fast)) && (!sel.label || sel.label === 'Gaia star')) {
 sel.label = 'Moving source';
 if (m.track.length) {
-sel.ra = m.track[0].ra;
-sel.dec = m.track[0].dec;
+const frameNow = player.frame();
+const when = frameNow && Number.isFinite(frameNow.mjd) ? frameNow.mjd : m.track[0].mjd;
+let best = m.track[0];
+for (const p of m.track) if (Math.abs(p.mjd - when) < Math.abs(best.mjd - when)) best = p;
+sel.ra = best.ra;
+sel.dec = best.dec;
 }
 panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
 }
@@ -7135,7 +7141,7 @@ function lightCurveNote(sel) {
 const lc = sel.lightCurve || [];
 const wing = (sel.spectrum || []).find((p) => p && p.sat && Number.isFinite(p.wingR1));
 if (lc.length && lc[0].method === 'wings' && wing) {
-return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux.`;
+return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux. Single exposures of a saturated star scatter by tens of percent, so read the means, not the dots.`;
 }
 if (!lc.length && (sel.spectrum || []).length && (sel.spectrum || []).every((p) => p.flagged)) {
 return 'Every exposure of this source has flagged pixels in the aperture (often a saturated star), and the light around it is too faint or too crowded to follow instead.';
@@ -7691,6 +7697,7 @@ const has = (k) => changed.includes(k);
 emit('state', { state: s, changed });
 if (has('embed')) layout.setEmbed(s.embed);
 if (has('ra') || has('dec')) {
+document.title = titleFor(s);
 if (hasTarget()) startTarget();
 else showLanding();
 return;
@@ -7817,9 +7824,9 @@ handle.remove();
 },
 };
 },
-addView({ id, label, title, needs, build } = {}) {
+addView({ id, label, title, needs, build, empty } = {}) {
 if (!id || typeof build !== 'function' || pluginViews.has(id) || VIEWS.includes(id)) return { remove() {} };
-pluginViews.set(id, { id, label: label || id, title: title || '', needs, build });
+pluginViews.set(id, { id, label: label || id, title: title || '', needs, build, empty: typeof empty === 'string' ? empty : '' });
 controls.addView({ id, label: label || id, title: title || '' });
 if (store.get().view === id && currentData()) scheduleRebuild({ reset: true });
 return {
@@ -9712,7 +9719,7 @@ refineByWavelength(out);
 out.sort((a, b) => a.mjd - b.mjd);
 return out;
 }
-function refineByWavelength(points, { minPoints = 40, perBin = 8, minSpanDays = 60, minSpread = 0.6 } = {}) {
+function refineByWavelength(points, { minPoints = 40, perBin = 8, minSpanDays = 60, minBinDays = 30 } = {}) {
 const groups = new Map();
 for (const p of points) {
 if (!groups.has(p.det)) groups.set(p.det, []);
@@ -9734,7 +9741,7 @@ if (byWave.some((bin) => {
 let b0 = Infinity;
 let b1 = -Infinity;
 for (const k of bin) { if (mjd[k] < b0) b0 = mjd[k]; if (mjd[k] > b1) b1 = mjd[k]; }
-return bin.length < 5 || b1 - b0 < minSpread * span;
+return bin.length < 5 || b1 - b0 < minBinDays;
 })) continue;
 const ratio = Float64Array.from(pts, (p) => p.ratio);
 let inTime = new Float64Array(n).fill(1);
@@ -15199,7 +15206,7 @@ const mean = htmlEl('span', { class: 'tbp-legend-item' }, legend);
 const ms = svgEl('svg', { width: 14, height: 14, viewBox: '0 0 14 14', 'aria-hidden': 'true' }, mean);
 svgEl('path', { d: 'M7 1V13M4.5 1h5M4.5 13h5', stroke: PAPER, 'stroke-width': 1.25, fill: 'none' }, ms);
 svgEl('circle', { cx: 7, cy: 7, r: 3.5, fill: PAPER, stroke: INK, 'stroke-width': 1 }, ms);
-htmlEl('span', { text: 'pass mean' }, mean);
+htmlEl('span', { text: 'mean per pass or month' }, mean);
 const one = htmlEl('span', { class: 'tbp-legend-item' }, legend);
 const os = svgEl('svg', { width: 18, height: 12, viewBox: '0 0 18 12', 'aria-hidden': 'true' }, one);
 svgEl('line', { x1: 0, x2: 18, y1: 6, y2: 6, stroke: STONE, 'stroke-width': 1, 'stroke-dasharray': '4 3' }, os);
@@ -15218,7 +15225,12 @@ return;
 const v = state.verdict;
 const n = state.points.length;
 const passes = splitPasses(state.points).length;
-subEl.textContent = `${n} measurement${n === 1 ? '' : 's'} · ${passes} survey pass${passes === 1 ? '' : 'es'}`;
+const t = state.points.map((p) => p.mjd).filter(isNum);
+const spanDays = t.length ? Math.max(...t) - Math.min(...t) : 0;
+const where = v.epochs.length > passes && spanDays > 120
+? `over ${Math.round(spanDays / 30.44)} months`
+: `${passes} survey pass${passes === 1 ? '' : 'es'}`;
+subEl.textContent = `${n} measurement${n === 1 ? '' : 's'} · ${where}`;
 verdictText.textContent = v.text;
 const means = v.epochs.map((e) => `${e.label} ${e.mean.toFixed(2)}`).join(', ');
 svg.setAttribute('aria-label',
@@ -36105,7 +36117,7 @@ const MOVING_CSS = `
 .tbm-visits .tbm-r { text-align: right; }
 .tbm-dets { color: var(--tbm-muted); font-family: var(--tbm-num); font-size: 11px; white-space: nowrap; }
 
-.tbm-track { display: block; width: 100%; height: auto; background: var(--tbm-sunken); border: 1px solid var(--tbm-rule); border-radius: 3px; }
+.tbm-track { display: block; width: 100%; max-width: 460px; height: auto; background: var(--tbm-sunken); border: 1px solid var(--tbm-rule); border-radius: 3px; }
 .tbm-figcap { color: var(--tbm-muted); font-size: 12px; margin-top: 4px; }
 
 .tbm-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -37238,6 +37250,7 @@ viewHandle = app.addView({
 id: VIEW_ID,
 label: 'Follow body',
 title: 'Stacks that follow a solar-system body: it stays at the centre while the stars streak',
+empty: 'No body is being followed yet. Open the Solar system tab on the right, pick a body such as Pluto, and load its exposures: the stacks that follow it play here.',
 build: buildView,
 });
 }
