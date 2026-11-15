@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T11:52:06.536Z, sources sha256 4e73d036a6e2ad35.
+Single-file build of 111 modules, 2026-11-15T11:56:45.574Z, sources sha256 544c0c3b39408d99.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -9240,12 +9240,20 @@ return { m, a, dx, dy, ar, np };
 const usable = stacks.map((st, index) => ({ ...moments(st), index })).filter((q) => q.np >= 12);
 const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0, from: -1, to: -1 };
 if (usable.length < 2) return none;
+const sameSeason = (a, b) => {
+const dt = Math.abs(stacks[a].mjd - stacks[b].mjd);
+if (!(dt > 200)) return false;
+const years = Math.round(dt / 365.25);
+return years >= 1 && Math.abs(dt - years * 365.25) <= 60;
+};
+const verdict = (allow) => {
 let dip = null;
 let mono = null;
 for (let i = 0; i < usable.length; i++) {
 for (let j = i + 1; j < usable.length; j++) {
 const f = usable[i];
 const l = usable[j];
+if (!allow(f.index, l.index)) continue;
 if (f.ar + l.ar > 0) {
 const ddx = l.dx - f.dx;
 const ddy = l.dy - f.dy;
@@ -9266,6 +9274,10 @@ return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole
 }
 if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
 return { ...none, dipole, monopole };
+};
+const yearly = verdict(sameSeason);
+if (yearly.from >= 0) return yearly;
+return verdict(() => true);
 }
 function coverageEdge(stack, n) {
 const npix = n * n;
