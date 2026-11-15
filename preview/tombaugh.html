@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:51:36.997Z, sources sha256 e50826020a319132.
+Single-file build of 111 modules, 2026-11-15T10:59:46.981Z, sources sha256 d957263ed0b4cecd.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -11409,6 +11409,7 @@ kind: 'mover', challenge: true,
 aliases: ['Barnards Star', 'GJ 699', 'Gliese 699', 'HIP 87937', 'V2500 Oph'],
 blurb: 'A red dwarf six light-years away with the largest proper motion of any star: 10.4 arcsec a year, about 1.7 SPHEREx pixels.',
 why: 'Blink the passes and one star steps north while the rest hold still; the motion meter should land near the 10.4 arcsec a year that Gaia measures.',
+found: '11.9 ± 2.4 arcsec a year heading 355°. Gaia says 10.4 at 356°.',
 },
 {
 id: 'eps-indi-b',
@@ -11420,6 +11421,7 @@ kind: 'pair', challenge: true,
 aliases: ['Eps Indi B', 'Epsilon Indi B', 'eps Ind B', 'Epsilon Indi Bab'],
 blurb: 'Two methane-rich T dwarfs circling each other 12 light-years away, about 400 arcsec from the star Epsilon Indi A.',
 why: 'The two are under an arcsecond apart, so they share one pixel, but their blended spectrum should dip at 3.3 um where methane absorbs, and the pair drifts 4.7 arcsec a year in step with Epsilon Indi A.',
+found: '4.51 ± 0.65 arcsec a year at 126° (catalogue: 4.64 at 124°). Methane removes 60 % of the light at 3.3 um.',
 },
 {
 id: 'wise0855',
@@ -11431,6 +11433,7 @@ kind: 'cold', challenge: true,
 aliases: ['WISE 0855', 'WISE J0855-0714', 'WISE J085510.83-071442.5', 'W0855', 'WISEA J085510.74-071442.5'],
 blurb: 'The coldest brown dwarf known, about 250 K (below freezing), 7.4 light-years away.',
 why: 'It sits near the limit of a single SPHEREx exposure and shows, if at all, only between 4.5 and 5 um; stacking along its 8.1 arcsec a year track is the fair test of whether it is there.',
+found: 'It is there: 8.0 ± 1.2 arcsec a year at 278° from three visits (published: 8.17 at 275°).',
 },
 {
 id: 'rw-aur',
@@ -11442,6 +11445,7 @@ kind: 'irregular', challenge: true,
 aliases: ['RW Aur', 'RW Aur A', 'HD 240764'],
 blurb: 'A young star about 530 light-years away, still pulling in gas from its disc, that brightens and fades with no fixed period.',
 why: 'Nothing moves here: the residual view and the light curve should show one star changing between passes while its neighbours stay flat.',
+found: 'Brightened by 40 % between Sep 2025 and Mar 2026 (11 sigma). No motion.',
 },
 {
 id: 'r-dra',
@@ -11453,6 +11457,7 @@ kind: 'lpv', challenge: true,
 aliases: ['R Dra', 'HD 149880', 'HIP 81014'],
 blurb: 'A Mira-type red giant that swells and fades over about 245 days.',
 why: 'Passes six months apart catch it at different points of its 245-day cycle, so its brightness should differ from pass to pass and the water band near 1.9 um should change depth with it.',
+found: 'Faded by 28 % between Mar and Apr 2026 (4.3 sigma). No motion.',
 },
 {
 id: 'proxima',
@@ -16679,9 +16684,11 @@ const CSS = `
 .tbx-search__hint b { font-family: var(--tbx-mono); font-weight: 400; color: var(--tbx-paper); }
 .tbx-search.is-invalid .tbx-search__hint { color: #FF8672; }
 
+.tbx-starts { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .tbx-surprise {
   display: inline-flex; align-items: center; gap: 10px;
   margin: clamp(10px, 1.6vh, 14px) 0 0;
+  text-decoration: none;
   padding: 9px 14px 9px 11px;
   border: 1px dashed var(--tbx-line-strong);
   background: transparent;
@@ -16817,6 +16824,7 @@ const CSS = `
 .tbx-card__blurb { margin-top: 5px; font-size: 13px; line-height: 1.42; color: rgba(247, 242, 231, 0.78); }
 .tbx-card__why { margin-top: 10px; font-size: 13px; line-height: 1.42; color: var(--tbx-paper); }
 .tbx-card__why .tbx-label { display: block; margin-bottom: 3px; font-size: 10px; }
+.tbx-card__found .tbx-label { color: var(--tbx-signal); }
 .tbx-card__go {
   position: absolute; right: 10px; bottom: 9px;
   font-family: var(--tbx-mono); font-size: 12px; color: var(--tbx-signal);
@@ -16837,6 +16845,7 @@ const CSS = `
   list-style: none;
 }
 .tbx-foot li:last-child { margin-left: auto; }
+.tbx-foot .tbx-foot__result { flex: 1 1 100%; color: var(--tbx-paper); }
 
 @media (max-width: 900px) {
   .tbx-top {
@@ -17950,6 +17959,10 @@ const ICON_UNSEEN =
 '<rect x="1" y="1" width="4" height="4" opacity="0.35"/><rect x="6" y="1" width="4" height="4" opacity="0.6"/><rect x="11" y="1" width="4" height="4" opacity="0.35"/>' +
 '<rect x="1" y="6" width="4" height="4" opacity="0.6"/><rect x="6" y="6" width="4" height="4"/><rect x="11" y="6" width="4" height="4" opacity="0.6"/>' +
 '<rect x="1" y="11" width="4" height="4" opacity="0.35"/><rect x="6" y="11" width="4" height="4" opacity="0.6"/><rect x="11" y="11" width="4" height="4" opacity="0.35"/></svg>';
+const ICON_ORBIT =
+'<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2">' +
+'<ellipse cx="8" cy="8" rx="7" ry="3.2" transform="rotate(-24 8 8)" opacity="0.6"/><circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none"/>' +
+'<circle cx="13.6" cy="5.1" r="1.1" fill="currentColor" stroke="none"/></svg>';
 function createLanding(container, opts = {}) {
 const doc = container.ownerDocument || globalThis.document;
 const win = doc.defaultView || globalThis;
@@ -18040,7 +18053,14 @@ const surprise = stagger(el(doc, 'button', 'tbx-surprise'));
 surprise.type = 'button';
 surprise.innerHTML = ICON_UNSEEN;
 surprise.append(el(doc, 'span', '', 'Somewhere nobody has looked'));
-body.append(lede, form, surprise);
+const pluto = stagger(el(doc, 'a', 'tbx-surprise tbx-follow'));
+pluto.href = '?body=pluto';
+pluto.title = 'Follows Pluto through every SPHEREx exposure that caught it and reads its spectrum';
+pluto.innerHTML = ICON_ORBIT;
+pluto.append(el(doc, 'span', '', 'Follow Pluto, the world Tombaugh found'));
+const starts = el(doc, 'div', 'tbx-starts');
+starts.append(surprise, pluto);
+body.append(lede, form, starts);
 top.append(head, figure, body);
 const previews = [];
 const cardButtons = [];
@@ -18089,6 +18109,11 @@ const why = el(doc, 'span', 'tbx-card__why');
 why.append(el(doc, 'span', 'tbx-label', 'Look for'), pretty(target.why));
 text.appendChild(why);
 }
+if (target.found) {
+const found = el(doc, 'span', 'tbx-card__why tbx-card__found');
+found.append(el(doc, 'span', 'tbx-label', 'Measured here, on real data'), pretty(target.found));
+text.appendChild(found);
+}
 const goMark = el(doc, 'span', 'tbx-card__go', 'open →');
 goMark.setAttribute('aria-hidden', 'true');
 btn.append(plate, text, goMark);
@@ -18124,6 +18149,7 @@ inner.appendChild(section);
 }
 const foot = stagger(el(doc, 'ul', 'tbx-foot'), 9);
 for (const line of [
+'Checked on real data, 15 Nov 2026: all five test targets measured, 34 comparisons with the catalogues within 3 sigma (Validation tab)',
 'Data: NASA SPHEREx via IRSA',
 'Open source, Apache 2.0',
 'Built by Missing Mass for NASA Space Apps 2026. Not affiliated with or endorsed by NASA.',
@@ -18131,6 +18157,7 @@ for (const line of [
 ]) {
 foot.appendChild(el(doc, 'li', '', line));
 }
+foot.firstChild.className = 'tbx-foot__result';
 inner.appendChild(foot);
 container.appendChild(root);
 const hero = createHero(heroCanvas, { scheduler: opts.scheduler, reducedMotion: forcedMotion ? opts.reducedMotion : undefined });
