@@ -336,6 +336,15 @@ releases in its code.
   keeps its cache and the index in a private storage bucket, `spherex-cache`, reached with the
   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables. `tools/deploy-bundle.mjs`
   checks and assembles the files to upload.
-- **Page.** Hosted at `https://batch-ly.com/tombaugh/index.html`.
+- **Page.** Hosted at `https://batch-ly.com/tombaugh/index.html`: the single file from
+  `node tools/build.mjs --strict --minify --banner --api https://api.batch-ly.com/functions/v1/spherex --out dist/live/index.html`,
+  placed in the site's `public/tombaugh/` folder and uploaded by the site's own deploy script.
+- **The site's security policy.** batch-ly.com sends a Content-Security-Policy header. The page
+  was loaded under that policy in a test browser (15 November 2026): its inline script, styles,
+  workers and images are all allowed, and so is the proxy at `api.batch-ly.com`. One thing is not:
+  the policy's `connect-src` does not list `https://nasa-irsa-spherex.s3.amazonaws.com`, so the
+  "Direct from NASA's public cloud copy" fallback is blocked on that address and the page stays on
+  the proxy. The fallback works wherever the page is served without that policy (a local copy, the
+  repository). Adding the bucket's address to `connect-src` would enable it on the site as well.
 - **API base selection in the page.** `window.TOMBAUGH_API`, else the `api` query parameter, else
   `/api` on localhost, else the production URL.
