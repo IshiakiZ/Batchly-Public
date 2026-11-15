@@ -307,6 +307,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  * @param {Array<{survey: string, upTo: number, gray?: boolean}>} [opts.layers] which pictures to show up to which tile order
  * @param {(sel: object|null) => void} [opts.onSelect]
  * @param {(view: {ra,dec,fov}) => void} [opts.onView]
+ * @param {(canvases: HTMLCanvasElement[]) => void} [opts.onDraw]  called right after each drawn frame
  */
 export function createSkyGlobe(host, opts = {}) {
   const doc = host.ownerDocument;
@@ -1005,6 +1006,8 @@ export function createSkyGlobe(host, opts = {}) {
     if (root.offsetParent === null && width <= 1) return;
     const busy = drawPhotos(basis, scale, t);
     drawStars(basis, scale);
+    // The glass over the sky copies this frame while it is still in the canvases.
+    if (typeof opts.onDraw === 'function') opts.onDraw([glCanvas, topCanvas]);
     if (typeof opts.onView === 'function') opts.onView({ ...view });
     if (moving || busy) invalidate();
   }

@@ -1,0 +1,312 @@
+/* Tombaugh - SPHEREx blink comparator. Apache-2.0.
+   AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. */
+
+/* The skin: system type, capsule controls and glass. It sits on top of styles.css, which keeps
+   the layout. The glass itself (the bend at the edge of every card and button) is drawn by
+   src/ui/backdrop.js on the canvas behind the page; the rules here add the crisp rim and the
+   shadow, and a plain fill for browsers without WebGL. */
+
+/* ------------------------------------------------------------------ tokens */
+:root {
+  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-head: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, Menlo, monospace;
+  --font-mark: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif;
+  --ground: #0b0b0d;
+  --muted: #b4b1a8;
+  --rule: rgba(255, 255, 255, 0.1);
+  --rule-strong: rgba(255, 255, 255, 0.2);
+  --hover: rgba(255, 255, 255, 0.08);
+  --ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --topbar-h: 68px;
+  --r-card: 26px;
+  --r-tile: 16px;
+  /* The rim of a piece of glass: a hairline all round, light on top, shade below. */
+  --rim: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  --rim-low: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 1px 0.5px rgba(255, 255, 255, 0.34), inset 0 -1px 0.5px rgba(0, 0, 0, 0.34);
+  --drop: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.28);
+  --drop-low: 0 1px 2px rgba(0, 0, 0, 0.4), 0 3px 10px rgba(0, 0, 0, 0.2);
+  /* What a piece of glass is filled with when the canvas cannot draw it. */
+  --fill: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  --fill-card: rgba(30, 30, 33, 0.72);
+}
+
+html {
+  background: var(--ground); font-size: 14px; line-height: 1.4;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+}
+body {
+  background:
+    radial-gradient(1100px 760px at 88% -12%, rgba(229, 60, 39, 0.2), transparent 62%),
+    radial-gradient(980px 760px at -8% 108%, rgba(70, 104, 196, 0.24), transparent 62%),
+    var(--ground);
+  background-attachment: fixed;
+}
+html[data-backdrop="on"] body, html[data-mode="simple"][data-backdrop="on"] body { background: none; }
+html[data-embed="1"] body { background: var(--ink); }
+
+.backdrop { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; pointer-events: none; }
+html[data-screen="boot"] .backdrop, html[data-screen="landing"] .backdrop, html[data-embed="1"] .backdrop, html:not([data-backdrop="on"]) .backdrop { display: none; }
+
+.wordmark { font-family: var(--font-mark); }
+.status-title, .empty-title, .about h3, .fs-name, .dialog-title, .panel-title, .simple-name, .simple-title {
+  font-family: var(--font-head); font-weight: 700; letter-spacing: -0.015em;
+}
+.panel-title { letter-spacing: 0.02em; }
+
+/* ------------------------------------------------------------------- glass */
+/* Every piece named in backdrop.js GLASS_KINDS. With the canvas on they are clear; without it filled. */
+.topbar, .simple-card, .controls, .glass-panel { background: var(--fill-card); border: 0; box-shadow: var(--rim), var(--drop); }
+.btn:not(.btn-solid), .seg, .simple-change, .tab, .chip, .search-input { background: var(--fill); border: 0; box-shadow: var(--rim-low), var(--drop-low); }
+html[data-backdrop="on"] .topbar, html[data-backdrop="on"] .simple-card, html[data-backdrop="on"] .controls, html[data-backdrop="on"] .glass-panel,
+html[data-backdrop="on"] .btn:not(.btn-solid), html[data-backdrop="on"] .seg, html[data-backdrop="on"] .simple-change,
+html[data-backdrop="on"] .tab, html[data-backdrop="on"] .chip, html[data-backdrop="on"] .search-input { background: transparent; }
+/* Glass over a photo or over other glass cannot be drawn by the canvas: it is frosted instead. */
+.frost {
+  background: rgba(34, 34, 38, 0.52); border: 0; box-shadow: var(--rim), var(--drop);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+}
+
+/* ----------------------------------------------------------------- buttons */
+.btn {
+  height: 34px; padding: 0 15px; border-radius: 999px; font-size: 13px; font-weight: 500; letter-spacing: -0.005em;
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.btn:not(.btn-solid):hover, html[data-backdrop="on"] .btn:not(.btn-solid):hover { background: rgba(255, 255, 255, 0.1); }
+.btn:not(.btn-solid):active, html[data-backdrop="on"] .btn:not(.btn-solid):active { background: rgba(255, 255, 255, 0.18); transform: scale(0.97); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.42; color: var(--paper); }
+.btn[aria-pressed="true"]:not(.btn-play):not(.btn-solid), html[data-backdrop="on"] .btn[aria-pressed="true"]:not(.btn-play):not(.btn-solid) {
+  background: rgba(255, 255, 255, 0.2); color: #fff;
+}
+.btn-solid {
+  border: 0; font-weight: 600; color: #111;
+  background: linear-gradient(180deg, #fffdf8, #ece6d8);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.btn-solid:hover { background: linear-gradient(180deg, #fff, #f4efe3); }
+.btn-solid:active { transform: scale(0.97); }
+.btn-quiet, html[data-backdrop="on"] .btn-quiet { color: var(--muted); }
+.btn-small { height: 28px; padding: 0 12px; font-size: 12px; }
+.btn-icon { width: 34px; padding: 0; }
+
+/* segmented controls: a capsule with a lighter thumb on the chosen part */
+.seg { border-radius: 999px; padding: 3px; gap: 2px; align-items: center; }
+.seg-btn { height: 28px; border: 0; border-radius: 999px; padding: 0 13px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.seg-btn:hover { background: rgba(255, 255, 255, 0.07); }
+.seg-btn[aria-checked="true"], .seg-btn[aria-pressed="true"] {
+  color: #fff; font-weight: 600; background: rgba(255, 255, 255, 0.17);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.seg-btn[aria-checked="true"]::after, .seg-btn[aria-pressed="true"]::after { display: none; }
+
+/* ----------------------------------------------------------------- top bar */
+.topbar, html[data-mode="simple"] .topbar {
+  height: calc(var(--topbar-h) - 14px); margin: 10px 14px 0; padding: 0 12px 0 24px; border-radius: 999px; column-gap: 24px;
+}
+.wordmark { font-size: 17px; letter-spacing: 0.16em; }
+.tagline { font-size: 11px; letter-spacing: 0; }
+.search-input {
+  height: 36px; padding: 0 16px; border-radius: 999px; font-family: var(--font-text); font-size: 14px;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.16), inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+html[data-mode="simple"] .search-input { border-radius: 999px; }
+.search-input:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55), inset 0 1px 2px rgba(0, 0, 0, 0.45); }
+.search-field .btn, html[data-mode="simple"] .search-field .btn { height: 36px; border-radius: 999px; padding: 0 18px; }
+.search-pop { top: 44px; border: 0; border-radius: 20px; padding: 16px 18px; background: rgba(34, 34, 38, 0.6); box-shadow: var(--rim), var(--drop); -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6); }
+.sim-badge { border-radius: 999px; }
+.console { height: calc(100vh - var(--topbar-h)); }
+
+/* ------------------------------------------------------------ simple mode */
+html[data-mode="simple"] .console { grid-template-columns: auto minmax(340px, 560px); justify-content: center; }
+html[data-mode="simple"] .stage { padding-top: 16px; }
+html[data-mode="simple"] .simplebar { margin-bottom: 14px; }
+.simple-seg { height: 44px; }
+.simple-seg .seg-btn { height: 38px; font-size: 14px; }
+html[data-mode="simple"] .viewer-frame, html[data-mode="simple"] .viewer, html[data-mode="simple"] #viewer { border-radius: 22px; }
+html[data-mode="simple"] .viewer-frame { border: 0; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.22), 0 18px 50px rgba(0, 0, 0, 0.5); }
+html[data-mode="simple"] .simple { padding: 16px 18px 10px 6px; }
+html[data-mode="simple"] .simple-card, html[data-mode="simple"] .simple-card:first-child {
+  max-width: none; padding: 20px 24px; border-top: 0; border-radius: var(--r-card); margin-bottom: 14px; gap: 12px;
+}
+.simple-name { font-size: 32px; line-height: 1.1; letter-spacing: -0.025em; }
+.simple-title { font-size: 17px; }
+.simple-line { font-size: 15px; color: var(--muted); }
+.simple-row { padding: 12px 0; border-top-color: rgba(255, 255, 255, 0.09); }
+.simple-row-q { font-size: 15px; }
+.simple-answer { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.simple-answer.is-fact { font-weight: 500; color: var(--paper); }
+.simple-more > summary { text-decoration: none; font-size: 13.5px; color: var(--muted); gap: 8px; }
+.simple-more > summary::before {
+  content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--t-fast) var(--ease); margin-left: 2px;
+}
+.simple-more[open] > summary::before { content: ""; transform: rotate(45deg); }
+.simple-more-body { padding: 12px 0 2px; }
+html[data-mode="simple"] .simple-change, .simple-change { border-radius: var(--r-tile); padding: 12px 16px; transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.simple-change:hover, html[data-backdrop="on"] .simple-change:hover, html[data-mode="simple"] .simple-change:hover { background: rgba(255, 255, 255, 0.08); }
+.simple-change:active { transform: scale(0.985); }
+.simple-change[aria-current="true"], html[data-backdrop="on"] .simple-change[aria-current="true"] { background: rgba(255, 255, 255, 0.13); box-shadow: inset 0 0 0 1.5px var(--signal), var(--drop-low); }
+.simple-change-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.simple-change .cand-n { border: 0; background: rgba(255, 255, 255, 0.14); font-family: var(--font-text); font-weight: 600; font-size: 12px; }
+.simple-change[aria-current="true"] .cand-n { background: var(--signal); color: #fff; }
+html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go), html[data-mode="simple"] .seg, html[data-mode="simple"] .simple-change { border-color: transparent; }
+html[data-backdrop="on"][data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go):not(:hover):not(:active):not([aria-pressed="true"]),
+html[data-backdrop="on"][data-mode="simple"] .seg,
+html[data-backdrop="on"][data-mode="simple"] .simple-change:not(:hover):not([aria-current="true"]) { background: transparent; }
+html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go), html[data-mode="simple"] .seg, html[data-mode="simple"] .simple-change { box-shadow: var(--rim-low), var(--drop-low); }
+html[data-mode="simple"] .seg { overflow: visible; }
+html[data-mode="simple"] .seg-btn { border-radius: 999px; }
+.simple-tool, .simple-tool-seg { height: 34px; }
+.simple-tool-seg .seg-btn { height: 28px; }
+.simple-tool[aria-pressed="true"] { border-color: transparent; }
+html[data-mode="simple"] .player .btn { height: 36px; }
+html[data-mode="simple"] .player .btn-icon { width: 36px; }
+.blinded { border: 0; border-radius: 24px; }
+.blinded-patch { border-radius: 999px; }
+
+/* ------------------------------------------------------------ dialogs, toasts */
+.dialog { border: 0; border-radius: 26px; background: rgba(32, 32, 35, 0.78); box-shadow: var(--rim), 0 30px 80px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(30px) saturate(1.6); backdrop-filter: blur(30px) saturate(1.6); }
+.dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.toast { border-radius: 999px; }
+
+/* ------------------------------------------------------------------ player */
+html[data-mode="simple"] .player .btn-play { width: auto; padding: 0 16px 0 13px; gap: 8px; }
+html[data-mode="simple"] .player .btn-play::after { font-size: 13px; font-weight: 500; }
+.player .btn-play[aria-pressed="true"] { border-color: transparent; }
+.player-transport { gap: 6px; }
+.timeline { height: 38px; border-radius: 10px; }
+.tl-label { border-left: 0; padding-left: 2px; font-size: 11.5px; font-weight: 500; }
+.tl-ticks { height: 18px; border-bottom: 0; background: rgba(255, 255, 255, 0.07); border-radius: 999px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1); padding: 0 6px; align-items: center; height: 8px; }
+.tl-tick::before { bottom: 50%; height: 4px; width: 4px; margin-left: -2px; margin-bottom: -2px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); }
+.tl-tick.is-wide::before { width: 4px; margin-left: -2px; }
+.tl-tick.is-live::before { height: 14px; width: 14px; margin-left: -7px; margin-bottom: -7px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.3); }
+.tl-group { gap: 7px; }
+
+/* ------------------------------------------------------------ advanced mode */
+html[data-mode="advanced"] { --rail-w: 226px; --chrome-v: 352px; }
+html[data-mode="advanced"] .console { column-gap: 0; }
+.modeopts { font-size: 12.5px; }
+.seg-modes { height: 40px; }
+.seg-modes .seg-btn { height: 32px; padding: 0 12px; }
+.strip-prev { background: linear-gradient(to right, rgba(16, 16, 19, 0.92) 45%, rgba(16, 16, 19, 0)); border-radius: 999px 0 0 999px; }
+.strip-next { background: linear-gradient(to left, rgba(16, 16, 19, 0.92) 45%, rgba(16, 16, 19, 0)); border-radius: 0 999px 999px 0; }
+
+/* the control rail: one glass card */
+.controls { border-radius: 24px; padding: 16px 14px; scrollbar-width: none; }
+.controls::-webkit-scrollbar { display: none; }
+.controls-body { padding: 0; gap: 14px; }
+.ctl { padding-top: 14px; border-top-color: rgba(255, 255, 255, 0.08); gap: 8px; }
+.ctl-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.ctl .seg-btn { padding: 0 4px; }
+.det-grid { border: 0; gap: 4px; border-radius: 0; }
+.det-grid .seg-btn, .det-grid .seg-btn:nth-child(n) { border: 0; border-radius: 10px; height: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.1); }
+.det-grid .seg-btn[aria-checked="true"], .det-grid .seg-btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.2); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35); }
+.switch { min-height: 34px; font-size: 13px; }
+.switch-track { flex: 0 0 38px; width: 38px; height: 22px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.16); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
+.switch-track::after { top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+.switch[aria-checked="true"] .switch-track { background: var(--signal); }
+.switch[aria-checked="true"] .switch-track::after { transform: translateX(16px); background: #fff; }
+select.select {
+  height: 32px; padding: 0 30px 0 14px; border: 0; border-radius: 999px; font-size: 12.5px; background-color: rgba(255, 255, 255, 0.07);
+  box-shadow: var(--rim-low), var(--drop-low); background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
+}
+html[data-backdrop="on"] select.select { background-color: transparent; }
+select.select option { background: #1c1c1f; color: var(--paper); }
+input[type="range"].range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); }
+input[type="range"].range::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); }
+input[type="range"].range::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -7px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+input[type="range"].range::-moz-range-thumb { width: 18px; height: 18px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+
+/* the viewer and its tools */
+html[data-mode="advanced"] .viewer-frame, html[data-mode="advanced"] .viewer, html[data-mode="advanced"] #viewer { border-radius: 18px; overflow: hidden; }
+html[data-mode="advanced"] .viewer-frame { border: 0; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.22), 0 14px 40px rgba(0, 0, 0, 0.45); }
+.toolrow { height: 34px; }
+.tool-group { border: 0; border-radius: 999px; padding: 2px; gap: 1px; background: var(--fill); box-shadow: var(--rim-low), var(--drop-low); }
+html[data-backdrop="on"] .tool-group { background: transparent; }
+.tool, .tool:first-child { border: 0; border-radius: 999px; height: 26px; padding: 0 11px; font-size: 12px; }
+.tool[aria-pressed="true"] { box-shadow: none; background: rgba(255, 255, 255, 0.18); color: #fff; }
+html .tbv-toolbar { border-radius: 999px; padding: 3px; background: rgba(28, 28, 31, 0.5); box-shadow: var(--rim-low); -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5); }
+html .tbv-btn { border-radius: 999px; border-color: transparent; }
+.status-card { border-radius: 22px; }
+.player .btn-play { width: 46px; }
+.caption-meta, .player-count { font-size: 11.5px; }
+
+/* the measurements column: one glass card, its tabs a row of pills */
+html[data-mode="advanced"] .side { margin: 12px 14px 12px 0; border-left: 0; border-radius: var(--r-card); overflow: hidden; background: var(--fill-card); box-shadow: var(--rim), var(--drop); }
+html[data-backdrop="on"][data-mode="advanced"] .side { background: transparent; }
+.side > .strip { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.tabs { padding: 10px 14px; gap: 2px; }
+.tab, .tab:first-child, html[data-backdrop="on"] .tab { height: 30px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500; background: transparent; box-shadow: none; }
+.tab:hover, html[data-backdrop="on"] .tab:hover { background: rgba(255, 255, 255, 0.07); }
+.tab[aria-selected="true"], html[data-backdrop="on"] .tab[aria-selected="true"] {
+  font-weight: 600; color: #fff; background: rgba(255, 255, 255, 0.17);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.tab[aria-selected="true"]::after { display: none; }
+.side .strip-arrow { top: 8px; bottom: 8px; }
+.panel { padding: 16px 20px 20px; }
+.fieldsum, .cite { border-top-color: rgba(255, 255, 255, 0.08); }
+html .tbp-btn { border-radius: 999px; padding-left: 12px; padding-right: 12px; }
+html .tbp-seg .tbp-btn { border-radius: 0; }
+html .tbp-seg .tbp-btn:first-child { border-radius: 999px 0 0 999px; }
+html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
+.cand, .chip { border-radius: var(--r-tile); }
+
+/* ------------------------------------------------------------ the sky page */
+.skyhome-brand .wordmark { font-size: 20px; letter-spacing: 0.18em; }
+.skyhome-tag { font-size: 14px; font-weight: 500; letter-spacing: -0.005em; opacity: 0.8; }
+.skyhome-top { padding-top: 18px; }
+.skyhome-input { font-size: 16px; letter-spacing: -0.01em; }
+.skyhome-field .btn { font-size: 15px; font-weight: 600; }
+.skyhome-mode, .skyhome-chip { font-weight: 500; letter-spacing: -0.005em; }
+.skyhome-chip { height: 38px; padding: 0 17px; border-radius: 999px; }
+.skyhome-zoom-btn { width: 42px; height: 42px; border-radius: 50%; font-weight: 300; font-size: 22px; }
+.skyhome-starts-label { font-weight: 500; }
+.skyhome-hint { font-weight: 500; border-radius: 999px; }
+.skyhome-card { border-radius: 999px; padding: 10px 10px 10px 24px; }
+.skyhome-card-name { font-weight: 600; letter-spacing: -0.015em; }
+.skyhome-go { height: 44px; border-radius: 999px; font-weight: 600; border: 0; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 2px 10px rgba(229, 60, 39, 0.4); }
+.skyhome-menu, .picklist { border-radius: 24px; }
+/* The sky page's glass: backdrop.js draws each piece on the canvas under the controls, bending the
+   sky behind it. Here: the rim, the shadow and how a press feels. Without the canvas they are frosted. */
+.skyhome-glass { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; pointer-events: none; }
+.skyhome:not(.has-glass) .skyhome-glass { display: none; }
+.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist { border: 0; box-shadow: var(--rim), var(--drop); }
+.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint { border: 0; box-shadow: var(--rim-low), var(--drop-low); }
+.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist, .skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint {
+  background: rgba(34, 34, 38, 0.5); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+}
+.skyhome.has-glass :is(.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist, .skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint) {
+  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn { transition: background-color 140ms ease, transform 140ms ease; }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):hover { background-color: rgba(255, 255, 255, 0.1); }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):active { background-color: rgba(255, 255, 255, 0.05); transform: scale(0.97); }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):focus-visible { outline: 2px solid rgba(247, 242, 231, 0.85); outline-offset: 2px; }
+.skyhome-inputwrap:focus-within { box-shadow: var(--rim), 0 0 0 2px rgba(247, 242, 231, 0.7), var(--drop); }
+.skyhome .skyhome-x { background: rgba(255, 255, 255, 0.1); border: 0; box-shadow: var(--rim-low); }
+.skyhome .skyhome-x:hover { background: rgba(255, 255, 255, 0.18); }
+.picklist-row.is-active { outline: 0; background: rgba(255, 255, 255, 0.14); }
+.picklist-row:hover, .skyhome-menu-row:hover, .skyhome-menu-row:focus-visible { background: rgba(255, 255, 255, 0.1); }
+.skyhome-menu-row, .picklist-row { border-radius: 12px; }
+.skyhome-credit[open] { border: 0; border-radius: 18px; background: rgba(28, 28, 31, 0.72); box-shadow: var(--rim), var(--drop); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
+
+/* ------------------------------------------------------------------ narrow */
+@media (max-width: 719px) {
+  :root { --topbar-h: auto; }
+  /* Two rows (name and buttons, then the search box): a rounded card, not a capsule. */
+  .topbar, html[data-mode="simple"] .topbar { height: auto; margin: 8px 8px 0; padding: 10px 12px 10px 16px; border-radius: 24px; column-gap: 10px; row-gap: 8px; }
+  .topbar > .sim-badge { margin-bottom: 0; }
+  /* Advanced has five buttons: they take a row of their own and slide sideways if they must. */
+  html[data-mode="advanced"] .topbar > .top-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
+  html[data-mode="advanced"] .topbar > .top-actions::-webkit-scrollbar { display: none; }
+  html[data-mode="advanced"] .topbar > .search { grid-row: 3; }
+  html[data-mode="advanced"] .topbar > .sim-badge { grid-row: 4; }
+  .console { height: auto; }
+  /* The controls slide up over the picture here, where the canvas cannot draw them: frosted. */
+  .controls, html[data-backdrop="on"] .controls {
+    background: rgba(30, 30, 34, 0.8); border-radius: 26px 26px 0 0;
+    -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+  }
+  .sheet-head { background: transparent; }
+}

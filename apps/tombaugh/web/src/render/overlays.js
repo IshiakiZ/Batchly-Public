@@ -18,6 +18,8 @@ import { formatValue, mjdToIso } from './viewmath.js';
 export const BRAND = { ink: '#171715', paper: '#F7F2E7', signal: '#E53C27', stone: '#77766E' };
 export const FONT_MONO = 'Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace';
 export const FONT_SANS = 'Arial, Helvetica, sans-serif';
+/** The interface type of the page, for text that should read as part of it (Simple mode's caption). */
+export const FONT_UI = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif';
 
 const TAU = Math.PI * 2;
 
@@ -567,11 +569,13 @@ export function drawRegionHatch(ctx, rect, img, k, path, style) {
  * shown above it.
  * Returns the height used.
  */
-export function drawCaption(ctx, rect, lines, { maxWidth, readout = '' } = {}) {
-  const pad = 10;
-  const padX = 8;
-  const padY = 6;
-  const lh = 15;
+export function drawCaption(ctx, rect, lines, { maxWidth, readout = '', plain = false } = {}) {
+  // plain: the page's own type on a round pill, for Simple mode.
+  const pad = plain ? 14 : 10;
+  const padX = plain ? 13 : 8;
+  const padY = plain ? 7 : 6;
+  const lh = plain ? 17 : 15;
+  const fontOf = (l) => (plain ? `600 ${Math.max(13, l.size || 13)}px ${FONT_UI}` : `${l.bold ? 'bold ' : ''}${l.size || 11}px ${FONT_MONO}`);
   const limit = Math.max(60, (maxWidth || rect.size - 2 * pad) - padX * 2);
   const x = Math.round(rect.x + pad);
   let bottom = Math.round(rect.y + rect.size - pad);
@@ -586,7 +590,7 @@ export function drawCaption(ctx, rect, lines, { maxWidth, readout = '' } = {}) {
     if (l.parts) {
       const parts = l.parts.filter(Boolean);
       if (!parts.length) continue;
-      ctx.font = `${l.bold ? 'bold ' : ''}${l.size || 11}px ${FONT_MONO}`;
+      ctx.font = fontOf(l);
       const joined = parts.join('  \u00b7  ');
       if (parts.length === 1 || ctx.measureText(joined).width <= limit) shown.push({ ...l, text: joined });
       else for (const part of parts) shown.push({ ...l, text: part });
@@ -597,15 +601,27 @@ export function drawCaption(ctx, rect, lines, { maxWidth, readout = '' } = {}) {
   if (shown.length) {
     let w = 0;
     const fitted = shown.map((l) => {
-      ctx.font = `${l.bold ? 'bold ' : ''}${l.size || 11}px ${FONT_MONO}`;
+      ctx.font = fontOf(l);
       const text = fitText(ctx, l.text, limit);
       w = Math.max(w, ctx.measureText(text).width);
       return { ...l, text, font: ctx.font };
     });
     const h = fitted.length * lh + padY * 2;
     const bw = Math.ceil(w) + padX * 2;
-    ctx.fillStyle = INK_BACK;
-    ctx.fillRect(x, bottom - h, bw, h);
+    if (plain) {
+      const r = Math.min(h / 2, 16);
+      ctx.fillStyle = 'rgba(18, 18, 20, 0.66)';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, bottom - h, bw, h, r);
+      else ctx.rect(x, bottom - h, bw, h);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = INK_BACK;
+      ctx.fillRect(x, bottom - h, bw, h);
+    }
     fitted.forEach((l, i) => {
       ctx.font = l.font;
       ctx.fillStyle = l.color || BRAND.paper;

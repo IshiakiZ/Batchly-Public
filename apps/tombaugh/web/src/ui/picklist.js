@@ -45,7 +45,7 @@ export function attachPickList(input, opts = {}) {
 
   // The glass panel stays still and the list scrolls inside it (glass layers must not scroll away).
   const pop = doc.createElement('div');
-  pop.className = 'picklist glass';
+  pop.className = 'picklist';
   pop.hidden = true;
   const list = doc.createElement('div');
   list.className = 'picklist-scroll';

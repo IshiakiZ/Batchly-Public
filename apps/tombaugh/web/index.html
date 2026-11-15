@@ -3,7 +3,7 @@
   Tombaugh - SPHEREx blink comparator. Apache-2.0.
   AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
 -->
-<html lang="en" data-screen="boot" data-glass-preset="thick">
+<html lang="en" data-screen="boot">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -22,15 +22,15 @@
 <meta name="twitter:description" content="Every SPHEREx exposure of one patch of sky, aligned and played as a movie. Things that move or change stand out.">
 <!-- The mark: one star at two dates, as a blink comparator shows it. Paper then, Signal now, on Ink. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23171715'/%3E%3Ccircle cx='12.5' cy='18' r='7' fill='%23F7F2E7'/%3E%3Ccircle cx='19.5' cy='14' r='7' fill='%23E53C27'/%3E%3Cpath d='M18.6 13.5a7 7 0 0 0-5.2 11.45 7 7 0 0 0 5.2-11.45z' fill='%23171715' fill-opacity='.38'/%3E%3C/svg%3E">
-<!-- The glass look of the Batchly site (third-party, MIT: see vendor/liquid-glass). The page works without it. -->
-<link rel="stylesheet" href="vendor/liquid-glass/liquid-glass.min.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="apple.css">
 </head>
 <body>
+<canvas class="backdrop" id="backdrop" aria-hidden="true"></canvas>
 <a class="skip-link" href="#viewer">Skip to the viewer</a>
 
 <div class="app" id="app">
-  <header class="topbar glass" id="topbar" data-testid="topbar">
+  <header class="topbar" id="topbar" data-testid="topbar">
     <a class="brand" id="brand" href="./" aria-label="Tombaugh, start page">
       <span class="wordmark">TOMBAUGH</span>
       <span class="tagline">a blink comparator for the 102-color sky <span class="byline">by Missing Mass</span></span>
@@ -164,7 +164,6 @@
   <p class="noscript">Tombaugh needs JavaScript to load and align the SPHEREx images.</p>
 </noscript>
 
-<script src="vendor/liquid-glass/liquid-glass.min.js"></script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

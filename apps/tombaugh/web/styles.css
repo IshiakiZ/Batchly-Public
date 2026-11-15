@@ -714,9 +714,7 @@ html[data-mode="simple"] .simple {
 .simple-change-strength { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 /* ---- Simple mode: the small tools under the picture, and the too-bright notice */
-/* ---- Simple mode wears the glass look of the Batchly site: a soft ground, a floating bar, glass
-   cards (the library draws those) and rim-lit pills for the small controls. */
-:root { --glass-accent: #f7f2e7; --glass-dispersion: 0.3; }
+/* ---- Simple mode: a soft ground, a floating bar, cards and pills (apple.css gives them their glass). */
 html[data-mode="simple"] body {
   background:
     radial-gradient(1100px 760px at 88% -12%, rgba(229, 60, 39, 0.22), transparent 62%),
@@ -727,8 +725,8 @@ html[data-mode="simple"] body {
 }
 html[data-mode="simple"] .topbar { margin: 10px 14px 0; height: calc(var(--topbar-h) - 6px); border-bottom: 0; border-radius: 26px; }
 html[data-mode="simple"] .side { border-left: 0; }
-html[data-mode="simple"] .simple-card.glass { padding: 18px 22px; border-top: 0; border-radius: 22px; margin-bottom: 12px; }
-html[data-mode="simple"] .simple-card.glass:first-child { padding-top: 18px; }
+html[data-mode="simple"] .simple-card { padding: 18px 22px; border-top: 0; border-radius: 22px; margin-bottom: 12px; }
+html[data-mode="simple"] .simple-card:first-child { padding-top: 18px; }
 html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go),
 html[data-mode="simple"] .seg,
 html[data-mode="simple"] .simple-change {
@@ -744,7 +742,6 @@ html[data-mode="simple"] .seg { border-radius: 999px; overflow: hidden; }
 html[data-mode="simple"] .seg-btn { border-radius: 0; border-left-color: rgba(255, 255, 255, 0.1); }
 html[data-mode="simple"] .simple-change { border-radius: 16px; }
 html[data-mode="simple"] .viewer-frame { border-color: rgba(255, 255, 255, 0.16); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); }
-.blinded.glass { background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .simpletools { display: none; }
 html[data-mode="simple"] .simpletools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: var(--viewer-size); margin-top: 2px; }
 .simple-tool-seg { display: inline-flex; height: 34px; }
@@ -790,7 +787,7 @@ html[data-mode="advanced"] .player-row > .simple-tool-seg, html[data-embed="1"] 
   .panel-title { display: block; }
   .tagline { display: none; }
   html[data-mode="simple"] { --viewer-size: clamp(280px, min(calc(100vh - 220px), calc(100vw - 2 * var(--pad))), 760px); }
-  /* clip sideways: the glass cards draw a little past their own edges */
+  /* clip sideways: the cards' shadows reach a little past their own edges */
   html[data-mode="simple"] .simple { overflow: visible; overflow-x: clip; padding-top: 20px; }
   .simple-card { margin: 0 auto; }
 }

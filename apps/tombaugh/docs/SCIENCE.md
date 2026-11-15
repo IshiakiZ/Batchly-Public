@@ -541,7 +541,7 @@ These were done on real files or are enforced by tests that run without network 
 | TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight tests are the Astropy comparison and the offsets from Gaia below |
 | Pixel solid angle: 1 MJy/sr over a 6.15 arcsec pixel = 889 microJy | Arithmetic, checked |
 | Parallax worked number: 2 AU at 500 AU = 13.75 arcmin | Arithmetic, checked |
-| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 1043 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
+| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 1050 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
 | The same inputs given to this code and to Astropy (FITS reading, world coordinates, wavelength lookup, frame format, RICE decompression, ephemeris and motion, reprojection) | 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)) |
 
 ### Checks on real data

@@ -102,10 +102,8 @@ time, and uses published values for the two brown dwarfs, which Gaia does not li
 
 ## 6. Software and tools
 
-**One third-party code library is bundled, for looks only:** Liquid Glass for the Web v1.3.0 (MIT,
-`web/vendor/liquid-glass/`), the glass look of the Batchly site that hosts the tool. It draws the
-glass bars, cards and buttons and takes no part in the science. All other code in the repository
-was generated for this project. There are no npm dependencies and no CDN imports. Astropy is used only as an
+**No third-party code library is bundled.** All code in the repository was generated for this
+project, including the glass look of the controls. There are no npm dependencies and no CDN imports. Astropy is used only as an
 independent check during development. Aladin is not used.
 
 | # | Tool | Role | Link |

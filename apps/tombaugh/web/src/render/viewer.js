@@ -105,6 +105,7 @@ export const DEFAULT_OPTIONS = {
   scaleBar: true,
   colorbar: true,
   caption: true,
+  plainCaption: false, //  the caption in the page's own type on a round pill
   crosshair: false, //     open reticle at the grid centre
   pixelGrid: true, //      pixel boundaries at high zoom
   loupe: false, //         magnified inset beside the cursor (mouse / pen only)
@@ -710,6 +711,7 @@ export function createViewer(container, options = {}) {
       drawCaption(c, rect, lines, {
         maxWidth: rect.size - 20 - (barWidth ? barWidth + 28 : 0),
         readout: live && opts.readout ? readoutText() : '',
+        plain: !!opts.plainCaption,
       });
     }
 

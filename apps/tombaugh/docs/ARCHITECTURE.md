@@ -1,7 +1,7 @@
 # Tombaugh: architecture
 
 Two parts. A small proxy finds and trims data from public archives. A browser app does the
-science and the drawing. Neither has a third-party dependency in its data or science code; the page bundles one MIT display library (`web/vendor/liquid-glass/`) for its glass controls, and works without it.
+science and the drawing. Neither has a third-party code dependency. The glass look of the controls is drawn by the page's own WebGL code (`web/src/ui/backdrop.js`), and the page works without it.
 
 The proxy reads NASA's public SPHEREx bucket on AWS Open Data, using this project's own index of
 every exposure in it (272,963 exposures in 273 index units). IRSA's search and cutout services
@@ -327,7 +327,7 @@ releases in its code.
 
 - **Development.** `node proxy/dev-server.mjs`. Synthetic backend by default;
   `TOMBAUGH_BACKEND=s3` for the public bucket, `TOMBAUGH_BACKEND=irsa` for IRSA only.
-- **Tests.** `node --test` runs the unit tests beside each module (1043 pass). `test/e2e.mjs`
+- **Tests.** `node --test` runs the unit tests beside each module (1050 pass). `test/e2e.mjs`
   drives the page in a browser with Playwright against the synthetic backend (14 checks pass on
   the bundled page). `tools/crosscheck/` compares the code with Astropy
   ([CROSSCHECK.md](CROSSCHECK.md)).

@@ -84,7 +84,7 @@ between "Photos", "What changed" and "In colour", a row of small tools (speed, w
 smooth, known stars, save), and short answers in everyday words to "Moving?", "How fast?" and
 "Brightness changed?" for any star you click, with its charts folded underneath. Anything longer
 sits in a drop-down. A star too bright for the camera gets a plain notice instead of a blank
-photo. The controls wear the liquid-glass look of the Batchly site that hosts the tool. **Advanced** (the button at the top right) is the full console: eight views,
+photo. The controls are glass: every card and button bends the softly moving backdrop, or the sky itself, behind it. **Advanced** (the button at the top right) is the full console: eight views,
 six detectors, the spectrum, light-curve and motion plots, the candidate list with its reasons,
 the Validation tab and the measuring tools. Simple mode measures nothing of its own. Every answer
 in it is Advanced mode's verdict reworded. The choice is remembered in the browser, and a link
@@ -317,7 +317,7 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 1043 unit tests; they do not touch the network
+# 1050 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file

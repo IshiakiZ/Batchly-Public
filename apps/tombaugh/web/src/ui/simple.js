@@ -383,7 +383,7 @@ export function createSimpleView({
   const fieldLook = h('p', { class: 'simple-text' });
   const fieldVisits = h('p', { class: 'simple-text' });
   const fieldMore = more('About this place', fieldWhat, fieldLook, fieldVisits);
-  const fieldCard = h('section', { class: 'simple-card simple-field glass' }, fieldName, fieldShort, fieldMore.el);
+  const fieldCard = h('section', { class: 'simple-card simple-field' }, fieldName, fieldShort, fieldMore.el);
 
   let field = { name: '', coord: '' };
   let visits = { loading: true, passes: [], error: '' };
@@ -405,7 +405,7 @@ export function createSimpleView({
 
   // ---- what changed ----------------------------------------------------------------------------
   const changeBody = h('div', { class: 'simple-changes' });
-  const changeCard = h('section', { class: 'simple-card glass' }, h('h3', { class: 'simple-title' }, 'What changed'), changeBody);
+  const changeCard = h('section', { class: 'simple-card' }, h('h3', { class: 'simple-title' }, 'What changed'), changeBody);
 
   let cands = { status: 'idle', list: [], active: -1 };
   let titleEls = [];
@@ -482,7 +482,7 @@ export function createSimpleView({
   const curveHost = h('div', { class: 'plot-host simple-plot' });
   const curveMore = more('Its brightness over time', curveHost);
   curveMore.el.hidden = true;
-  const pickCard = h('section', { class: 'simple-card glass' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el, specMore.el, curveMore.el);
+  const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el, specMore.el, curveMore.el);
 
   let selection = null;
   let spectrumPlot = null;
@@ -596,7 +596,7 @@ export function createSimpleView({
   // The full citation block (the same one Advanced mode shows) is moved in here by the page.
   const credit = more('Where the photos come from');
   credit.el.classList.add('simple-credit');
-  const creditCard = h('section', { class: 'simple-card glass' }, credit.el);
+  const creditCard = h('section', { class: 'simple-card' }, credit.el);
 
   if (host) clear(host).append(fieldCard, changeCard, pickCard, creditCard);
   setView('passes');

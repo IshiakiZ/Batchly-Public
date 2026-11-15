@@ -18,6 +18,7 @@ import { createCitation } from './ui/citation.js';
 import { createFieldSummary, frameWaveSpan, foundLine, summarizePasses } from './ui/fieldsummary.js';
 import { createTour, FALLBACK_TARGETS, findTarget } from './ui/tour.js';
 import { createToasts, copyText } from './ui/toast.js';
+import { createBackdrop } from './ui/backdrop.js';
 
 const VERSION = '0.1.0';
 const GAIA_RADIUS_DEG = 0.12; // covers the corners of the widest (10 arcmin) field
@@ -361,7 +362,7 @@ async function boot() {
     try {
       const full = store.get().mode !== 'simple';
       // Both modes show the true square pixels unless "Smooth" is switched on.
-      viewer.setOptions({ colorbar: full, compass: full, scaleBar: full, smooth: !!store.get().smooth });
+      viewer.setOptions({ colorbar: full, compass: full, scaleBar: full, plainCaption: !full, smooth: !!store.get().smooth });
       // The citation block sits at the foot of the column in Advanced mode and inside the
       // "Data" drop-down in Simple mode.
       if (els.cite && simple.creditBody) (full ? els.side : simple.creditBody).append(els.cite);
@@ -1041,7 +1042,8 @@ async function boot() {
   }
 
   // Simple mode names each entry of the list by what measuring that spot finds, not by the search's
-  // first guess. The measurements run one at a time, between frames, and are kept on the entry.
+  // first guess. Each measurement is cut in two short tasks with a pause between them, so the
+  // photos keep flipping smoothly while the list fills in. Results are kept on the entry.
   let checkTimer = null;
   function queueChecks() {
     if (checkTimer !== null) {
@@ -1054,26 +1056,45 @@ async function boot() {
     const data = session.byDet.get(det);
     if (!entry || !entry.model || !data || !data.layers.length || data.partial) return;
     const key = session.key;
+    const live = () => key === session.key && store.get().det === det && store.get().mode === 'simple';
+    const later = (fn, ms) => {
+      checkTimer = setTimeout(() => {
+        checkTimer = null;
+        if (live()) fn();
+      }, ms);
+    };
     const step = () => {
-      checkTimer = null;
-      if (key !== session.key || store.get().det !== det || store.get().mode !== 'simple') return;
       const i = entry.candidates.findIndex((c) => !c.checked && !c.unchecked && !c.checkTried);
       if (i < 0) return;
       const c = entry.candidates[i];
       c.checkTried = true;
-      try {
-        simple.setChecked(i, measureSpot(c.ra, c.dec, data));
-      } catch (err) {
+      const fail = (err) => {
         console.warn('[tombaugh] candidate check failed', err);
         simple.setChecked(i, null);
+        later(step, 120);
+      };
+      let spot = null;
+      try {
+        spot = measureSpotMotion(c.ra, c.dec, data);
+      } catch (err) {
+        fail(err);
+        return;
       }
-      checkTimer = setTimeout(step, 30);
+      later(() => {
+        try {
+          simple.setChecked(i, measureSpotLight(c.ra, c.dec, spot));
+        } catch (err) {
+          fail(err);
+          return;
+        }
+        later(step, 120);
+      }, 90);
     };
-    checkTimer = setTimeout(step, 150);
+    later(step, 400);
   }
 
-  /** Motion and brightness at a spot, as simple.setSelection takes them. Changes nothing on screen. */
-  function measureSpot(ra, dec, data) {
+  /** First half of measuring a spot: its motion. Changes nothing on screen. */
+  function measureSpotMotion(ra, dec, data) {
     const frame = player.frame();
     const m = pipeline.measureMotion(lib, data.layers, data.grid, ra, dec, {
       stars: session.gaia.stars,
@@ -1081,7 +1102,11 @@ async function boot() {
       startMjd: frame && Number.isFinite(frame.mjd) ? frame.mjd : null,
     });
     const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
-    const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
+    return { m, follow: pipeline.photometryTrack(lib, m, verdict.verdict) };
+  }
+
+  /** Second half: its brightness over time. -> what simple.setSelection takes. */
+  function measureSpotLight(ra, dec, { m, follow }) {
     const spec = pipeline.measureSpectrum(lib, allFrames(), ra, dec, follow ? { track: follow.track } : {});
     return {
       measured: m ? m.measured : null,
@@ -1358,7 +1383,7 @@ async function boot() {
     // A blank patch that leaves most of the photo: one short label so nobody takes it for a hole in the sky.
     const patch = plain && !show && flaggedMiddle(frame) > 0.08;
     if (patch && !patchEl) {
-      patchEl = h('div', { class: 'blinded-patch glass', role: 'note' }, 'Blank patch: too bright for the camera');
+      patchEl = h('div', { class: 'blinded-patch frost', role: 'note' }, 'Blank patch: too bright for the camera');
       els.viewerFrame.append(patchEl);
     }
     if (patchEl) patchEl.hidden = !patch;
@@ -1367,7 +1392,7 @@ async function boot() {
       return;
     }
     if (!blindedEl) {
-      blindedEl = h('div', { class: 'blinded glass', role: 'status' });
+      blindedEl = h('div', { class: 'blinded frost', role: 'status' });
       els.viewerFrame.append(blindedEl);
     }
     const canWiden = s.fov < FOVS[FOVS.length - 1];
@@ -2745,6 +2770,15 @@ async function boot() {
       return layout.currentTab() === String(id);
     },
   };
+  // The moving ground and the glass drawn over it. Without WebGL the page keeps its plain ground.
+  let backdrop = null;
+  try {
+    backdrop = store.get().embed ? null : createBackdrop({ canvas: document.getElementById('backdrop'), reducedMotion: reducedMotion() });
+    if (backdrop) document.documentElement.dataset.backdrop = 'on';
+  } catch (err) {
+    console.warn('[tombaugh] backdrop', err);
+  }
+  app.backdrop = () => (backdrop ? backdrop.status() : null);
   try {
     window.tombaugh = app;
   } catch {

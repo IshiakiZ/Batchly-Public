@@ -28,18 +28,10 @@ browser. See docs/AI-USE.md for the full log.
 
 THIRD-PARTY CODE
 
-One library, used only for the look of the controls:
-
-Liquid Glass for the Web v1.3.0 (web/vendor/liquid-glass/), the glass
-look of the Batchly site that hosts the tool. MIT License, Copyright (c)
-2026 Liquid Glass for the Web contributors. An independent,
-Apple-inspired implementation, not affiliated with Apple. The full
-licence text is in web/vendor/liquid-glass/LICENSE. It draws the glass
-bars, cards and buttons; it takes no part in reading, aligning or
-measuring the data, and the page works without it.
-
-Everything else in the repository was generated for this project. There
-are no npm dependencies and no CDN imports.
+None. All code in the repository was generated for this project,
+including the glass look of the controls (web/src/ui/backdrop.js and
+web/apple.css; an independent drawing, not affiliated with Apple or with
+any glass library). There are no npm dependencies and no CDN imports.
 
 
 THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
