@@ -5,12 +5,13 @@
 // zoom, click a star (or pick one from the list in the search box), then press the button to see
 // what SPHEREx saw there. As few words as possible.
 //
-//   createHome(container, { targets, stars, figures, starts, onOpen, onSearch, onMode, view, onView })
+//   createHome(container, { targets, stars, figures, starts, bodies, onOpen, onBody, onSearch, onMode, view, onView })
 //     -> { el, show(), hide(), destroy(), focusSearch(), setSearch(text), setBusy(on, message), setError(message) }
 //
 //   targets  every built-in place: [{ id, name, ra, dec, short? }], ringed on the sky
 //   starts   the few to offer as buttons ("Start here")
 //   stars    the bright-star list (stardata.js starList()); figures: its constellation lines
+//   bodies   solar system bodies to offer: [{ id, name, kind }]; onBody (id) => void follows one
 //   onOpen   ({ ra, dec, name, target }) => void   go and look at that place
 //   onSearch (text) => void | Promise              free text that is not in the list
 
@@ -18,14 +19,35 @@ import { h } from './layout.js';
 import { createSkyGlobe, SKY_SURVEYS } from '../sky/globe.js';
 import { attachPickList } from './picklist.js';
 
-/** The names offered in a search box: built-in places first, then every named star A to Z. Pure. */
-export function pickItems(targets, stars) {
+/** A kind of solar system body in everyday words. Pure. */
+export function plainKind(kind) {
+  return (
+    {
+      'dwarf planet': 'Dwarf planet',
+      asteroid: 'Asteroid',
+      comet: 'Comet',
+      'interstellar comet': 'Comet from another star',
+      centaur: 'Icy body between the planets',
+    }[kind] || ''
+  );
+}
+
+/**
+ * The names offered in a search box: built-in places first, then the solar system bodies, then
+ * every named star A to Z. Pure.
+ */
+export function pickItems(targets, stars, bodies) {
   const out = [];
   const seen = new Set();
   for (const t of targets || []) {
     if (!t || !t.name || seen.has(t.name.toLowerCase())) continue;
     seen.add(t.name.toLowerCase());
     out.push({ name: t.name, group: 'Start here', ra: t.ra, dec: t.dec, target: t });
+  }
+  for (const b of bodies || []) {
+    if (!b || !b.id || !b.name || seen.has(b.name.toLowerCase())) continue;
+    seen.add(b.name.toLowerCase());
+    out.push({ name: b.name, group: 'Solar system', body: b.id });
   }
   const named = (stars || []).filter((s) => s && s.name && !seen.has(s.name.toLowerCase()));
   named.sort((a, b) => a.name.localeCompare(b.name));
@@ -44,7 +66,8 @@ export function createHome(container, opts = {}) {
   const targets = Array.isArray(opts.targets) ? opts.targets : [];
   const starts = Array.isArray(opts.starts) ? opts.starts : targets.slice(0, 5);
   const stars = Array.isArray(opts.stars) ? opts.stars : [];
-  const items = pickItems(targets, stars);
+  const bodies = Array.isArray(opts.bodies) ? opts.bodies.filter((b) => b && b.id && b.name) : [];
+  const items = pickItems(targets, stars, bodies);
 
   const skyHost = h('div', { class: 'skyhome-sky' });
   const input = h('input', {
@@ -60,18 +83,18 @@ export function createHome(container, opts = {}) {
     'data-testid': 'home-search',
   });
   const status = h('p', { class: 'skyhome-status', 'aria-live': 'polite' });
-  const field = h('div', { class: 'skyhome-field' }, input, h('button', { class: 'btn btn-solid', type: 'submit' }, 'Go'));
+  const field = h('div', { class: 'skyhome-field' }, h('div', { class: 'skyhome-inputwrap glass' }, input), h('button', { class: 'btn btn-solid', type: 'submit' }, 'Go'));
   const form = h('form', { class: 'skyhome-search', role: 'search', autocomplete: 'off' }, field, status);
 
   const cardName = h('strong', { class: 'skyhome-card-name' });
   const cardLine = h('span', { class: 'skyhome-card-line' });
   const cardGo = h('button', { class: 'btn btn-solid skyhome-go', type: 'button', 'data-testid': 'home-open' }, 'See what changed');
   const cardClose = h('button', { class: 'btn btn-quiet skyhome-x', type: 'button', 'aria-label': 'Close' }, '×');
-  const card = h('div', { class: 'skyhome-card', role: 'status', 'data-testid': 'home-card' }, h('div', { class: 'skyhome-card-text' }, cardName, cardLine), cardGo, cardClose);
+  const card = h('div', { class: 'skyhome-card glass', role: 'status', 'data-testid': 'home-card' }, h('div', { class: 'skyhome-card-text' }, cardName, cardLine), cardGo, cardClose);
   card.hidden = true;
 
   const chips = h('nav', { class: 'skyhome-starts', 'aria-label': 'Start here' }, h('span', { class: 'skyhome-starts-label' }, 'Start here'));
-  const hint = h('p', { class: 'skyhome-hint' }, 'Drag to look around. Scroll to zoom. Click a star.');
+  const hint = h('p', { class: 'skyhome-hint glass' }, 'Drag to look around. Scroll to zoom. Click a star.');
   // One line of credit, with the full acknowledgements folded underneath.
   const creditLine = h('summary', null);
   const credit = h(
@@ -87,11 +110,11 @@ export function createHome(container, opts = {}) {
       h('p', null, 'Tombaugh is a NASA Space Apps Challenge 2026 project by team Missing Mass. It is not affiliated with or endorsed by NASA. All of its code was written by an AI system, Claude, under the team’s direction.'),
     ),
   );
-  const zoomIn = h('button', { class: 'btn skyhome-zoom-btn', type: 'button', 'aria-label': 'Zoom in', title: 'Zoom in' }, '+');
-  const zoomOut = h('button', { class: 'btn skyhome-zoom-btn', type: 'button', 'aria-label': 'Zoom out', title: 'Zoom out' }, '−');
+  const zoomIn = h('button', { class: 'skyhome-zoom-btn glass', 'data-glass-interactive': '', type: 'button', 'aria-label': 'Zoom in', title: 'Zoom in' }, '+');
+  const zoomOut = h('button', { class: 'skyhome-zoom-btn glass', 'data-glass-interactive': '', type: 'button', 'aria-label': 'Zoom out', title: 'Zoom out' }, '−');
   const modeBtn =
     typeof opts.onMode === 'function'
-      ? h('button', { class: 'btn', type: 'button', 'data-testid': 'home-mode', title: 'Show every view, plot and tool', onclick: () => opts.onMode() }, 'Advanced')
+      ? h('button', { class: 'skyhome-mode glass', 'data-glass-interactive': '', type: 'button', 'data-testid': 'home-mode', title: opts.modeTitle || 'Show every view, plot and tool', onclick: () => opts.onMode() }, opts.modeLabel || 'Advanced')
       : null;
 
   const root = h(
@@ -119,7 +142,8 @@ export function createHome(container, opts = {}) {
   const globe = createSkyGlobe(skyHost, {
     stars,
     figures: opts.figures,
-    targets: targets.map((t) => ({ name: t.name, ra: t.ra, dec: t.dec, target: t })),
+    // A target with a measured parallax (mas) has a distance (pc), so it takes part in the depth effect.
+    targets: targets.map((t) => ({ name: t.name, ra: t.ra, dec: t.dec, dist: t.parallax > 0 ? 1000 / t.parallax : undefined, target: t })),
     layers: opts.layers,
     reducedMotion: opts.reducedMotion,
     photos: opts.photos,
@@ -161,7 +185,7 @@ export function createHome(container, opts = {}) {
   }
 
   function choose(item, { fov = 14 } = {}) {
-    const sel = { kind: item.target ? 'target' : 'star', name: item.name, ra: item.ra, dec: item.dec, target: item.target || null };
+    const sel = { kind: item.target ? 'target' : 'star', name: item.name, ra: item.ra, dec: item.dec, mag: item.mag, target: item.target || null };
     globe.select(sel);
     globe.flyTo(item.ra, item.dec, Math.min(globe.getView().fov, fov));
     showSelection(sel);
@@ -169,10 +193,57 @@ export function createHome(container, opts = {}) {
   }
 
   for (const t of starts) {
-    chips.append(h('button', { class: 'skyhome-chip', type: 'button', onclick: () => choose({ name: t.name, ra: t.ra, dec: t.dec, target: t }) }, t.name));
+    chips.append(h('button', { class: 'skyhome-chip glass', 'data-glass-interactive': '', type: 'button', onclick: () => choose({ name: t.name, ra: t.ra, dec: t.dec, target: t }) }, h('span', { class: 'skyhome-dot', 'aria-hidden': 'true' }), t.name));
   }
 
-  const picker = attachPickList(input, { items, host: field, onPick: (item) => choose(item) });
+  // The solar system: these move, so they are not on the map. One button opens the list.
+  let menu = null;
+  if (bodies.length && typeof opts.onBody === 'function') {
+    const list = h('div', { class: 'skyhome-menu-list', role: 'menu', 'aria-label': 'Solar system' });
+    for (const b of bodies) {
+      list.append(
+        h(
+          'button',
+          { class: 'skyhome-menu-row', type: 'button', role: 'menuitem', onclick: () => opts.onBody(b.id) },
+          h('strong', null, b.name),
+          h('span', null, plainKind(b.kind)),
+        ),
+      );
+    }
+    menu = h('div', { class: 'skyhome-menu glass', 'data-testid': 'home-bodies' }, list);
+    menu.hidden = true;
+    const btn = h(
+      'button',
+      { class: 'skyhome-chip skyhome-solar glass', 'data-glass-interactive': '', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'data-testid': 'home-solar' },
+      h('span', { class: 'skyhome-orbit', 'aria-hidden': 'true' }),
+      'Solar system',
+    );
+    const setOpen = (on) => {
+      menu.hidden = !on;
+      btn.setAttribute('aria-expanded', String(on));
+    };
+    btn.addEventListener('click', () => setOpen(menu.hidden));
+    root.addEventListener('pointerdown', (ev) => {
+      if (!menu.hidden && !menu.contains(ev.target) && !btn.contains(ev.target)) setOpen(false);
+    });
+    root.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && !menu.hidden) {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+    chips.append(btn);
+    root.append(menu);
+  }
+
+  const picker = attachPickList(input, {
+    items,
+    host: field,
+    onPick: (item) => {
+      if (item.body && typeof opts.onBody === 'function') opts.onBody(item.body);
+      else choose(item);
+    },
+  });
 
   function setError(message) {
     status.textContent = message || '';
@@ -215,7 +286,7 @@ export function createHome(container, opts = {}) {
 
   cardGo.addEventListener('click', () => {
     if (!selection || typeof opts.onOpen !== 'function') return;
-    opts.onOpen({ ra: selection.ra, dec: selection.dec, name: selection.name || '', target: selection.target || null });
+    opts.onOpen({ ra: selection.ra, dec: selection.dec, name: selection.name || '', mag: selection.mag, target: selection.target || null });
   });
   cardClose.addEventListener('click', () => {
     globe.select(null);

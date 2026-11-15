@@ -541,7 +541,7 @@ These were done on real files or are enforced by tests that run without network 
 | TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight tests are the Astropy comparison and the offsets from Gaia below |
 | Pixel solid angle: 1 MJy/sr over a 6.15 arcsec pixel = 889 microJy | Arithmetic, checked |
 | Parallax worked number: 2 AU at 500 AU = 13.75 arcmin | Arithmetic, checked |
-| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 1033 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
+| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 1043 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
 | The same inputs given to this code and to Astropy (FITS reading, world coordinates, wavelength lookup, frame format, RICE decompression, ephemeris and motion, reprojection) | 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)) |
 
 ### Checks on real data
@@ -660,6 +660,15 @@ with the same data model.
 **The fog-of-war map** records which 1.8 degree cells have been opened in Tombaugh. It is a count
 of views through this tool, it can be incremented by anyone, and it is not a record of what
 astronomers have examined by other means.
+
+**The depth on the start page is a display effect, not a measurement.** The whole-sky start page
+draws each catalogue star exactly at its catalogue position when the view is at rest, and a click
+always returns that position. While the view is moving (and in the slow sway before the first
+touch) the camera is placed up to 3 parsecs from the Sun and each star is drawn where it would
+appear from there, using its Hipparcos distance (from the HYG database, source S6), so near stars
+slide against far ones. The largest shift of any one star is squeezed under 5 percent of the view,
+so the handful of stars within a few parsecs move less than true geometry would give. No
+measurement in Tombaugh uses these distances or this effect.
 
 **Not affiliated with or endorsed by NASA.** Calibration, flags, variance and the zodiacal model
 are the SPHEREx pipeline's. Tombaugh displays and combines them and adds no calibration of its

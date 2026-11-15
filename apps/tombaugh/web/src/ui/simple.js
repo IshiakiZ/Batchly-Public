@@ -1,15 +1,15 @@
 // Tombaugh - SPHEREx blink comparator. Apache-2.0.
 // AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
 
-// Simple mode, the default face of the console: the picture, two views ("The sky" and "What
-// changed") and a side column that says in plain words what the field is, what changed in it and
-// what the thing you clicked is doing. Nothing here measures anything: every answer is the
+// Simple mode, the default face of the console: the picture, three views ("Photos", "What
+// changed" and "In colour"), a few small tools under it, and a side column that says in plain
+// words what the field is, what changed in it and what the thing you clicked is doing. Nothing here measures anything: every answer is the
 // Advanced mode's own verdict (the same candidate list, motion fit and light curve), reworded,
 // with the exact sentence kept underneath as fine print.
 
 import { h, clear } from './layout.js';
 
-/** The two views Simple mode offers, with the sentence shown under the switch. */
+/** The views Simple mode offers, with the words shown as each button's tooltip. */
 export const SIMPLE_VIEW_INFO = Object.freeze([
   {
     id: 'passes',
@@ -21,7 +21,44 @@ export const SIMPLE_VIEW_INFO = Object.freeze([
     label: 'What changed',
     hint: 'Only what moved or changed is left',
   },
+  {
+    id: 'lens',
+    label: 'In colour',
+    hint: 'Three kinds of infrared light shown as red, green and blue',
+  },
 ]);
+
+/** How fast the photos flip, slowest first: [player speed, label]. */
+export const SIMPLE_SPEEDS = Object.freeze([
+  ['1', 'Slow'],
+  ['auto', 'Normal'],
+  ['4', 'Fast'],
+]);
+
+const MOON_ARCSEC = 1800; // the full Moon is about half a degree across
+
+/**
+ * A speed across the sky in everyday words. `masPerYear` is the measured motion.
+ * "The Moon's width every 150 years". '' when there is nothing to say. Pure.
+ */
+export function plainSpeed(masPerYear) {
+  if (!isNum(masPerYear) || masPerYear <= 0) return '';
+  const years = MOON_ARCSEC / (masPerYear / 1000);
+  if (years > 1e6) return '';
+  const round = years >= 1000 ? Math.round(years / 100) * 100 : years >= 100 ? Math.round(years / 10) * 10 : Math.max(1, Math.round(years));
+  return `The Moon’s width every ${round.toLocaleString('en-US')} year${round === 1 ? '' : 's'}`;
+}
+
+/** "About 40 % brighter" from the light-curve verdict (factor = brighter visit over fainter). Pure. */
+export function plainAmount(verdict) {
+  const v = verdict || {};
+  if (!isNum(v.factor) || v.factor <= 1 || !['changed', 'possible'].includes(v.kind) || !v.direction) return '';
+  if (v.direction === 'rose') {
+    if (v.factor >= 2) return `${v.factor >= 10 ? Math.round(v.factor) : v.factor.toFixed(1)} times brighter`;
+    return `About ${Math.max(1, Math.round(100 * (v.factor - 1)))} % brighter`;
+  }
+  return `About ${Math.max(1, Math.round(100 * (1 - 1 / v.factor)))} % fainter`;
+}
 
 /** Plain-language descriptions of the built-in targets: a few words, what it is, and what to look for. */
 export const PLAIN_TARGETS = Object.freeze({
@@ -102,19 +139,24 @@ export function strengthWord(score) {
 
 /**
  * One candidate from the change search, in plain words. Pure.
+ * `checked` (or c.checked) is what measuring the spot itself said, once that has been done:
+ * { moving, bright: 'yes' | 'maybe' | 'no' | 'none', direction: 'rose' | 'fell' | '' }. The list
+ * never claims more than that measurement supports: "moved" is only said when it measured as moving.
  * -> { title, detail, caution, strength }
  */
-export function plainCandidate(c) {
+export function plainCandidate(c, checked = null) {
   const out = { title: 'Something changed', detail: 'This spot does not look the same on every visit.', caution: '', strength: strengthWord(c && c.score) };
   if (!c) return out;
+  const k = checked || c.checked || null;
   const when = betweenText(c);
   if (c.saturated) {
     // A star too bright for the detector: only its glare can be compared from visit to visit.
     if (c.kind === 'moved') {
-      out.title = 'A bright star moved';
+      out.title = k && k.moving === 'yes' ? 'A bright star moved' : 'A bright star may have moved';
       out.detail = `Its glare shifted${c.towards ? ` ${c.towards}` : ''}${when ? ` ${when}` : ' between visits'}.`;
     } else if (c.brighter === true || c.brighter === false) {
-      out.title = c.brighter ? 'A bright star got brighter' : 'A bright star got fainter';
+      const doubt = !!k && k.bright === 'no';
+      out.title = doubt ? 'A bright star may have changed' : c.brighter ? 'A bright star got brighter' : 'A bright star got fainter';
       out.detail = `Its glare ${c.brighter ? 'grew' : 'shrank'}${when ? ` ${when}` : ' between visits'}.`;
     } else {
       out.title = 'A bright star changed';
@@ -123,23 +165,42 @@ export function plainCandidate(c) {
     if (c.turned) out.caution = 'Take this one with care: the telescope was turned the other way round on the second visit, and that alone can change how a very bright star looks.';
     return out;
   }
-  if (c.kind === 'moved') {
-    out.title = 'Something moved';
-    out.detail = 'It is in a different place on different visits.';
-    return out;
-  }
-  const net = c.net;
-  if (net && net.onSource && isNum(net.frac)) {
+  // What the search itself guessed from the comparison picture.
+  const net = c.net && c.net.onSource && isNum(c.net.frac) ? c.net : null;
+  let guess = 'changed';
+  if (c.kind === 'moved') guess = 'moved';
+  else if (net) guess = net.frac > 0 ? 'rose' : 'fell';
+  else if (c.kind === 'varies') guess = 'varies';
+  // What the measurement of the spot allows the list to say.
+  let say = guess;
+  if (k) {
+    const brightSay = k.bright === 'yes' ? k.direction || (guess === 'rose' || guess === 'fell' ? guess : 'varies') : k.bright === 'maybe' ? 'maybe-bright' : '';
+    if (k.moving === 'yes') say = 'moved';
+    else if (guess === 'moved') say = brightSay || (k.moving === 'no' ? 'maybe' : 'maybe-moved');
+    else if (guess !== 'changed') say = k.bright === 'no' ? 'maybe' : brightSay || 'maybe-bright';
+    else say = brightSay || (k.moving === 'maybe' ? 'maybe-moved' : 'changed');
+  } else if (guess === 'moved') say = 'maybe-moved';
+  const TITLES = {
+    moved: 'Something moved',
+    'maybe-moved': 'Something may have moved',
+    rose: 'Something got brighter',
+    fell: 'Something got fainter',
+    varies: 'Something changed brightness',
+    'maybe-bright': 'Something may have changed brightness',
+    maybe: 'Something may have changed',
+    changed: 'Something changed',
+  };
+  out.title = TITLES[say] || TITLES.changed;
+  if (say === 'moved') out.detail = 'It is in a different place on different visits.';
+  else if ((say === 'rose' || say === 'fell') && net && say === guess) {
     const pct = Math.abs(100 * net.frac);
     const size = pct >= 10 ? pct.toFixed(0) : pct.toFixed(1);
-    out.title = net.frac > 0 ? 'Something got brighter' : 'Something got fainter';
-    out.detail = `Its light ${net.frac > 0 ? 'rose' : 'fell'} by about ${size} %${net.label ? ` in ${net.label}` : ''}.`;
-    return out;
-  }
-  if (c.kind === 'varies') {
-    out.title = 'Something changed brightness';
-    out.detail = 'It is brighter on some visits than on others.';
-  }
+    out.detail = `Its light ${say === 'rose' ? 'rose' : 'fell'} by about ${size} %${net.label ? ` in ${net.label}` : ''}.`;
+  } else if (say === 'rose' || say === 'fell' || say === 'varies') out.detail = 'It is brighter on some visits than on others.';
+  else if (say === 'maybe-moved') out.detail = 'It looks as if it shifted a little between visits.';
+  else if (say === 'maybe' || say === 'maybe-bright') out.detail = 'This spot looks a little different between visits.';
+  // "We are very sure" belongs to what the search guessed, so it is only said when that still stands.
+  if (say !== guess) out.strength = '';
   return out;
 }
 
@@ -240,9 +301,15 @@ export function createSimpleView({
   plots = {},
   findTarget = null,
   verdicts = {},
+  tools = null,
   onView = () => {},
   onPickCandidate = () => {},
   onClear = () => {},
+  onSpeed = () => {},
+  onField = () => {},
+  onSmooth = () => {},
+  onKnown = () => {},
+  onSave = null,
 } = {}) {
   // ---- the two-way switch above the picture ----------------------------------------------------
   const viewButtons = new Map();
@@ -285,6 +352,30 @@ export function createSimpleView({
     return { el: h('details', { class: 'simple-more' }, h('summary', null, label), body), body };
   }
 
+  // ---- the small tools under the picture --------------------------------------------------------
+  const speedButtons = new Map();
+  const speedSeg = h('div', { class: 'seg simple-tool-seg', role: 'radiogroup', 'aria-label': 'Speed' });
+  for (const [value, label] of SIMPLE_SPEEDS) {
+    const btn = h('button', { type: 'button', class: 'seg-btn', role: 'radio', 'aria-checked': 'false', onclick: () => onSpeed(value) }, label);
+    speedButtons.set(value, btn);
+    speedSeg.append(btn);
+  }
+  const btnWider = h('button', { type: 'button', class: 'btn simple-tool', title: 'Show more sky around it', onclick: () => onField(1) }, 'Wider');
+  const btnCloser = h('button', { type: 'button', class: 'btn simple-tool', title: 'Show less sky, closer in', onclick: () => onField(-1) }, 'Closer');
+  const btnSmooth = h('button', { type: 'button', class: 'btn simple-tool', 'aria-pressed': 'false', title: 'Blend the camera’s square pixels together', onclick: () => onSmooth() }, 'Smooth');
+  const btnKnown = h('button', { type: 'button', class: 'btn simple-tool', 'aria-pressed': 'false', title: 'Ring the stars that are already on the star charts', onclick: () => onKnown() }, 'Known stars');
+  const btnSave = typeof onSave === 'function' ? h('button', { type: 'button', class: 'btn simple-tool', title: 'Save this photo as a picture file', onclick: () => onSave() }, 'Save') : null;
+  if (tools) clear(tools).append(h('div', { class: 'simple-tool-group' }, btnWider, btnCloser), btnSmooth, btnKnown, btnSave);
+
+  function setTools({ speed, wider, closer, smooth, known } = {}) {
+    if (speed !== undefined) for (const [value, btn] of speedButtons) btn.setAttribute('aria-checked', String(value === String(speed)));
+    if (wider !== undefined) btnWider.disabled = !wider;
+    if (closer !== undefined) btnCloser.disabled = !closer;
+    if (smooth !== undefined) btnSmooth.setAttribute('aria-pressed', String(!!smooth));
+    if (known !== undefined) btnKnown.setAttribute('aria-pressed', String(!!known));
+  }
+  setTools({ speed: 'auto', wider: true, closer: true, smooth: false, known: false });
+
   // ---- the place -------------------------------------------------------------------------------
   const fieldName = h('h2', { class: 'simple-name' });
   const fieldShort = h('p', { class: 'simple-line' });
@@ -292,7 +383,7 @@ export function createSimpleView({
   const fieldLook = h('p', { class: 'simple-text' });
   const fieldVisits = h('p', { class: 'simple-text' });
   const fieldMore = more('About this place', fieldWhat, fieldLook, fieldVisits);
-  const fieldCard = h('section', { class: 'simple-card simple-field' }, fieldName, fieldShort, fieldMore.el);
+  const fieldCard = h('section', { class: 'simple-card simple-field glass' }, fieldName, fieldShort, fieldMore.el);
 
   let field = { name: '', coord: '' };
   let visits = { loading: true, passes: [], error: '' };
@@ -314,9 +405,24 @@ export function createSimpleView({
 
   // ---- what changed ----------------------------------------------------------------------------
   const changeBody = h('div', { class: 'simple-changes' });
-  const changeCard = h('section', { class: 'simple-card' }, h('h3', { class: 'simple-title' }, 'What changed'), changeBody);
+  const changeCard = h('section', { class: 'simple-card glass' }, h('h3', { class: 'simple-title' }, 'What changed'), changeBody);
 
   let cands = { status: 'idle', list: [], active: -1 };
+  let titleEls = [];
+
+  /** An entry is named once its spot has been measured; until then it says so. */
+  const shownCandidate = (c) => (c && (c.checked || c.unchecked) ? plainCandidate(c) : { title: 'Checking…' });
+
+  /** A check of the spot has come in: the list says what that check found. */
+  function refreshTitle(i) {
+    const c = cands.list[i];
+    const el = titleEls[i];
+    if (!c || !el) return;
+    const p = shownCandidate(c);
+    if (el.textContent === p.title) return;
+    el.textContent = p.title;
+    if (el.parentNode && typeof el.parentNode.setAttribute === 'function') el.parentNode.setAttribute('aria-label', `${i + 1}. ${p.title}. Show it.`);
+  }
 
   function renderChanges() {
     clear(changeBody);
@@ -334,8 +440,11 @@ export function createSimpleView({
       return;
     }
     const ol = h('ol', { class: 'simple-list' });
+    titleEls = [];
     list.forEach((c, i) => {
-      const p = plainCandidate(c);
+      const p = shownCandidate(c);
+      const title = h('span', { class: 'simple-change-title' }, p.title);
+      titleEls[i] = title;
       ol.append(
         h(
           'li',
@@ -350,7 +459,7 @@ export function createSimpleView({
               onclick: () => onPickCandidate(c, i),
             },
             h('span', { class: 'cand-n' }, String(i + 1)),
-            h('span', { class: 'simple-change-title' }, p.title),
+            title,
           ),
         ),
       );
@@ -366,14 +475,77 @@ export function createSimpleView({
   pickMore.el.hidden = true;
   const btnClear = h('button', { type: 'button', class: 'btn btn-small btn-quiet', onclick: () => onClear() }, 'Clear');
   btnClear.hidden = true;
-  const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el);
+  // Two charts, each folded away: the star's light split into colours, and its brightness over time.
+  const specHost = h('div', { class: 'plot-host simple-plot' });
+  const specMore = more('Its light, colour by colour', specHost);
+  specMore.el.hidden = true;
+  const curveHost = h('div', { class: 'plot-host simple-plot' });
+  const curveMore = more('Its brightness over time', curveHost);
+  curveMore.el.hidden = true;
+  const pickCard = h('section', { class: 'simple-card glass' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el, specMore.el, curveMore.el);
 
   let selection = null;
+  let spectrumPlot = null;
+  let curvePlot = null;
+  let spectrum = null;
+  const mount = (make, where, what) => {
+    if (typeof make !== 'function') return null;
+    try {
+      return make(where);
+    } catch (err) {
+      console.warn(`[tombaugh] simple view: ${what} failed to mount`, err);
+      return null;
+    }
+  };
+  spectrumPlot = mount(plots.createSpectrumPlot, specHost, 'spectrum plot');
+  curvePlot = mount(plots.createLightCurvePlot, curveHost, 'light-curve plot');
+
+  function renderPlots() {
+    const hasSpec = !!(selection && spectrumPlot && spectrum && spectrum.points.length);
+    specMore.el.hidden = !hasSpec;
+    if (hasSpec) {
+      try {
+        spectrumPlot.setData({ points: spectrum.points, binned: spectrum.binned, title: '' });
+      } catch (err) {
+        console.warn('[tombaugh] simple view: spectrum plot', err);
+      }
+    }
+    const curve = selection && Array.isArray(selection.lightCurve) ? selection.lightCurve : [];
+    const hasCurve = !!(curvePlot && curve.length > 1);
+    curveMore.el.hidden = !hasCurve;
+    if (hasCurve) {
+      try {
+        curvePlot.setData({ points: curve, title: '' });
+      } catch (err) {
+        console.warn('[tombaugh] simple view: light-curve plot', err);
+      }
+    }
+  }
+  // A chart drawn while folded away has no size: draw it again when its drop-down opens.
+  for (const m of [specMore, curveMore]) m.el.addEventListener('toggle', () => m.el.open && renderPlots());
 
   /** One question and its answer on a single line. */
   function answerRow(q, a) {
     return h('div', { class: 'simple-row' }, h('span', { class: 'simple-row-q' }, q), h('span', { class: `simple-answer is-${a.tone}` }, a.answer));
   }
+
+  /** The two answers for a measured spot: { mv, lv, motion, bright }. */
+  function judge(sel) {
+    let mv = { kind: 'few', text: '' };
+    let lv = { kind: 'empty', text: '' };
+    try {
+      if (typeof verdicts.motionVerdict === 'function') mv = verdicts.motionVerdict(sel.measured, sel.gaia, { passes: sel.passes }) || mv;
+    } catch (err) {
+      console.warn('[tombaugh] simple view: motion verdict', err);
+    }
+    try {
+      if (typeof verdicts.lightCurveVerdict === 'function') lv = verdicts.lightCurveVerdict(sel.lightCurve || []) || lv;
+    } catch (err) {
+      console.warn('[tombaugh] simple view: light-curve verdict', err);
+    }
+    return { mv, lv, motion: plainMotion(mv), bright: plainBrightness(lv) };
+  }
+  const checkedOf = (j) => ({ moving: j.motion.tone, bright: j.bright.tone, direction: j.lv.direction === 'rose' || j.lv.direction === 'fell' ? j.lv.direction : '' });
 
   function renderPick() {
     clear(pickBody);
@@ -387,40 +559,44 @@ export function createSimpleView({
     }
     const sel = selection;
     pickTitle.textContent = plainLabel(sel.label);
-    let mv = { kind: 'few', text: '' };
-    let lv = { kind: 'empty', text: '' };
-    try {
-      if (typeof verdicts.motionVerdict === 'function') mv = verdicts.motionVerdict(sel.measured, sel.gaia, { passes: sel.passes }) || mv;
-    } catch (err) {
-      console.warn('[tombaugh] simple view: motion verdict', err);
+    const judged = judge(sel);
+    const { lv, bright } = judged;
+    let { motion } = judged;
+    // A pick from the list: the list and these answers must say the same thing.
+    const m = /^c(\d+)$/.exec(String(sel.key || ''));
+    const cand = m ? cands.list[Number(m[1])] : null;
+    if (cand) {
+      cand.checked = checkedOf(judged);
+      refreshTitle(Number(m[1]));
+      if (cand.saturated && cand.kind === 'moved' && motion.tone !== 'yes') {
+        motion = { answer: 'Maybe', tone: 'maybe', gloss: 'Its glare shifted between visits, but the star is too bright for the camera to pin down its place.' };
+      }
     }
-    try {
-      if (typeof verdicts.lightCurveVerdict === 'function') lv = verdicts.lightCurveVerdict(sel.lightCurve || []) || lv;
-    } catch (err) {
-      console.warn('[tombaugh] simple view: light-curve verdict', err);
-    }
-    const motion = plainMotion(mv);
-    const bright = plainBrightness(lv);
     if (sel.saturated) {
       // The camera overflowed on this star: say so rather than trust a measurement of it.
       bright.gloss = `${bright.gloss} This star is too bright for the camera, so its brightness is less certain.`;
     }
-    pickBody.append(answerRow('Moving?', motion), answerRow('Brightness changed?', bright));
-    // A pick from the list: why the search listed it.
-    const m = /^c(\d+)$/.exec(String(sel.key || ''));
-    const cand = m ? cands.list[Number(m[1])] : null;
-    if (cand) {
-      const p = plainCandidate(cand);
-      pickDetail.append(h('p', { class: 'simple-text' }, `${p.detail}${p.strength ? ` ${p.strength}.` : ''}`), p.caution ? h('p', { class: 'simple-text' }, p.caution) : null);
-    }
+    pickBody.append(answerRow('Moving?', motion));
+    const speed = motion.tone === 'yes' && sel.measured ? plainSpeed(isNum(sel.measured.total) ? Math.abs(sel.measured.total) : Math.hypot(sel.measured.pmra, sel.measured.pmdec)) : '';
+    if (speed) pickBody.append(answerRow('How fast?', { answer: speed, tone: 'fact' }));
+    pickBody.append(answerRow('Brightness changed?', bright));
+    const amount = plainAmount(lv);
+    if (amount && bright.tone !== 'no') pickBody.append(answerRow('By how much?', { answer: amount, tone: 'fact' }));
     pickDetail.append(h('p', { class: 'simple-text' }, motion.gloss), h('p', { class: 'simple-text' }, bright.gloss));
+    if (cand) {
+      // Why the search listed it, when that adds something to the two answers above.
+      const p = plainCandidate(cand);
+      if (p.strength && p.detail) pickDetail.append(h('p', { class: 'simple-text' }, `${p.strength}.`));
+      if (p.caution) pickDetail.append(h('p', { class: 'simple-text' }, p.caution));
+    }
+    renderPlots();
   }
 
   // ---- data credit -----------------------------------------------------------------------------
   // The full citation block (the same one Advanced mode shows) is moved in here by the page.
   const credit = more('Where the photos come from');
   credit.el.classList.add('simple-credit');
-  const creditCard = h('section', { class: 'simple-card' }, credit.el);
+  const creditCard = h('section', { class: 'simple-card glass' }, credit.el);
 
   if (host) clear(host).append(fieldCard, changeCard, pickCard, creditCard);
   setView('passes');
@@ -454,6 +630,19 @@ export function createSimpleView({
     },
 
     /**
+     * The measurement of entry `index` of the list (the object setSelection takes), made in the
+     * background so the list says what was measured before anyone clicks.
+     */
+    setChecked(index, sel) {
+      const c = cands.list[index];
+      if (!c) return;
+      // No measurement could be made: the search's own guess stands, in its careful wording.
+      if (!sel) c.unchecked = true;
+      else if (!(selection && selection.key === `c${index}`)) c.checked = checkedOf(judge(sel));
+      refreshTitle(index);
+    },
+
+    /**
      * What is selected, or null: { key, label, measured, gaia, passes, lightCurve, saturated }.
      * key names the pick (a new key scrolls the answers into view).
      * measured / gaia are what the motion meter is given; lightCurve is its points.
@@ -461,6 +650,7 @@ export function createSimpleView({
     setSelection(sel) {
       const fresh = !!sel && (!selection || selection.key !== sel.key);
       selection = sel || null;
+      if (!selection) spectrum = null;
       renderPick();
       // A new pick: bring its answers into view (they sit below the list of changes).
       if (fresh && host && host.offsetParent !== null && typeof pickCard.scrollIntoView === 'function') {
@@ -472,7 +662,15 @@ export function createSimpleView({
       }
     },
 
-    /** Simple mode does not draw the spectrum (Advanced does); kept so the page can call it. */
-    setSpectrum() {},
+    /** The same object panels.setSpectrum takes: the measured points go in a folded chart. */
+    setSpectrum({ points = [], binned = [] } = {}) {
+      spectrum = Array.isArray(points) && points.length ? { points, binned: Array.isArray(binned) ? binned : [] } : null;
+      renderPlots();
+    },
+
+    /** { speed, wider, closer, smooth, known }: the state of the small tools under the picture. */
+    setTools,
+    /** The Slow / Normal / Fast switch; the page puts it beside the Play button. */
+    speedEl: speedSeg,
   };
 }

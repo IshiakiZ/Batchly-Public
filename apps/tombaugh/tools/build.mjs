@@ -1092,7 +1092,8 @@ export async function build(opts = {}) {
         const file = resolveLocal(srcAttr, htmlDir);
         if (!fs.existsSync(file)) throw new BuildError(`script not found: ${show(file)}`, whereHtml());
         let js = fs.readFileSync(file, 'utf8');
-        if (opts.minify) js = minifyJs(js, show(file));
+        // Third-party files under vendor/ are already minified: they go in byte for byte.
+        if (opts.minify && !/[\\/]vendor[\\/]/.test(file)) js = minifyJs(js, show(file));
         const keep = rawAttrs.slice(0, attrs.get('src').start) + rawAttrs.slice(attrs.get('src').end);
         pieces.push(`<script${keep.replace(/\s+$/, '')}>\n${escapeInlineScript(js, show(file))}\n</script>`);
         assets.push({ file: idOf(file), bytes: Buffer.byteLength(js), mime: 'text/javascript', sha256: sha256(js) });
@@ -1117,7 +1118,10 @@ export async function build(opts = {}) {
         continue;
       }
       if (rel.includes('stylesheet')) {
-        const css = finishCss(loadCss(resolveLocal(href, htmlDir), whereHtml()));
+        const cssFile = resolveLocal(href, htmlDir);
+        const rawCss = loadCss(cssFile, whereHtml());
+        // Third-party stylesheets under vendor/ are already minified: they go in as they are.
+        const css = /[\\/]vendor[\\/]/.test(cssFile) ? rawCss.replace(/\s+$/, '').replace(/<\/(?=style)/gi, '<\\/') : finishCss(rawCss);
         const media = attrVal(attrs, 'media');
         pieces.push(`<style${media ? ` media="${htmlAttrEscape(media)}"` : ''}>\n${css}\n</style>`);
         continue;

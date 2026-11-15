@@ -73,13 +73,18 @@ Type a position (`269.45 4.69`, `17h57m48.5s +04d41m36s`, `17:57:48.5 +04:41:36`
 
 ![The start page: the whole sky as SPHEREx saw it, with the five challenge targets ringed](docs/real/sky-home.jpg)
 
-The page has two modes. **Simple** is the default, and it starts on the whole sky: SPHEREx's own
-all-sky map, which you drag to look around and scroll to zoom. Sharper pictures load as you zoom
-in. Click any star, or pick a name from the scrollable list in the search box (the challenge
-targets and 468 named stars), press "See what changed", and the tool opens that spot: the photos
-with a Play button, a two-way switch between "Photos" and "What changed", and short answers in
-everyday words to "Moving?" and "Brightness changed?" for any star you click. Anything longer
-sits in a drop-down. **Advanced** (the button at the top right) is the full console: eight views,
+The page has two modes, and both start on the whole sky: SPHEREx's own all-sky map, which you
+drag to look around and scroll to zoom. Sharper pictures load as you zoom in. The stars have
+depth: while the view moves, near stars slide against far ones by their real distances, and they
+settle on their true places when it stops. Click any star, or pick a name from the scrollable
+list in the search box (the challenge targets and 468 named stars), press "See what changed", and
+the tool opens that spot. A "Solar system" button lists Pluto and thirteen other bodies to follow
+across the photos. **Simple** is the default: the photos with a Play button, a switch
+between "Photos", "What changed" and "In colour", a row of small tools (speed, wider or closer,
+smooth, known stars, save), and short answers in everyday words to "Moving?", "How fast?" and
+"Brightness changed?" for any star you click, with its charts folded underneath. Anything longer
+sits in a drop-down. A star too bright for the camera gets a plain notice instead of a blank
+photo. The controls wear the liquid-glass look of the Batchly site that hosts the tool. **Advanced** (the button at the top right) is the full console: eight views,
 six detectors, the spectrum, light-curve and motion plots, the candidate list with its reasons,
 the Validation tab and the measuring tools. Simple mode measures nothing of its own. Every answer
 in it is Advanced mode's verdict reworded. The choice is remembered in the browser, and a link
@@ -312,7 +317,7 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 1033 unit tests; they do not touch the network
+# 1043 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file

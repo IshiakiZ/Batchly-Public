@@ -4,7 +4,7 @@
 // tools/make-sky-data.mjs - build web/src/sky/stardata.js, the bright-star list the sky view and
 // the search pick-list use.
 //
-//   node tools/make-sky-data.mjs --src <dir> [--out web/src/sky/stardata.js]
+//   node tools/make-sky-data.mjs --src <dir> [--hyg <hygdata_v41.csv>] [--out web/src/sky/stardata.js]
 //
 // <dir> holds three files from the d3-celestial project (https://github.com/ofrohn/d3-celestial,
 // BSD 3-Clause, Copyright (c) 2015 Olaf Frohn), folder data/:
@@ -12,8 +12,13 @@
 //   starnames.json               proper names by Hipparcos number
 //   constellations.lines.json    the constellation stick figures
 //
-// The output keeps only what the page draws: position, brightness and colour of each star, the
-// proper names, and the stick figures, as flat integer lists.
+// --hyg adds each star's distance, so the sky view can show depth. It is the HYG database v4.1
+// (astronexus, https://github.com/astronexus/HYG-Database, file hyg/CURRENT/hygdata_v41.csv),
+// licensed CC BY-SA 4.0; its distances come from the Hipparcos parallaxes. Stars are matched by
+// Hipparcos number. Without --hyg every distance is written as 0 (unknown).
+//
+// The output keeps only what the page draws: position, brightness, colour and distance of each
+// star, the proper names, and the stick figures, as flat integer lists.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,9 +31,10 @@ const arg = (name, fallback) => {
   return at >= 0 && args[at + 1] ? args[at + 1] : fallback;
 };
 const src = arg('--src', '');
+const hygFile = arg('--hyg', '');
 const outFile = path.resolve(PROJECT, arg('--out', 'web/src/sky/stardata.js'));
 if (!src) {
-  console.error('usage: node tools/make-sky-data.mjs --src <dir with the d3-celestial data files>');
+  console.error('usage: node tools/make-sky-data.mjs --src <dir with the d3-celestial data files> [--hyg <hygdata_v41.csv>]');
   process.exit(2);
 }
 const read = (name) => JSON.parse(fs.readFileSync(path.join(src, name), 'utf8'));
@@ -38,6 +44,51 @@ const names = read('starnames.json');
 const lines = read('constellations.lines.json').features;
 
 const norm = (lon) => ((lon % 360) + 360) % 360;
+
+/** One line of a CSV file -> its fields (quoted fields may hold commas and doubled quotes). */
+function csvFields(line) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i += 1;
+      } else if (ch === '"') quoted = false;
+      else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') {
+      out.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/** Hipparcos number -> distance in parsecs, from the HYG database. Unknown distances are left out. */
+function readDistances(file) {
+  const map = new Map();
+  if (!file) return map;
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  const head = csvFields(lines[0]);
+  const hipAt = head.indexOf('hip');
+  const distAt = head.indexOf('dist');
+  if (hipAt < 0 || distAt < 0) throw new Error(`${file}: no "hip" and "dist" columns`);
+  for (let i = 1; i < lines.length; i += 1) {
+    if (!lines[i]) continue;
+    const f = csvFields(lines[i]);
+    const hip = f[hipAt];
+    const dist = Number(f[distAt]);
+    // HYG writes 100000 for a missing or dubious parallax.
+    if (!hip || !(dist > 0) || dist >= 100000) continue;
+    if (!map.has(hip)) map.set(hip, dist);
+  }
+  return map;
+}
+const distances = readDistances(hygFile);
 
 const rows = stars
   .map((f) => ({
@@ -53,8 +104,11 @@ const rows = stars
 const flat = [];
 const named = [];
 const seen = new Set();
+let withDistance = 0;
 rows.forEach((s, i) => {
-  flat.push(Math.round(s.ra * 1000), Math.round(s.dec * 1000), Math.round(s.mag * 100), Number.isFinite(s.bv) ? Math.round(s.bv * 100) : 60);
+  const dist = distances.get(s.hip) || 0;
+  if (dist > 0) withDistance += 1;
+  flat.push(Math.round(s.ra * 1000), Math.round(s.dec * 1000), Math.round(s.mag * 100), Number.isFinite(s.bv) ? Math.round(s.bv * 100) : 60, Math.max(dist > 0 ? 1 : 0, Math.round(dist * 10)));
   const entry = names[s.hip];
   const name = entry && typeof entry.name === 'string' ? entry.name.trim() : '';
   if (name && !seen.has(name.toLowerCase())) {
@@ -75,11 +129,21 @@ for (const f of lines) {
 const body = `// Tombaugh - SPHEREx blink comparator. Apache-2.0.
 // AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
 //
-// stardata.js: the ${rows.length} brightest stars (to magnitude 6), ${named.length} proper names and the
-// constellation stick figures, for the sky view and the search pick-list.
+// stardata.js: the ${rows.length} brightest stars (to magnitude 6), ${named.length} proper names, the
+// constellation stick figures and ${withDistance} star distances, for the sky view and the search pick-list.
 // GENERATED by tools/make-sky-data.mjs. Do not edit by hand.
 //
-// Source data: d3-celestial (https://github.com/ofrohn/d3-celestial), data/stars.6.json,
+// TWO SOURCES, TWO LICENCES.
+//
+// 1. Distances (the fifth number of every star in STARS): the HYG database v4.1 by astronexus
+//    (https://github.com/astronexus/HYG-Database, hyg/CURRENT/hygdata_v41.csv; now kept at
+//    https://codeberg.org/astronexus/hyg), which takes them from the Hipparcos parallaxes.
+//    "This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International
+//    License" (http://creativecommons.org/licenses/by-sa/4.0/). Changes made here: only the
+//    distance column is kept, matched to the stars below by Hipparcos number, rounded to a tenth
+//    of a parsec, with 0 for "unknown". Those distance values stay under CC BY-SA 4.0.
+//
+// 2. Everything else: d3-celestial (https://github.com/ofrohn/d3-celestial), data/stars.6.json,
 // data/starnames.json and data/constellations.lines.json, which are derived from the Hipparcos
 // catalogue (ESA 1997). Used under the BSD 3-Clause licence:
 //
@@ -106,10 +170,13 @@ const body = `// Tombaugh - SPHEREx blink comparator. Apache-2.0.
 
 /** The notice the licence asks to be kept with the data; shown in the page's credits. */
 export const STAR_DATA_CREDIT =
-  'Star positions, names and constellation figures: d3-celestial, Copyright (c) 2015 Olaf Frohn, BSD 3-Clause licence, from the Hipparcos catalogue (ESA 1997).';
+  'Star positions, names and constellation figures: d3-celestial, Copyright (c) 2015 Olaf Frohn, BSD 3-Clause licence, from the Hipparcos catalogue (ESA 1997). Star distances: HYG database v4.1 by astronexus, CC BY-SA 4.0, from the Hipparcos parallaxes.';
 
-/** Four integers per star, brightest first: RA and Dec in thousandths of a degree (J2000), magnitude x 100, B-V colour x 100. */
-export const STAR_FIELDS = 4;
+/**
+ * Five integers per star, brightest first: RA and Dec in thousandths of a degree (J2000),
+ * magnitude x 100, B-V colour x 100, distance in tenths of a parsec (0 = unknown).
+ */
+export const STAR_FIELDS = 5;
 export const STARS = [${flat.join(',')}];
 
 /** [index into the star list, proper name]. */
@@ -118,13 +185,13 @@ export const STAR_NAMES = ${JSON.stringify(named)};
 /** Constellation stick figures: each a list of RA, Dec pairs in hundredths of a degree. */
 export const SKY_FIGURES = ${JSON.stringify(figures)};
 
-/** The stars as objects: { ra, dec, mag, bv, name }. Built once, on first use. */
+/** The stars as objects: { ra, dec, mag, bv, dist, name }; dist in parsecs, 0 = unknown. Built once, on first use. */
 let cached = null;
 export function starList() {
   if (cached) return cached;
   const out = [];
   for (let i = 0; i < STARS.length; i += STAR_FIELDS) {
-    out.push({ ra: STARS[i] / 1000, dec: STARS[i + 1] / 1000, mag: STARS[i + 2] / 100, bv: STARS[i + 3] / 100, name: '' });
+    out.push({ ra: STARS[i] / 1000, dec: STARS[i + 1] / 1000, mag: STARS[i + 2] / 100, bv: STARS[i + 3] / 100, dist: STARS[i + 4] / 10, name: '' });
   }
   for (const [index, name] of STAR_NAMES) if (out[index]) out[index].name = name;
   cached = out;
@@ -142,4 +209,4 @@ export function namedStars() {
 
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, body);
-console.log(`${path.relative(PROJECT, outFile)}: ${rows.length} stars, ${named.length} names, ${figures.length} figure lines, ${(body.length / 1024).toFixed(0)} KB`);
+console.log(`${path.relative(PROJECT, outFile)}: ${rows.length} stars (${withDistance} with a distance), ${named.length} names, ${figures.length} figure lines, ${(body.length / 1024).toFixed(0)} KB`);

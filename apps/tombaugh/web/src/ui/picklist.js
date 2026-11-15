@@ -43,13 +43,17 @@ export function attachPickList(input, opts = {}) {
   const enabled = () => (typeof opts.enabled === 'function' ? !!opts.enabled() : true);
   const id = `picklist-${++uid}`;
 
+  // The glass panel stays still and the list scrolls inside it (glass layers must not scroll away).
+  const pop = doc.createElement('div');
+  pop.className = 'picklist glass';
+  pop.hidden = true;
   const list = doc.createElement('div');
-  list.className = 'picklist';
+  list.className = 'picklist-scroll';
   list.id = id;
   list.setAttribute('role', 'listbox');
   list.setAttribute('aria-label', 'Stars to pick from');
-  list.hidden = true;
-  (opts.host || input.parentNode).append(list);
+  pop.append(list);
+  (opts.host || input.parentNode).append(pop);
 
   input.setAttribute('role', 'combobox');
   input.setAttribute('aria-autocomplete', 'list');
@@ -117,14 +121,14 @@ export function attachPickList(input, opts = {}) {
     render();
     if (isOpen) return;
     isOpen = true;
-    list.hidden = false;
+    pop.hidden = false;
     input.setAttribute('aria-expanded', 'true');
   }
 
   function close() {
     if (!isOpen) return;
     isOpen = false;
-    list.hidden = true;
+    pop.hidden = true;
     input.setAttribute('aria-expanded', 'false');
     input.removeAttribute('aria-activedescendant');
     active = -1;
@@ -176,11 +180,11 @@ export function attachPickList(input, opts = {}) {
     }
   };
   const onBlur = (ev) => {
-    if (list.contains(ev.relatedTarget)) return;
+    if (pop.contains(ev.relatedTarget)) return;
     close();
   };
   const onOutside = (ev) => {
-    if (isOpen && ev.target !== input && !list.contains(ev.target)) close();
+    if (isOpen && ev.target !== input && !pop.contains(ev.target)) close();
   };
 
   input.addEventListener('focus', onFocus);
@@ -191,7 +195,7 @@ export function attachPickList(input, opts = {}) {
   doc.addEventListener('pointerdown', onOutside);
 
   return {
-    el: list,
+    el: pop,
     open,
     close,
     isOpen: () => isOpen,
@@ -202,7 +206,7 @@ export function attachPickList(input, opts = {}) {
       input.removeEventListener('keydown', onKey, true);
       input.removeEventListener('blur', onBlur);
       doc.removeEventListener('pointerdown', onOutside);
-      list.remove();
+      pop.remove();
     },
   };
 }

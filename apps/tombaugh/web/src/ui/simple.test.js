@@ -4,16 +4,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SIMPLE_VIEW_INFO, PLAIN_TARGETS, plainCandidate, plainSetAside, plainMotion, plainBrightness, plainVisits, plainLabel, plainTarget, strengthWord,
+  SIMPLE_VIEW_INFO, PLAIN_TARGETS, plainCandidate, plainSetAside, plainMotion, plainBrightness, plainVisits, plainLabel, plainTarget, strengthWord, plainSpeed, plainAmount,
 } from './simple.js';
 import { SIMPLE_VIEWS } from '../state.js';
 import { TARGETS } from '../core/targets.js';
 import { motionVerdict } from '../plots/motion.js';
 import { lightCurveVerdict } from '../plots/lightcurve.js';
 
-test('the switch offers exactly the views state.js calls simple', () => {
-  assert.deepEqual(SIMPLE_VIEW_INFO.map((v) => v.id), [...SIMPLE_VIEWS]);
+test('the switch offers the views state.js calls simple, then the colour picture', () => {
+  // 'lens' (shown as "In colour") is offered from the switch only: a link to a lens still opens Advanced.
+  assert.deepEqual(SIMPLE_VIEW_INFO.map((v) => v.id), [...SIMPLE_VIEWS, 'lens']);
   for (const v of SIMPLE_VIEW_INFO) assert.ok(v.label && v.hint.length > 20, v.id);
+});
+
+test('plainSpeed says a motion as Moon widths', () => {
+  assert.equal(plainSpeed(10400), 'The Moon’s width every 170 years');
+  assert.equal(plainSpeed(1800000), 'The Moon’s width every 1 year');
+  assert.equal(plainSpeed(500), 'The Moon’s width every 3,600 years');
+  assert.equal(plainSpeed(0), '');
+  assert.equal(plainSpeed(NaN), '');
+  assert.equal(plainSpeed(0.001), '');
+});
+
+test('plainAmount says a brightness change in percent', () => {
+  assert.equal(plainAmount({ kind: 'changed', factor: 1.4, direction: 'rose' }), 'About 40 % brighter');
+  assert.equal(plainAmount({ kind: 'changed', factor: 1.4, direction: 'fell' }), 'About 29 % fainter');
+  assert.equal(plainAmount({ kind: 'changed', factor: 2.5, direction: 'rose' }), '2.5 times brighter');
+  assert.equal(plainAmount({ kind: 'steady', factor: 1.4, direction: 'rose' }), '');
+  assert.equal(plainAmount({ kind: 'changed' }), '');
+  assert.equal(plainAmount(null), '');
 });
 
 test('every built-in target has a plain description, and no description is orphaned', () => {
@@ -66,7 +85,24 @@ test('strengthWord', () => {
 });
 
 test('plainCandidate: movers, brightness changes and saturated stars', () => {
-  assert.equal(plainCandidate({ kind: 'moved', score: 12 }).title, 'Something moved');
+  // "Moved" is only said once measuring the spot agrees; until then the list says "may have".
+  assert.equal(plainCandidate({ kind: 'moved', score: 12 }).title, 'Something may have moved');
+  const movedOk = plainCandidate({ kind: 'moved', score: 12 }, { moving: 'yes', bright: 'no', direction: '' });
+  assert.equal(movedOk.title, 'Something moved');
+  assert.equal(movedOk.strength, 'We are very sure');
+  // The search guessed "moved", the measurement found it still and fainter: the list says fainter.
+  const still = plainCandidate({ kind: 'moved', score: 12 }, { moving: 'no', bright: 'yes', direction: 'fell' });
+  assert.equal(still.title, 'Something got fainter');
+  assert.equal(still.strength, '');
+  assert.equal(plainCandidate({ kind: 'moved', score: 12, checked: { moving: 'no', bright: 'no', direction: '' } }).title, 'Something may have changed');
+  assert.equal(plainCandidate({ kind: 'moved' }, { moving: 'none', bright: 'none', direction: '' }).title, 'Something may have moved');
+  assert.equal(plainCandidate({ kind: 'varies' }, { moving: 'yes', bright: 'yes', direction: 'rose' }).title, 'Something moved');
+  assert.equal(plainCandidate({ kind: 'varies' }, { moving: 'no', bright: 'no', direction: '' }).title, 'Something may have changed');
+  assert.equal(plainCandidate({ kind: 'varies' }, { moving: 'no', bright: 'maybe', direction: '' }).title, 'Something may have changed brightness');
+  assert.equal(plainCandidate({ kind: 'varies' }, { moving: 'no', bright: 'none', direction: '' }).title, 'Something may have changed brightness');
+  assert.equal(plainCandidate({ kind: 'varies', net: { onSource: true, frac: 0.4 } }, { moving: 'no', bright: 'yes', direction: 'fell' }).title, 'Something got fainter');
+  assert.equal(plainCandidate({ kind: 'moved', saturated: true }).title, 'A bright star may have moved');
+  assert.equal(plainCandidate({ saturated: true, brighter: true }, { moving: 'no', bright: 'no', direction: '' }).title, 'A bright star may have changed');
   const up = plainCandidate({ kind: 'varies', score: 8, net: { onSource: true, frac: 0.4, sigma: 11, label: 'Mar 2026' } });
   assert.equal(up.title, 'Something got brighter');
   assert.equal(up.detail, 'Its light rose by about 40 % in Mar 2026.');
@@ -81,7 +117,7 @@ test('plainCandidate: movers, brightness changes and saturated stars', () => {
   assert.equal(plainCandidate(null).title, 'Something changed');
 
   const sat = plainCandidate({ kind: 'moved', saturated: true, towards: 'north', between: ['Sep 2025', 'Sep 2026'], score: 10.3 });
-  assert.equal(sat.title, 'A bright star moved');
+  assert.equal(sat.title, 'A bright star may have moved');
   assert.equal(sat.detail, 'Its glare shifted north between Sep 2025 and Sep 2026.');
   assert.equal(sat.caution, '');
   const turned = plainCandidate({ kind: 'varies', saturated: true, brighter: true, between: ['Sep 2025', 'Mar 2026'], turned: true, score: 19.2 });

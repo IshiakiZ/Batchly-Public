@@ -3,7 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { viewBasis, planeScale, project, unproject, viewRadius, degPerPixel, orderForView, magLimit, labelLimit, dotAlpha, starColor, nearestPoint, clampView, MIN_FOV, MAX_FOV, SKY_SURVEYS } from './globe.js';
+import { viewBasis, planeScale, project, unproject, viewRadius, degPerPixel, orderForView, magLimit, labelLimit, dotAlpha, starColor, nearestPoint, clampView, MIN_FOV, MAX_FOV, SKY_SURVEYS, DEPTH_REACH, depthReach, depthLimit, parallaxDir, leanTarget, glowBucket, bucketBv, glowRadius } from './globe.js';
 import { radecToVec, vecToRadec } from './healpix.js';
 import { starList, namedStars, STARS, STAR_FIELDS, STAR_NAMES, SKY_FIGURES, STAR_DATA_CREDIT } from './stardata.js';
 
@@ -116,4 +116,101 @@ test('the star list: brightest first, named, with the licence notice', () => {
   assert.ok(SKY_FIGURES.length > 100);
   assert.match(STAR_DATA_CREDIT, /Olaf Frohn/);
   assert.match(STAR_DATA_CREDIT, /BSD/);
+});
+
+test('the star list carries real distances, with their own credit', () => {
+  assert.equal(STAR_FIELDS, 5);
+  const stars = starList();
+  const dist = (name) => stars.find((s) => s.name === name).dist;
+  close(dist('Sirius'), 2.6, 0.15);
+  close(dist('Vega'), 7.7, 0.2);
+  close(dist('Rigil Kentaurus'), 1.3, 0.1);
+  assert.ok(dist('Betelgeuse') > 100 && dist('Deneb') > 300);
+  for (const s of stars) assert.ok(s.dist >= 0 && Number.isFinite(s.dist));
+  // Nearly every star has one; the rest say 0 (unknown) and must not move.
+  assert.ok(stars.filter((s) => s.dist > 0).length / stars.length > 0.95);
+  assert.match(STAR_DATA_CREDIT, /HYG/);
+  assert.match(STAR_DATA_CREDIT, /CC BY-SA 4\.0/);
+});
+
+const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])));
+
+test('depth: with the camera at the Sun every star is exactly where the catalogue says', () => {
+  const u = radecToVec(101.287, -16.716);
+  assert.equal(parallaxDir(u, 2.6, [0, 0, 0], 0.1), u);
+  assert.equal(parallaxDir(u, 2.6, null, 0.1), u);
+});
+
+test('depth: a star of unknown distance never moves', () => {
+  const u = radecToVec(10, 20);
+  for (const d of [0, -1, NaN, undefined]) assert.equal(parallaxDir(u, d, [1, 2, 3], 0.1), u);
+});
+
+test('depth: near stars shift more than far ones, the right way, and stay unit vectors', () => {
+  const basis = viewBasis(80, 10);
+  const u = radecToVec(80, 10);
+  const c = basis.e.map((x) => x * 0.5); // the camera steps half a parsec east
+  const near = parallaxDir(u, 5, c);
+  const mid = parallaxDir(u, 50, c);
+  const far = parallaxDir(u, 500, c);
+  assert.ok(angle(u, near) > angle(u, mid) && angle(u, mid) > angle(u, far) && angle(u, far) > 0);
+  close(angle(u, near), Math.atan(0.5 / 5), 1e-9);
+  close(angle(u, far), Math.atan(0.5 / 500), 1e-9);
+  for (const v of [near, mid, far]) close(Math.hypot(v[0], v[1], v[2]), 1, 1e-12);
+  // Step east and the star slides west: on screen (east is left) it moves right.
+  const scale = planeScale(60, 800);
+  assert.ok(project(near, basis, scale, 400, 400).x > project(u, basis, scale, 400, 400).x);
+});
+
+test('depth: no star shifts further than the limit, however near it is', () => {
+  const basis = viewBasis(200, -40);
+  const u = radecToVec(200, -40);
+  const limit = depthLimit(100);
+  close(limit, 5 * Math.PI / 180, 1e-12);
+  close(depthLimit(100, 0.02), 2 * Math.PI / 180, 1e-12);
+  let last = 0;
+  for (const d of [1000, 100, 30, 10, 3, 1.3, 0.5, 0.01]) {
+    const shift = angle(u, parallaxDir(u, d, basis.n.map((x) => x * 3), limit));
+    assert.ok(shift <= limit + 1e-12, `${d} pc shifts ${shift}`);
+    assert.ok(shift >= last - 1e-12, 'nearer never shifts less');
+    last = shift;
+  }
+  // Far stars are not squeezed noticeably: the limit only bites near it.
+  close(angle(u, parallaxDir(u, 1000, basis.n.map((x) => x * 3), limit)), Math.atan(3 / 1000), 1e-5);
+});
+
+test('depth: the camera leans the way the view turns, forward when zooming in, never past its reach', () => {
+  const basis = viewBasis(30, 20);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  assert.deepEqual(leanTarget(basis, 0, 0, 0, null, 90), [0, 0, 0]);
+  const east = leanTarget(basis, 0.4, 0, 0, null, 90);
+  assert.ok(dot(east, basis.e) > 0 && Math.abs(dot(east, basis.n)) < 1e-12 && Math.abs(dot(east, basis.f)) < 1e-12);
+  const south = leanTarget(basis, 0, -0.4, 0, null, 90);
+  assert.ok(dot(south, basis.n) < 0);
+  const zoomIn = leanTarget(basis, 0, 0, 2, null, 90);
+  const zoomOut = leanTarget(basis, 0, 0, -2, null, 90);
+  assert.ok(dot(zoomIn, basis.f) > 0 && dot(zoomOut, basis.f) < 0);
+  const aim = radecToVec(40, 25);
+  const aimed = leanTarget(basis, 0, 0, 2, aim, 90);
+  close(dot(aimed, aim), Math.hypot(aimed[0], aimed[1], aimed[2]), 1e-9);
+  // Faster means further, but never past the reach, and the reach shrinks with the field of view.
+  const slow = leanTarget(basis, 0.05, 0, 0, null, 90);
+  assert.ok(Math.hypot(...slow) < Math.hypot(...east));
+  for (const fov of [120, 60, 10, 1]) {
+    const wild = leanTarget(basis, 50, -80, 40, null, fov);
+    assert.ok(Math.hypot(...wild) <= depthReach(fov) + 1e-12);
+  }
+  close(depthReach(MAX_FOV), DEPTH_REACH, 1e-12);
+  close(depthReach(60), DEPTH_REACH / 2, 1e-12);
+  assert.ok(depthReach(400) <= DEPTH_REACH);
+});
+
+test('glow: only bright stars get one, brighter means bigger, colours fall into eight buckets', () => {
+  assert.equal(glowRadius(1, 5), 0);
+  assert.equal(glowRadius(1, 3.6), 0);
+  assert.ok(glowRadius(2, -1.4) > glowRadius(2, 1) && glowRadius(2, 1) > glowRadius(2, 3) && glowRadius(2, 3) > 2);
+  assert.equal(glowBucket(-0.3), 0);
+  assert.equal(glowBucket(1.7), 7);
+  assert.equal(glowBucket(NaN), glowBucket(0.6));
+  for (let b = 0; b < 8; b += 1) assert.equal(glowBucket(bucketBv(b)), b);
 });

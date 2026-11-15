@@ -12,6 +12,13 @@
 // bright stars, the constellation figures, names and the selection ring. With no WebGL or no
 // network the star layer alone still works.
 //
+// DEPTH. Each catalogue star has a real distance (stardata.js). At rest every star is drawn
+// exactly at its catalogue position. While the view is moving, the camera leans a few parsecs
+// away from the Sun (sideways when you turn, forward when you zoom in), and each star is drawn
+// where it would appear from there, so near stars slide against far ones. The lean eases back to
+// zero when the motion stops. It is a display effect only: a click always returns the true
+// position. Until the first touch the view also drifts and sways slowly, so the depth shows.
+//
 // The pure functions at the top (projection, level of detail, picking) are exported for tests.
 
 import { pixelsInDisc, pixelBounds, tileMesh, gridIndices, tilePath, radecToVec, vecToRadec } from './healpix.js';
@@ -169,6 +176,88 @@ export function clampView(v) {
   };
 }
 
+/** Farthest the camera leans from the Sun, in parsecs, at the widest view. */
+export const DEPTH_REACH = 3;
+
+/** How far the camera may lean at this field of view (parsecs): the effect looks the same at every zoom. */
+export function depthReach(fov) {
+  return DEPTH_REACH * Math.max(0, Math.min(1, fov / MAX_FOV));
+}
+
+/** The most one star may shift, in radians: `share` of the view (about 5 percent while you move it). */
+export function depthLimit(fov, share = 0.05) {
+  return share * fov * DEG;
+}
+
+/**
+ * Where a star appears from a camera that has moved away from the Sun.
+ *   u      unit vector to the star as seen from the Sun
+ *   d      its distance in parsecs (0, NaN or negative = unknown: it does not move)
+ *   c      camera position in parsecs, same axes as u
+ *   limit  the largest shift allowed, radians; larger shifts are squeezed smoothly (tanh) under it
+ * Returns a unit vector (u itself when nothing moves).
+ */
+export function parallaxDir(u, d, c, limit = Infinity) {
+  if (!(d > 0) || !c || (c[0] === 0 && c[1] === 0 && c[2] === 0)) return u;
+  const x = d * u[0] - c[0];
+  const y = d * u[1] - c[1];
+  const z = d * u[2] - c[2];
+  const len = Math.hypot(x, y, z);
+  if (!(len > 1e-9)) return u;
+  const wx = x / len;
+  const wy = y / len;
+  const wz = z / len;
+  if (!(limit < Infinity)) return [wx, wy, wz];
+  if (!(limit > 0)) return u;
+  const dot = Math.max(-1, Math.min(1, u[0] * wx + u[1] * wy + u[2] * wz));
+  const tx = wx - dot * u[0];
+  const ty = wy - dot * u[1];
+  const tz = wz - dot * u[2];
+  const tl = Math.hypot(tx, ty, tz);
+  if (tl < 1e-12) return u;
+  const shift = limit * Math.tanh(Math.atan2(tl, dot) / limit);
+  const cs = Math.cos(shift);
+  const sn = Math.sin(shift) / tl;
+  return [u[0] * cs + tx * sn, u[1] * cs + ty * sn, u[2] * cs + tz * sn];
+}
+
+/**
+ * Where the camera leans for a given motion of the view (parsecs, sky axes).
+ *   basis    viewBasis() of the current view
+ *   vE, vN   how fast the centre of the view moves east and north, in view-widths per second
+ *   vIn      how fast it zooms in, in e-folds of the field of view per second (negative = out)
+ *   toward   unit vector the zoom is aimed at (null = the centre of the view)
+ * Turning leans the camera sideways the way the view turns; zooming in leans it forward.
+ * The length never exceeds depthReach(fov).
+ */
+export function leanTarget(basis, vE, vN, vIn, toward, fov) {
+  const reach = depthReach(fov);
+  const speed = Math.hypot(vE, vN);
+  const side = speed > 1e-9 ? Math.tanh(speed / 0.6) / speed : 0;
+  const ahead = Math.tanh(vIn / 1.2);
+  const a = toward || basis.f;
+  const out = [0, 0, 0];
+  for (let i = 0; i < 3; i += 1) out[i] = (vE * basis.e[i] + vN * basis.n[i]) * side + a[i] * ahead;
+  const len = Math.hypot(out[0], out[1], out[2]);
+  const k = len > 1 ? reach / len : reach;
+  return [out[0] * k, out[1] * k, out[2] * k];
+}
+
+/** Which of the eight glow colours a star with B-V colour index `bv` uses (0 = blue-white, 7 = orange). */
+export function glowBucket(bv) {
+  const t = Math.max(0, Math.min(1, ((Number.isFinite(bv) ? bv : 0.6) + 0.3) / 2.0));
+  return Math.round(t * 7);
+}
+
+/** The B-V colour index at the middle of a glow bucket. */
+export const bucketBv = (bucket) => (bucket / 7) * 2.0 - 0.3;
+
+/** Radius in pixels of a star's soft glow (0 = too faint for one), from its dot radius and magnitude. */
+export function glowRadius(r, mag) {
+  if (!(mag < 3.6)) return 0;
+  return r * (3.4 + (3.6 - mag) * 1.4);
+}
+
 const VERT = `
 attribute vec3 aPos;
 attribute vec2 aUv;
@@ -201,15 +290,20 @@ void main() {
   gl_FragColor = vec4(rgb, c.a * uAlpha);
 }`;
 
+const IDLE_DRIFT = 0.0000045; // view-widths per millisecond: a full turn of a wide view takes minutes
+const IDLE_SWAY = 0.25; // share of the camera's reach used by the sway before the first touch
+const IDLE_LIMIT = 0.02; // and the most a star may shift then, as a share of the view
+
 const meshN = (order) => (order <= 3 ? 8 : order <= 5 ? 4 : 2);
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /**
  * @param {HTMLElement} host an element with a size; the canvases fill it
  * @param {object} opts
- * @param {Array<{ra,dec,mag,bv,name}>} opts.stars brightest first
+ * @param {Array<{ra,dec,mag,bv,dist,name}>} opts.stars brightest first; dist in parsecs (0 = unknown) gives depth
+ * @param {boolean} [opts.idle] false = no slow drift and sway before the first touch (default: on, off with reducedMotion)
  * @param {Array<number[]>} [opts.figures] constellation lines, RA/Dec pairs in hundredths of a degree
- * @param {Array<{name,ra,dec}>} [opts.targets] places to mark with a ring and a name
+ * @param {Array<{name,ra,dec,dist?}>} [opts.targets] places to mark with a ring and a name; dist (parsecs) is optional
  * @param {Array<{survey: string, upTo: number, gray?: boolean}>} [opts.layers] which pictures to show up to which tile order
  * @param {(sel: object|null) => void} [opts.onSelect]
  * @param {(view: {ra,dec,fov}) => void} [opts.onView]
@@ -247,6 +341,80 @@ export function createSkyGlobe(host, opts = {}) {
     return pts;
   });
   let targetVec = targets.map((t) => radecToVec(t.ra, t.dec));
+
+  // Depth: who is how far away. A place or a figure corner that sits on a catalogue star moves with it.
+  const COS_SAME = Math.cos(0.06 * DEG);
+  function starAt(vec) {
+    let best = -1;
+    let bestDot = COS_SAME;
+    for (let i = 0; i < starVec.length; i += 1) {
+      const v = starVec[i];
+      const dot = v[0] * vec[0] + v[1] * vec[1] + v[2] * vec[2];
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = i;
+      }
+    }
+    return best;
+  }
+  const starDist = stars.map((s) => (s.dist > 0 ? s.dist : 0));
+  const starIndexByName = new Map();
+  stars.forEach((s, i) => {
+    if (s.name && !starIndexByName.has(s.name.toLowerCase())) starIndexByName.set(s.name.toLowerCase(), i);
+  });
+  const figureDist = figureVec.map((line) =>
+    line.map((v) => {
+      const i = starAt(v);
+      return i >= 0 ? starDist[i] : 0;
+    }),
+  );
+  function distOfPlace(t, vec) {
+    if (!t) return 0;
+    if (t.dist > 0) return t.dist;
+    if (t.target && t.target.dist > 0) return t.target.dist;
+    const byName = t.name ? starIndexByName.get(String(t.name).toLowerCase()) : undefined;
+    if (byName !== undefined) return starDist[byName];
+    const i = starAt(vec);
+    return i >= 0 ? starDist[i] : 0;
+  }
+  let targetDist = targets.map((t, i) => distOfPlace(t, targetVec[i]));
+  let selectionDist = 0;
+
+  // The camera's lean away from the Sun, in parsecs (see DEPTH in the header).
+  let cam = [0, 0, 0]; // what is drawn
+  let camSoft = [0, 0, 0]; // first smoothing stage
+  let camOn = false;
+  let limitShare = 0.05; // eases between the idle and the moving limit, so nothing jumps
+  let prevView = null; // the view and time of the last frame, for the speed of the motion
+  let idle = !reduced && opts.idle !== false ? { t0: now() } : null;
+  function wake() {
+    idle = null;
+  }
+
+  // Soft round glows, one per colour, drawn once and stamped per star.
+  const glowSprites = new Map();
+  function glowSprite(bucket) {
+    let c = glowSprites.get(bucket);
+    if (c) return c;
+    const size = 64;
+    c = doc.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const g = c.getContext('2d');
+    const m = /(\d+),\s*(\d+),\s*(\d+)/.exec(starColor(bucketBv(bucket))) || [0, 255, 255, 255];
+    const rgb = `${m[1]},${m[2]},${m[3]}`;
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, `rgba(${rgb},0.95)`);
+    grad.addColorStop(0.1, `rgba(${rgb},0.6)`);
+    grad.addColorStop(0.3, `rgba(${rgb},0.2)`);
+    grad.addColorStop(0.6, `rgba(${rgb},0.05)`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+    glowSprites.set(bucket, c);
+    return c;
+  }
+  const starBucket = stars.map((s) => glowBucket(s.bv));
 
   let view = clampView({ ra: opts.ra ?? 84, dec: opts.dec ?? 2, fov: opts.fov ?? 95 });
   let goalFov = view.fov;
@@ -623,6 +791,10 @@ export function createSkyGlobe(host, opts = {}) {
     const minZ = Math.cos(Math.min(Math.PI, radius));
     const fov = view.fov;
     hits = [];
+    // Depth: where each thing appears from the leaning camera (null = everything in its true place).
+    const lean = camOn ? cam : null;
+    const reachLimit = depthLimit(fov, limitShare);
+    const seen = (vec, dist) => (lean && dist > 0 ? parallaxDir(vec, dist, lean, reachLimit) : vec);
 
     // Constellation figures: faint, and gone once you are zoomed in among the real stars.
     const figAlpha = fov >= 40 ? 0.22 : fov <= 12 ? 0 : (0.22 * (fov - 12)) / 28;
@@ -631,10 +803,12 @@ export function createSkyGlobe(host, opts = {}) {
       ctx.globalAlpha = figAlpha;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (const line of figureVec) {
+      for (let li = 0; li < figureVec.length; li += 1) {
+        const line = figureVec[li];
+        const far = figureDist[li];
         let prev = null;
-        for (const v of line) {
-          const p = project(v, basis, scale, cx, cy);
+        for (let vi = 0; vi < line.length; vi += 1) {
+          const p = project(seen(line[vi], far[vi]), basis, scale, cx, cy);
           const ok = p.z > minZ - 0.15;
           if (ok && prev) {
             ctx.moveTo(prev.x, prev.y);
@@ -653,31 +827,49 @@ export function createSkyGlobe(host, opts = {}) {
     const boost = Math.max(0.85, Math.min(1.9, (70 / fov) ** 0.3));
     const labels = [];
     let selectionLabelled = false;
+    // Pass 1: where every star in view is, and the soft glow of the bright ones (light adds up).
+    const shown = [];
+    if (dots > 0.01) ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < stars.length; i += 1) {
       const s = stars[i];
       if (s.mag > limit) break; // brightest first
-      const p = project(starVec[i], basis, scale, cx, cy);
-      if (p.z < minZ || p.x < -20 || p.y < -20 || p.x > w + 20 || p.y > h + 20) continue;
+      const p = project(seen(starVec[i], starDist[i]), basis, scale, cx, cy);
+      if (p.z < minZ || p.x < -40 || p.y < -40 || p.x > w + 40 || p.y > h + 40) continue;
       const r = Math.max(0.55, (6.8 - s.mag) * 0.36 * boost);
+      shown.push(i, p.x, p.y, r);
+      if (dots > 0.01) {
+        const halo = glowRadius(r, s.mag);
+        if (halo > 0) {
+          ctx.globalAlpha = dots * Math.min(1, 0.4 + (3.6 - s.mag) * 0.16);
+          ctx.drawImage(glowSprite(starBucket[i]), p.x - halo, p.y - halo, halo * 2, halo * 2);
+        }
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // Pass 2: the crisp dot of each star, what can be clicked, and the names.
+    for (let k = 0; k < shown.length; k += 4) {
+      const i = shown[k];
+      const s = stars[i];
+      const x = shown[k + 1];
+      const y = shown[k + 2];
+      const r = shown[k + 3];
       if (dots > 0.01) {
         ctx.globalAlpha = dots * (s.mag > 5 ? 0.75 : 1);
-        if (s.mag < 1.6) {
-          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
-          glow.addColorStop(0, 'rgba(255,255,255,0.55)');
-          glow.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r * 3.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
         ctx.fillStyle = starTint[i];
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
+        if (s.mag < 2) {
+          // A white-hot centre on the brightest.
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(x, y, r * 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      hits.push({ x: p.x, y: p.y, rank: 1, kind: 'star', name: s.name || '', ra: s.ra, dec: s.dec, mag: s.mag });
+      hits.push({ x, y, rank: 1, kind: 'star', name: s.name || '', ra: s.ra, dec: s.dec, mag: s.mag });
       if (s.name && s.mag <= names) {
-        labels.push({ x: p.x, y: p.y, r, text: s.name });
+        labels.push({ x, y, r, text: s.name });
         if (selection && selection.name === s.name) selectionLabelled = true;
       }
     }
@@ -707,7 +899,7 @@ export function createSkyGlobe(host, opts = {}) {
     ctx.fillStyle = INK;
     ctx.font = '600 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
     for (let i = 0; i < targets.length; i += 1) {
-      const p = project(targetVec[i], basis, scale, cx, cy);
+      const p = project(seen(targetVec[i], targetDist[i]), basis, scale, cx, cy);
       if (p.z < minZ || p.x < -40 || p.y < -40 || p.x > w + 40 || p.y > h + 40) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
@@ -718,7 +910,7 @@ export function createSkyGlobe(host, opts = {}) {
 
     // The selection.
     if (selection) {
-      const p = project(radecToVec(selection.ra, selection.dec), basis, scale, cx, cy);
+      const p = project(seen(radecToVec(selection.ra, selection.dec), selectionDist), basis, scale, cx, cy);
       if (p.z > minZ) {
         ctx.strokeStyle = INK;
         ctx.lineWidth = 2;
@@ -788,6 +980,13 @@ export function createSkyGlobe(host, opts = {}) {
       else moving = true;
     }
 
+    // Before the first touch: a slow drift, so the sky is alive.
+    if (idle && !fly && !drag && !pinch) {
+      const cosd = Math.max(0.05, Math.cos(view.dec * DEG));
+      view = clampView({ ra: view.ra + (IDLE_DRIFT * view.fov * dt) / cosd, dec: view.dec, fov: view.fov });
+      moving = true;
+    }
+
     if (Math.abs(Math.log(goalFov / view.fov)) > 0.0015) {
       const k = reduced ? 1 : 1 - Math.exp(-dt / 85);
       view = clampView({ ...view, fov: Math.exp(Math.log(view.fov) + (Math.log(goalFov) - Math.log(view.fov)) * k) });
@@ -801,10 +1000,64 @@ export function createSkyGlobe(host, opts = {}) {
 
     const basis = basisNow();
     const scale = scaleNow();
+    if (updateLean(basis, t, dt)) moving = true;
+    // Hidden (the start page is not on screen): draw nothing and let the loop rest.
+    if (root.offsetParent === null && width <= 1) return;
     const busy = drawPhotos(basis, scale, t);
     drawStars(basis, scale);
     if (typeof opts.onView === 'function') opts.onView({ ...view });
     if (moving || busy) invalidate();
+  }
+
+  /**
+   * Move the camera's lean toward what the current motion asks for. Returns true while it is
+   * still leaning (another frame is needed).
+   */
+  function updateLean(basis, t, dt) {
+    const prev = prevView;
+    prevView = { ra: view.ra, dec: view.dec, fov: view.fov, t };
+    // Once the photos carry the stars (zoomed in), everything stays pinned to them.
+    const gain = reduced ? 0 : dotAlpha(view.fov, photosReady);
+    let goal = [0, 0, 0];
+    if (gain > 0 && prev) {
+      const secs = Math.max(8, Math.min(200, t - prev.t)) / 1000;
+      let dra = view.ra - prev.ra;
+      if (dra > 180) dra -= 360;
+      if (dra < -180) dra += 360;
+      const vIn = -Math.log(view.fov / prev.fov) / secs;
+      // A zoom held under the cursor also slides the centre; that is not a turn.
+      const zoomOnly = !!anchor && !drag && !spin && !fly;
+      const vE = zoomOnly ? 0 : (dra * Math.cos(view.dec * DEG)) / view.fov / secs;
+      const vN = zoomOnly ? 0 : (view.dec - prev.dec) / view.fov / secs;
+      goal = leanTarget(basis, vE, vN, vIn, anchor ? anchor.vec : null, view.fov);
+      if (idle) {
+        // A slow sway from side to side, so near stars drift against far ones.
+        const reach = depthReach(view.fov) * IDLE_SWAY;
+        const a = (t - idle.t0) / 2200;
+        const sx = Math.sin(a);
+        const sy = 0.35 * Math.sin(a * 0.71 + 1);
+        for (let i = 0; i < 3; i += 1) goal[i] += reach * (sx * basis.e[i] + sy * basis.n[i]);
+      }
+      for (let i = 0; i < 3; i += 1) goal[i] *= gain;
+    }
+    const k1 = 1 - Math.exp(-dt / 90);
+    const k2 = 1 - Math.exp(-dt / 110);
+    limitShare = prev ? limitShare + ((idle ? IDLE_LIMIT : 0.05) - limitShare) * k2 : idle ? IDLE_LIMIT : 0.05;
+    let size = 0;
+    for (let i = 0; i < 3; i += 1) {
+      camSoft[i] += (goal[i] - camSoft[i]) * k1;
+      cam[i] += (camSoft[i] - cam[i]) * k2;
+      size = Math.max(size, Math.abs(cam[i]), Math.abs(camSoft[i]));
+    }
+    const still = goal[0] === 0 && goal[1] === 0 && goal[2] === 0;
+    if (still && size < depthReach(view.fov) * 0.003 + 1e-6) {
+      cam = [0, 0, 0];
+      camSoft = [0, 0, 0];
+      camOn = false;
+      return false;
+    }
+    camOn = size > 0;
+    return camOn || !still;
   }
 
   // ---- size ------------------------------------------------------------------------------------
@@ -839,6 +1092,7 @@ export function createSkyGlobe(host, opts = {}) {
     } catch {
       // not fatal
     }
+    wake();
     fly = null;
     spin = null;
     anchor = null;
@@ -911,6 +1165,7 @@ export function createSkyGlobe(host, opts = {}) {
     ev.preventDefault();
     const p = local(ev);
     const step = ev.deltaMode === 1 ? ev.deltaY * 32 : ev.deltaY;
+    wake();
     fly = null;
     spin = null;
     if (!anchor || Math.hypot(anchor.x - p.x, anchor.y - p.y) > 3) anchor = { x: p.x, y: p.y, vec: skyAt(p.x, p.y) };
@@ -920,6 +1175,7 @@ export function createSkyGlobe(host, opts = {}) {
 
   function onDouble(ev) {
     const p = local(ev);
+    wake();
     anchor = { x: p.x, y: p.y, vec: skyAt(p.x, p.y) };
     goalFov = Math.max(MIN_FOV, goalFov * 0.4);
     invalidate();
@@ -937,6 +1193,7 @@ export function createSkyGlobe(host, opts = {}) {
     else if (ev.key === '-' || ev.key === '_') zoomBy(1 / 0.6);
     else used = false;
     if (used) {
+      wake();
       ev.preventDefault();
       invalidate();
     }
@@ -956,10 +1213,12 @@ export function createSkyGlobe(host, opts = {}) {
 
   function select(sel) {
     selection = sel && Number.isFinite(sel.ra) && Number.isFinite(sel.dec) ? sel : null;
+    selectionDist = selection ? distOfPlace(selection, radecToVec(selection.ra, selection.dec)) : 0;
     invalidate();
   }
 
   function zoomBy(factor) {
+    wake();
     anchor = null;
     fly = null;
     goalFov = Math.max(MIN_FOV, Math.min(MAX_FOV, goalFov * factor));
@@ -968,6 +1227,7 @@ export function createSkyGlobe(host, opts = {}) {
 
   function flyTo(ra, dec, fov) {
     const to = clampView({ ra, dec, fov: Number.isFinite(fov) ? fov : view.fov });
+    wake();
     spin = null;
     anchor = null;
     if (reduced) {
@@ -1015,6 +1275,8 @@ export function createSkyGlobe(host, opts = {}) {
       goalFov = view.fov;
       fly = null;
       spin = null;
+      prevView = null; // a jump is not a motion: no lean
+      wake();
       invalidate();
     },
     flyTo,
@@ -1023,6 +1285,7 @@ export function createSkyGlobe(host, opts = {}) {
     setTargets(list) {
       targets = Array.isArray(list) ? list : [];
       targetVec = targets.map((t) => radecToVec(t.ra, t.dec));
+      targetDist = targets.map((t, i) => distOfPlace(t, targetVec[i]));
       invalidate();
     },
     setLayers(next) {
@@ -1041,7 +1304,7 @@ export function createSkyGlobe(host, opts = {}) {
         else if (t.state === 'error') errors += 1;
         else loading += 1;
       }
-      return { webgl: !!gl, photos: photosReady, order, survey: layer.survey, tiles: ready, loading, errors, failed, clickable: hits.length };
+      return { webgl: !!gl, photos: photosReady, order, survey: layer.survey, tiles: ready, loading, errors, failed, clickable: hits.length, lean: Math.hypot(cam[0], cam[1], cam[2]), idle: !!idle };
     },
     destroy() {
       destroyed = true;

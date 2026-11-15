@@ -28,14 +28,39 @@ browser. See docs/AI-USE.md for the full log.
 
 THIRD-PARTY CODE
 
-None. No third-party code libraries are bundled or imported at run time;
-there are no npm dependencies and no CDN imports. All code in the
-repository was generated for this project.
+One library, used only for the look of the controls:
+
+Liquid Glass for the Web v1.3.0 (web/vendor/liquid-glass/), the glass
+look of the Batchly site that hosts the tool. MIT License, Copyright (c)
+2026 Liquid Glass for the Web contributors. An independent,
+Apple-inspired implementation, not affiliated with Apple. The full
+licence text is in web/vendor/liquid-glass/LICENSE. It draws the glass
+bars, cards and buttons; it takes no part in reading, aligning or
+measuring the data, and the page works without it.
+
+Everything else in the repository was generated for this project. There
+are no npm dependencies and no CDN imports.
 
 
 THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
 
-web/src/sky/stardata.js (bright stars, star names and constellation
+web/src/sky/stardata.js holds data from two sources.
+
+1. The star distances in that file (the fifth number of each star) come
+from the HYG database v4.1 by astronexus
+(https://github.com/astronexus/HYG-Database, file
+hyg/CURRENT/hygdata_v41.csv; the database is now kept at
+https://codeberg.org/astronexus/hyg), which takes them from the Hipparcos
+parallaxes. HYG is licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License
+(http://creativecommons.org/licenses/by-sa/4.0/). Changes made: only the
+distance column is kept, matched to the stars by Hipparcos number, rounded
+to a tenth of a parsec, with 0 written for an unknown distance. Those
+distance values remain under CC BY-SA 4.0; the Apache-2.0 licence of this
+project does not replace it for them. The page uses the distances only to
+show depth while the sky view is moving.
+
+2. Everything else in that file (bright stars, star names and constellation
 figures for the sky view) is derived from data files of d3-celestial
 (https://github.com/ofrohn/d3-celestial), which take their positions from
 the Hipparcos catalogue (ESA 1997). They are used under the BSD 3-Clause

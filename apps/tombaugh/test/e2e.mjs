@@ -297,6 +297,9 @@ async function main() {
     setup.browser = `chromium ${browser.version()}`;
     const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
     const page = await desktop.newPage();
+    // The start page asks IRSA for its sky pictures. They are an optional layer (the star list is
+    // built in), and the test stays off the network: answer those requests with "no content".
+    await page.route('https://irsa.ipac.caltech.edu/**', (r) => r.fulfill({ status: 204, body: '' }));
     const watch = watchPage(page);
     pages.push({ name: 'desktop', watch });
     trackForeign(page);
@@ -733,12 +736,21 @@ async function main() {
         await waitForMovie(p, movieTimeout);
         // The change search lists what it found in plain words; clicking one answers two questions.
         await p.waitForSelector('.simple-change', { timeout: Math.min(movieTimeout, 60000) });
+        // Each entry is named once its spot has been measured.
+        await p.waitForFunction(() => [...document.querySelectorAll('.simple-change-title')].every((el) => !/^Checking/.test(el.textContent)), null, { timeout: 30000 });
         const changes = await p.locator('.simple-change .simple-change-title').allInnerTexts();
         t.data('changes', changes);
         await p.locator('.simple-change').first().click();
         await p.waitForFunction(() => document.querySelectorAll('#simple .simple-row .simple-answer').length >= 2, null, { timeout: 20000 });
         const answers = await p.locator('#simple .simple-row').allInnerTexts();
         t.data('answers', answers.map((a) => a.replace(/\s+/g, ' ').slice(0, 160)));
+        // The list and the answers must agree: no entry is called "moved" when its answer is "No".
+        const picked = (await p.locator('.simple-change[aria-current="true"] .simple-change-title').allInnerTexts())[0] || (await p.locator('.simple-change .simple-change-title').allInnerTexts())[0] || '';
+        t.data('pickedTitle', picked);
+        const movingRow = answers.find((a) => /^Moving\?/.test(a.trim())) || '';
+        if (/\bmoved$/.test(picked) && !/may have moved$/.test(picked) && /\bNo\s*$/.test(movingRow)) throw new Error(`the list says "${picked}" but the answer to "Moving?" is No`);
+        const why = await p.locator('#simple .simple-detail').allInnerTexts();
+        if (why.some((w) => /(^|\n)\s*(null|undefined)\s*($|\n)/.test(w))) throw new Error('the "Why" drop-down shows a stray "null"');
         await waitFor(() => new URL(p.url()).searchParams.get('view') === 'residual', { timeoutMs: 5000, what: 'view=residual in the URL after picking a change' });
         const pressed = await p.evaluate(() => { const b = document.querySelector('#simplebar [data-view="residual"]'); return b ? b.getAttribute('aria-checked') : null; });
         if (pressed !== 'true') throw new Error('the "What changed" switch is not marked as selected in the residual view');

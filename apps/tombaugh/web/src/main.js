@@ -5,7 +5,7 @@
 // guarded dynamic import, so a missing or broken module degrades one feature instead of blanking
 // the page), wires state -> loader -> pipeline -> viewer / player / panels, and hosts plugins.
 
-import { createStore, readUrlState, writeUrlState, shareUrl, initialMode, DEFAULT_STATE, VIEWS, SIMPLE_VIEWS } from './state.js';
+import { createStore, readUrlState, writeUrlState, shareUrl, initialMode, DEFAULT_STATE, VIEWS, SIMPLE_VIEWS, FOVS } from './state.js';
 import { createApi, resolveApiBase } from './api.js';
 import { createLoader, isCancelled } from './loader.js';
 import * as pipeline from './pipeline.js';
@@ -78,6 +78,7 @@ const OPTIONAL_MODULES = [
   ['home', () => import('./ui/home.js')],
   ['stardata', () => import('./sky/stardata.js')],
   ['picklist', () => import('./ui/picklist.js')],
+  ['bodies', () => import('./plugins/moving/bodies.js')],
   ['explain', () => import('./ui/explain.js')],
   ['fx', () => import('./ui/fx.js')],
   ['shortcuts', () => import('./ui/shortcuts.js')],
@@ -268,16 +269,37 @@ async function boot() {
   });
 
   // Simple mode: the same candidates, selection and spectrum the panels get, said in plain words.
+  let simpleSpeed = 'auto'; // how fast the photos flip in Simple mode
+  let simpleKnown = false; // whether Simple mode rings the stars the charts already list
+  function syncSimpleTools() {
+    const s = store.get();
+    const at = FOVS.indexOf(s.fov);
+    try {
+      simple.setTools({ speed: simpleSpeed, wider: at < FOVS.length - 1, closer: at > 0, smooth: !!s.smooth, known: simpleKnown });
+    } catch (err) {
+      console.warn('[tombaugh] simple tools', err);
+    }
+  }
   const simple = createSimpleView({
     bar: els.simplebar,
     host: els.simple,
-    plots: { createSpectrumPlot: opt.spectrum && opt.spectrum.createSpectrumPlot },
+    tools: document.getElementById('simpletools'),
+    plots: {
+      createSpectrumPlot: opt.spectrum && opt.spectrum.createSpectrumPlot,
+      createLightCurvePlot: opt.lightcurve && opt.lightcurve.createLightCurvePlot,
+    },
     findTarget: (name) => findTarget(targets, name),
     verdicts: {
       motionVerdict: opt.motion && opt.motion.motionVerdict,
       lightCurveVerdict: opt.lightcurve && opt.lightcurve.lightCurveVerdict,
     },
     onView: (view) => {
+      if (view === 'lens') {
+        // "In colour": the three-colour picture, the one lens Simple mode shows.
+        session.simpleColour = true;
+        if (store.get().view !== 'lens' || store.get().lens !== 'rgb') store.set({ view: 'lens', lens: 'rgb', t: 0 });
+        return;
+      }
       if (store.get().view !== view) store.set({ view, t: 0 });
     },
     onPickCandidate: (c, i) => {
@@ -285,9 +307,35 @@ async function boot() {
       if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
     },
     onClear: () => select(null),
+    onSpeed: (value) => {
+      simpleSpeed = value;
+      player.setSpeed(value);
+      syncSimpleTools();
+    },
+    onField: (step) => {
+      const at = FOVS.indexOf(store.get().fov);
+      const next = FOVS[Math.max(0, Math.min(FOVS.length - 1, (at < 0 ? 1 : at) + step))];
+      if (next !== store.get().fov) store.set({ fov: next });
+    },
+    onSmooth: () => store.set({ smooth: !store.get().smooth }),
+    onKnown: () => {
+      simpleKnown = !simpleKnown;
+      syncSimpleTools();
+      updateOverlays();
+    },
+    onSave: () => downloadPng(),
   });
+  if (!lib.rgbComposite) simple.setViewDisabled('lens', 'The colour picture is not available in this build');
   if (!lib.fitSkyModel || !lib.residualLayer) simple.setViewDisabled('residual', 'The comparison is not available in this build');
   simple.setView(store.get().view);
+  // The speed switch sits beside the Play button (the player's own speed menu is Advanced only).
+  try {
+    const row = els.player && els.player.querySelector('.player-row');
+    if (row && simple.speedEl) row.append(simple.speedEl);
+  } catch (err) {
+    console.warn('[tombaugh] simple speed switch', err);
+  }
+  syncSimpleTools();
   applyModeToViewer();
   for (const name of ['setCandidates', 'setSpectrum']) {
     const base = panels[name];
@@ -312,9 +360,8 @@ async function boot() {
   function applyModeToViewer() {
     try {
       const full = store.get().mode !== 'simple';
-      // Simple mode always shows the pictures smoothed; Advanced keeps the true square pixels
-      // unless its own "Smooth" switch is on.
-      viewer.setOptions({ colorbar: full, compass: full, scaleBar: full, smooth: full ? store.get().smooth : true });
+      // Both modes show the true square pixels unless "Smooth" is switched on.
+      viewer.setOptions({ colorbar: full, compass: full, scaleBar: full, smooth: !!store.get().smooth });
       // The citation block sits at the foot of the column in Advanced mode and inside the
       // "Data" drop-down in Simple mode.
       if (els.cite && simple.creditBody) (full ? els.side : simple.creditBody).append(els.cite);
@@ -990,6 +1037,61 @@ async function boot() {
     }
     const active = session.selection && Number.isInteger(session.selection.candidate) ? session.selection.candidate : -1;
     panels.setCandidates({ status: 'ready', list: entry.candidates, active });
+    queueChecks();
+  }
+
+  // Simple mode names each entry of the list by what measuring that spot finds, not by the search's
+  // first guess. The measurements run one at a time, between frames, and are kept on the entry.
+  let checkTimer = null;
+  function queueChecks() {
+    if (checkTimer !== null) {
+      clearTimeout(checkTimer);
+      checkTimer = null;
+    }
+    if (store.get().mode !== 'simple') return;
+    const det = store.get().det;
+    const entry = session.models.get(det);
+    const data = session.byDet.get(det);
+    if (!entry || !entry.model || !data || !data.layers.length || data.partial) return;
+    const key = session.key;
+    const step = () => {
+      checkTimer = null;
+      if (key !== session.key || store.get().det !== det || store.get().mode !== 'simple') return;
+      const i = entry.candidates.findIndex((c) => !c.checked && !c.unchecked && !c.checkTried);
+      if (i < 0) return;
+      const c = entry.candidates[i];
+      c.checkTried = true;
+      try {
+        simple.setChecked(i, measureSpot(c.ra, c.dec, data));
+      } catch (err) {
+        console.warn('[tombaugh] candidate check failed', err);
+        simple.setChecked(i, null);
+      }
+      checkTimer = setTimeout(step, 30);
+    };
+    checkTimer = setTimeout(step, 150);
+  }
+
+  /** Motion and brightness at a spot, as simple.setSelection takes them. Changes nothing on screen. */
+  function measureSpot(ra, dec, data) {
+    const frame = player.frame();
+    const m = pipeline.measureMotion(lib, data.layers, data.grid, ra, dec, {
+      stars: session.gaia.stars,
+      known: targets,
+      startMjd: frame && Number.isFinite(frame.mjd) ? frame.mjd : null,
+    });
+    const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
+    const follow = pipeline.photometryTrack(lib, m, verdict.verdict);
+    const spec = pipeline.measureSpectrum(lib, allFrames(), ra, dec, follow ? { track: follow.track } : {});
+    return {
+      measured: m ? m.measured : null,
+      gaia: m && m.catalogue
+        ? { pmra: m.catalogue.pmra, pmdec: m.catalogue.pmdec, total: m.catalogue.total, source: 'catalogue' }
+        : m && m.gaia && m.gaia.total !== null ? { pmra: m.gaia.pmra, pmdec: m.gaia.pmdec, total: m.gaia.total } : null,
+      passes: m && m.track.length && opt.motion && opt.motion.passPositions ? opt.motion.passPositions(m.track).length : undefined,
+      lightCurve: spec.curve,
+      saturated: !!(m && m.saturated),
+    };
   }
 
   // ---- movie ----------------------------------------------------------------------------------
@@ -1207,6 +1309,81 @@ async function boot() {
     return shown;
   }
 
+  // A star far too bright for the camera floods the photo: most of it is flagged and there is
+  // nothing left to compare. Simple mode says so in the picture instead of showing a blank square.
+  const blindedCache = new WeakMap();
+  /** Fraction of a frame's pixels that are flagged or missing (0 when it has no mask). */
+  function flaggedFraction(frame) {
+    if (!frame || !frame.mask || !frame.mask.length) return 0;
+    let frac = blindedCache.get(frame);
+    if (frac === undefined) {
+      let bad = 0;
+      const m = frame.mask;
+      for (let i = 0; i < m.length; i++) if (m[i]) bad++;
+      frac = bad / m.length;
+      blindedCache.set(frame, frac);
+    }
+    return frac;
+  }
+  const patchCache = new WeakMap();
+  /** Fraction of the middle of a frame (a disc 0.7 of its width) that is flagged: a blanked star, not a ragged edge. */
+  function flaggedMiddle(frame) {
+    if (!frame || !frame.mask || !frame.mask.length) return 0;
+    let frac = patchCache.get(frame);
+    if (frac === undefined) {
+      const m = frame.mask;
+      const n = Math.round(Math.sqrt(m.length));
+      const c = (n - 1) / 2;
+      const r2 = (0.35 * n) ** 2;
+      let bad = 0;
+      let all = 0;
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          if ((x - c) ** 2 + (y - c) ** 2 > r2) continue;
+          all++;
+          if (m[y * n + x]) bad++;
+        }
+      }
+      frac = all ? bad / all : 0;
+      patchCache.set(frame, frac);
+    }
+    return frac;
+  }
+  let blindedEl = null;
+  let patchEl = null;
+  function updateBlinded(frame) {
+    const s = store.get();
+    const plain = s.mode === 'simple' && !!frame;
+    const show = plain && flaggedFraction(frame) > 0.45;
+    // A blank patch that leaves most of the photo: one short label so nobody takes it for a hole in the sky.
+    const patch = plain && !show && flaggedMiddle(frame) > 0.08;
+    if (patch && !patchEl) {
+      patchEl = h('div', { class: 'blinded-patch glass', role: 'note' }, 'Blank patch: too bright for the camera');
+      els.viewerFrame.append(patchEl);
+    }
+    if (patchEl) patchEl.hidden = !patch;
+    if (!show) {
+      if (blindedEl) blindedEl.hidden = true;
+      return;
+    }
+    if (!blindedEl) {
+      blindedEl = h('div', { class: 'blinded glass', role: 'status' });
+      els.viewerFrame.append(blindedEl);
+    }
+    const canWiden = s.fov < FOVS[FOVS.length - 1];
+    clear(blindedEl).append(
+      h('strong', null, 'Too bright for this camera'),
+      h('span', null, `${s.name || 'This star'} floods the photo, so there is little left to compare.`),
+      h(
+        'span',
+        { class: 'blinded-actions' },
+        canWiden ? h('button', { type: 'button', class: 'btn btn-solid', onclick: () => store.set({ fov: FOVS[FOVS.length - 1] }) }, 'Show more sky') : null,
+        h('button', { type: 'button', class: 'btn', onclick: () => goHome() }, 'Pick another star'),
+      ),
+    );
+    blindedEl.hidden = false;
+  }
+
   function renderFrame(frame) {
     if (!frame) return;
     const s = store.get();
@@ -1230,6 +1407,7 @@ async function boot() {
     } catch (err) {
       console.warn('[tombaugh] frame failed to draw', err);
     }
+    updateBlinded(frame);
     updateOverlays();
     updateFrameSummary(frame);
     syncSimulatedBadge();
@@ -1264,7 +1442,9 @@ async function boot() {
   function shownCaption(frame) {
     const c = frame && frame.caption ? frame.caption : null;
     if (!c || store.get().mode !== 'simple') return c;
-    return { title: c.title };
+    // The colour picture's own caption names detectors and passes: say it the Simple way.
+    const title = String(c.title || '').replace(/^Three-detector colour/i, 'In colour').replace(/\bpass (\d+ of \d+)/i, 'visit $1');
+    return { title };
   }
 
   function refreshCaptions() {
@@ -1407,8 +1587,8 @@ async function boot() {
     // its own through frame.markers or addOverlay.
     const ownSky = !pluginViews.has(s.view);
     if (frame && session.grid) {
-      // Simple mode leaves the catalogue rings out: the picture and the moving thing are enough.
-      if (ownSky && s.gaia && s.mode !== 'simple' && session.gaia.stars.length && lib.gridSkyToPix) {
+      // Simple mode leaves the catalogue rings out unless "Known stars" is switched on.
+      if (ownSky && s.gaia && (s.mode !== 'simple' || simpleKnown) && session.gaia.stars.length && lib.gridSkyToPix) {
         try {
           overlays.gaia = ghostsFor(frame);
         } catch (err) {
@@ -1729,15 +1909,39 @@ async function boot() {
   let homeView = null; // where the sky start page was last looking
   const skyStars = () => (opt.stardata && typeof opt.stardata.starList === 'function' ? opt.stardata.starList() : []);
 
+  /** The solar system bodies the tool can follow, for the start page and the search lists. */
+  const skyBodies = () => (opt.bodies && Array.isArray(opt.bodies.BODIES) ? opt.bodies.BODIES.map((b) => ({ id: b.id, name: b.name, kind: b.kind })) : []);
+
+  /**
+   * Follow a solar system body. It moves, so it has no fixed spot to open: the "Solar system"
+   * tool reads ?body= when the page loads and does the rest (find it, fetch the photos, stack them).
+   */
+  function openBody(id) {
+    try {
+      const url = new URL(window.location.href);
+      url.search = `?body=${encodeURIComponent(id)}`;
+      url.hash = '';
+      window.location.assign(url.toString());
+    } catch (err) {
+      console.warn('[tombaugh] could not open the body', err);
+    }
+  }
+
   /** A star or spot picked on the sky start page, or a name picked from a search list. */
   function openFromSky(sel) {
     if (!sel) return;
+    if (sel.body) {
+      openBody(sel.body);
+      return;
+    }
     if (sel.target) {
       pickTarget(sel.target);
       return;
     }
     store.set({ view: 'passes' });
-    goTo({ ra: sel.ra, dec: sel.dec, name: sel.name || '' });
+    // A naked-eye star is far brighter than this camera was built for: start with more sky around it.
+    const bright = Number.isFinite(sel.mag) && sel.mag < 4.5;
+    goTo({ ra: sel.ra, dec: sel.dec, name: sel.name || '', fov: bright ? FOVS[FOVS.length - 1] : DEFAULT_STATE.fov });
   }
   let landingFallback = null;
   let resolveToken = 0;
@@ -1992,14 +2196,18 @@ async function boot() {
         setMode(plain ? 'advanced' : 'simple', { remember: true });
         showLanding();
       };
-      if (plain && opt.home && typeof opt.home.createHome === 'function') {
-        // Simple mode starts on the whole sky: look around, click a star, open it.
+      if (opt.home && typeof opt.home.createHome === 'function') {
+        // Both modes start on the whole sky: look around, click a star, open it.
         try {
           landingPlain = plain;
           landing = opt.home.createHome(els.landing, {
             targets: targets.map(plainTarget),
             starts: tourTargets,
+            modeLabel: plain ? 'Advanced' : 'Simple',
+            modeTitle: plain ? 'Show every view, plot and tool' : 'Back to the short version',
             stars: skyStars(),
+            bodies: skyBodies(),
+            onBody: (id) => openBody(id),
             figures: opt.stardata ? opt.stardata.SKY_FIGURES : [],
             starCredit: opt.stardata ? opt.stardata.STAR_DATA_CREDIT : '',
             view: homeView,
@@ -2212,7 +2420,7 @@ async function boot() {
   if (btnSky) btnSky.addEventListener('click', () => goHome());
   if (opt.picklist && opt.home && typeof opt.picklist.attachPickList === 'function') {
     try {
-      const names = opt.home.pickItems(targets.map(plainTarget), skyStars());
+      const names = opt.home.pickItems(targets.map(plainTarget), skyStars(), skyBodies());
       opt.picklist.attachPickList(els.searchInput, {
         items: names,
         host: els.searchInput.parentNode,
@@ -2304,14 +2512,17 @@ async function boot() {
     const has = (k) => changed.includes(k);
     emit('state', { state: s, changed });
     if (has('embed')) layout.setEmbed(s.embed);
+    if (has('smooth') || has('fov')) syncSimpleTools();
     if (has('mode')) {
       layout.setMode(s.mode);
       applyModeToViewer();
+      queueChecks();
     }
     if (has('view')) {
       simple.setView(s.view);
       // A view that only Advanced mode shows (a link, a story, a tool): show the controls for it.
-      if (s.mode === 'simple' && !SIMPLE_VIEWS.includes(s.view)) queueMicrotask(() => setMode('advanced'));
+      const colour = s.view === 'lens' && s.lens === 'rgb' && session.simpleColour;
+      if (s.mode === 'simple' && !SIMPLE_VIEWS.includes(s.view) && !colour) queueMicrotask(() => setMode('advanced'));
     }
     if (has('ra') || has('dec')) {
       document.title = titleFor(s);
@@ -2344,7 +2555,7 @@ async function boot() {
     if (has('stretch') || has('colormap')) renderFrame(player.frame());
     if (has('smooth')) {
       try {
-        viewer.setOptions({ smooth: s.mode === 'simple' ? true : s.smooth });
+        viewer.setOptions({ smooth: !!s.smooth });
       } catch {
         // optional
       }
@@ -2586,6 +2797,71 @@ async function boot() {
     toasts.show('The image viewer module is missing from this build, so frames cannot be drawn.', { kind: 'alert', timeout: 8000 });
   }
   await loadPlugins();
+  watchBodyStart();
+
+  /**
+   * A link that follows a solar system body (?body=pluto) starts on the sky page while the
+   * "Solar system" tool finds the body and fetches its photos. Say what is happening there, in
+   * plain words, until the photos open.
+   */
+  function watchBodyStart() {
+    let wanted = '';
+    try {
+      wanted = String(new URLSearchParams(window.location.search).get('body') || '').trim().toLowerCase();
+    } catch {
+      wanted = '';
+    }
+    const entry = (app.plugins || []).find((p) => p.name === 'moving');
+    const handle = entry && entry.handle && typeof entry.handle.state === 'function' ? entry.handle : null;
+    if (!wanted || !handle) return;
+    const known = skyBodies().find((b) => b.id === wanted || b.name.toLowerCase() === wanted);
+    const name = known ? known.name : wanted;
+    const words = {
+      idle: `Finding ${name}…`,
+      ephemeris: `Finding where ${name} has been…`,
+      track: `Finding the photos ${name} is in…`,
+      plan: 'Getting the photos…',
+      loading: 'Getting the photos…',
+      stacking: 'Lining the photos up…',
+    };
+    const say = (text, error) => {
+      if (!landing) return;
+      try {
+        if (error) {
+          if (landing.setBusy) landing.setBusy(false);
+          if (landing.setError) landing.setError(text);
+        } else if (landing.setBusy) landing.setBusy(true, text);
+      } catch {
+        // the start page is optional
+      }
+    };
+    const started = Date.now();
+    const tick = () => {
+      if (hasTarget() || document.documentElement.dataset.screen === 'console') return; // the photos opened
+      let st = null;
+      try {
+        st = handle.state();
+      } catch {
+        st = null;
+      }
+      const phase = st && st.phase ? st.phase : 'idle';
+      if (phase === 'error') {
+        say(`${name} could not be followed just now. Try again in a minute.`, true);
+        return;
+      }
+      if (phase === 'empty') {
+        say(`The telescope has no photos of ${name} yet.`, true);
+        return;
+      }
+      if (phase === 'done' && Date.now() - started > 4000 && !(st.items && st.items.length)) {
+        say(`The telescope has no photos of ${name} yet.`, true);
+        return;
+      }
+      say(words[phase] || words.idle, false);
+      if (Date.now() - started < 10 * 60 * 1000) setTimeout(tick, 500);
+    };
+    tick();
+  }
 }
 
 boot().catch((err) => {

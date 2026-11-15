@@ -24,7 +24,8 @@ export const HEADER = [
 ];
 export const DEFAULT_DIRS = ['web', 'proxy', 'tools', 'test'];
 const EXTENSIONS = new Set(['.js', '.mjs', '.ts']);
-const SKIP_DIRS = new Set(['node_modules', 'dist', 'tmp']);
+// vendor/ holds third-party code under its own licence banner (see each folder's README).
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'tmp', 'vendor']);
 
 /** All checkable files under the given directories or files (absolute paths, sorted). */
 export function listSourceFiles(targets, base = PROJECT) {

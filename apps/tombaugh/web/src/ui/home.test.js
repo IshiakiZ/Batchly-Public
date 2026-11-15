@@ -28,3 +28,17 @@ test('selectionTitle names what was picked in plain words', () => {
   assert.equal(selectionTitle({ kind: 'point', name: '' }), 'This spot');
   assert.equal(selectionTitle(null), '');
 });
+
+test('the solar system bodies sit between the targets and the stars, and carry their id', async () => {
+  const { plainKind } = await import('./home.js');
+  const { BODIES } = await import('../plugins/moving/bodies.js');
+  const items = pickItems(TARGETS, starList(), BODIES);
+  const firstBody = items.findIndex((i) => i.group === 'Solar system');
+  const firstStar = items.findIndex((i) => !i.group);
+  assert.ok(firstBody > 0 && firstBody < firstStar);
+  const pluto = items.find((i) => i.name === 'Pluto');
+  assert.equal(pluto.body, 'pluto');
+  assert.equal(pluto.ra, undefined);
+  // Every kind in the list has plain words.
+  for (const b of BODIES) assert.ok(plainKind(b.kind).length > 3, b.kind);
+});

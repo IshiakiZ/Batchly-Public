@@ -615,7 +615,7 @@ html[data-embed="1"] .embed-credit { display: block; }
 /* The default face of the console: the picture, a two-way switch and plain-language answers.
    Advanced mode is everything above; these rules only hide parts of it and show two blocks. */
 .simplebar, .simple { display: none; }
-html[data-mode="simple"] { --rail-w: 0px; --chrome-v: 232px; --font-num: var(--font-text); }
+html[data-mode="simple"] { --rail-w: 0px; --chrome-v: 290px; --font-num: var(--font-text); }
 /* A softer look than the instrument panel of Advanced mode: round corners, no typewriter type. */
 html[data-mode="simple"] .btn,
 html[data-mode="simple"] .search-input,
@@ -686,6 +686,10 @@ html[data-mode="simple"] .simple {
 .simple-detail { display: grid; gap: 14px; }
 .simple-spec { display: grid; gap: 6px; }
 .simple-plot .tbp-tools, .simple-plot .tbp-head { display: none; }
+/* The chart's screen-reader table is clipped to 1px but can still widen the page on a phone: pin it. */
+.simple-plot { overflow: hidden; }
+.simple-plot .tbp-sr { left: 0; top: 0; }
+.simple-more-body { min-width: 0; }
 /* Drop-downs: a few words to click, the explanation inside. */
 .simple-more > summary {
   display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; list-style: none;
@@ -708,6 +712,62 @@ html[data-mode="simple"] .simple {
 .simple-change[aria-current="true"] .cand-n { border-color: var(--signal); color: var(--signal); }
 .simple-change-title { font-size: 15px; font-weight: bold; }
 .simple-change-strength { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* ---- Simple mode: the small tools under the picture, and the too-bright notice */
+/* ---- Simple mode wears the glass look of the Batchly site: a soft ground, a floating bar, glass
+   cards (the library draws those) and rim-lit pills for the small controls. */
+:root { --glass-accent: #f7f2e7; --glass-dispersion: 0.3; }
+html[data-mode="simple"] body {
+  background:
+    radial-gradient(1100px 760px at 88% -12%, rgba(229, 60, 39, 0.22), transparent 62%),
+    radial-gradient(980px 760px at -8% 108%, rgba(70, 104, 196, 0.26), transparent 62%),
+    radial-gradient(700px 520px at 46% 46%, rgba(247, 242, 231, 0.05), transparent 70%),
+    #0c0c0e;
+  background-attachment: fixed;
+}
+html[data-mode="simple"] .topbar { margin: 10px 14px 0; height: calc(var(--topbar-h) - 6px); border-bottom: 0; border-radius: 26px; }
+html[data-mode="simple"] .side { border-left: 0; }
+html[data-mode="simple"] .simple-card.glass { padding: 18px 22px; border-top: 0; border-radius: 22px; margin-bottom: 12px; }
+html[data-mode="simple"] .simple-card.glass:first-child { padding-top: 18px; }
+html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go),
+html[data-mode="simple"] .seg,
+html[data-mode="simple"] .simple-change {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+html[data-mode="simple"] .btn:not(.btn-solid):hover, html[data-mode="simple"] .simple-change:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07));
+}
+html[data-mode="simple"] .btn { border-radius: 999px; }
+html[data-mode="simple"] .seg { border-radius: 999px; overflow: hidden; }
+html[data-mode="simple"] .seg-btn { border-radius: 0; border-left-color: rgba(255, 255, 255, 0.1); }
+html[data-mode="simple"] .simple-change { border-radius: 16px; }
+html[data-mode="simple"] .viewer-frame { border-color: rgba(255, 255, 255, 0.16); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); }
+.blinded.glass { background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.simpletools { display: none; }
+html[data-mode="simple"] .simpletools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: var(--viewer-size); margin-top: 2px; }
+.simple-tool-seg { display: inline-flex; height: 34px; }
+.simple-tool-seg .seg-btn { height: 32px; padding: 0 10px; font-size: 12.5px; }
+.simple-tool-group { display: inline-flex; gap: 4px; }
+.simple-tool { height: 34px; padding: 0 11px; font-size: 12.5px; }
+.simple-tool[aria-pressed="true"] { border-color: var(--signal); color: var(--paper); background: rgba(229, 60, 39, 0.16); }
+.simple-tool:disabled { opacity: 0.4; cursor: default; }
+.simple-answer.is-fact { font-weight: normal; font-size: 15px; }
+.blinded {
+  position: absolute; left: 50%; top: 50%; z-index: 4; transform: translate(-50%, -50%);
+  display: grid; gap: 8px; justify-items: center; text-align: center; width: min(86%, 380px); padding: 20px 22px;
+  background: rgba(23, 23, 21, 0.82); border: 1px solid var(--rule); border-radius: 16px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.blinded strong { font-size: 18px; }
+.blinded span { font-size: 14px; line-height: 1.45; }
+.blinded-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.blinded[hidden] { display: none; }
+.blinded-patch { position: absolute; left: 50%; top: 12px; z-index: 4; transform: translateX(-50%); padding: 7px 14px; border-radius: 16px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.blinded-patch[hidden] { display: none; }
+.player-row > .simple-tool-seg { margin-left: auto; }
+html[data-mode="advanced"] .player-row > .simple-tool-seg, html[data-embed="1"] .player-row > .simple-tool-seg { display: none; }
 .btn-mode[aria-pressed="true"] { border-color: var(--paper); }
 
 /* ------------------------------------------------- medium: panels stack below */
@@ -730,7 +790,8 @@ html[data-mode="simple"] .simple {
   .panel-title { display: block; }
   .tagline { display: none; }
   html[data-mode="simple"] { --viewer-size: clamp(280px, min(calc(100vh - 220px), calc(100vw - 2 * var(--pad))), 760px); }
-  html[data-mode="simple"] .simple { overflow: visible; padding-top: 20px; }
+  /* clip sideways: the glass cards draw a little past their own edges */
+  html[data-mode="simple"] .simple { overflow: visible; overflow-x: clip; padding-top: 20px; }
   .simple-card { margin: 0 auto; }
 }
 
@@ -744,6 +805,12 @@ html[data-mode="simple"] .simple {
   .topbar { grid-template-columns: 1fr auto; row-gap: 8px; padding: 10px var(--pad) 6px; height: auto; }
   .topbar > .brand { grid-column: 1; grid-row: 1; }
   .topbar > .top-actions { grid-column: 2; grid-row: 1; }
+  /* Simple mode on a phone: four buttons and the name do not fit on one line. */
+  html[data-mode="simple"] .topbar { margin: 8px 8px 0; padding: 10px 12px 8px; }
+  html[data-mode="simple"] .topbar .wordmark { font-size: 15px; }
+  html[data-mode="simple"] .top-actions { gap: 6px; }
+  html[data-mode="simple"] .top-actions .btn { padding: 0 10px; font-size: 12px; }
+  html[data-mode="simple"] #btn-help { display: none; }
   .topbar > .search { grid-column: 1 / -1; grid-row: 2; }
   .topbar > .sim-badge { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; justify-content: center; margin-bottom: 4px; }
   .top-actions .btn { height: 30px; padding: 0 10px; }
@@ -837,19 +904,18 @@ html[data-mode="simple"] .simple {
 
 /* ------------------------------------------------------- pick-list of names */
 .picklist {
-  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60;
-  max-height: min(52vh, 420px); overflow-y: auto; overscroll-behavior: contain;
-  background: var(--ink-raised); border: 1px solid var(--rule-strong); border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); padding: 6px; text-align: left;
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60; border-radius: 16px; text-align: left;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
+.picklist[hidden] { display: none; }
+.picklist-scroll { position: relative; max-height: min(52vh, 420px); overflow-y: auto; overscroll-behavior: contain; padding: 6px; border-radius: inherit; }
 .picklist-head { padding: 8px 10px 4px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.picklist-row { padding: 8px 10px; border-radius: 6px; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picklist-row { padding: 8px 10px; border-radius: 10px; font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picklist-row:hover, .picklist-row.is-active { background: var(--hover); }
 .picklist-row.is-active { outline: 1px solid var(--rule-strong); }
 .picklist-row.is-featured::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 9px; border-radius: 50%; background: var(--signal); vertical-align: 1px; }
 .picklist-none { padding: 10px; font-size: 13px; color: var(--muted); }
 html[data-mode="simple"] .search-pop { display: none !important; }
-html[data-mode="advanced"] #btn-sky { display: none; }
 
 /* ------------------------------------------------- the sky start page (Simple) */
 .skyhome { position: relative; height: 100vh; height: 100dvh; min-height: 420px; overflow: hidden; background: #05060a; }
@@ -861,7 +927,7 @@ html[data-mode="advanced"] #btn-sky { display: none; }
 .skyhome-top {
   position: absolute; left: 0; right: 0; top: 0; z-index: 5; display: grid; grid-template-columns: 1fr minmax(240px, 460px) 1fr;
   align-items: start; gap: 16px; padding: 16px 20px 44px;
-  background: linear-gradient(to bottom, rgba(5, 6, 10, 0.88), rgba(5, 6, 10, 0.55) 55%, rgba(5, 6, 10, 0));
+  background: linear-gradient(to bottom, rgba(5, 6, 10, 0.6), rgba(5, 6, 10, 0.3) 55%, rgba(5, 6, 10, 0));
   pointer-events: none;
 }
 .skyhome-top > * { pointer-events: auto; }
@@ -870,50 +936,55 @@ html[data-mode="advanced"] #btn-sky { display: none; }
 .skyhome-tag { font-size: 14px; color: var(--paper); opacity: 0.86; }
 .skyhome-search { display: grid; gap: 6px; }
 .skyhome-field { position: relative; display: flex; gap: 8px; }
+.skyhome-inputwrap { flex: 1; min-width: 0; height: 44px; border-radius: 22px; }
 .skyhome-input {
-  flex: 1; min-width: 0; height: 44px; padding: 0 16px; font-size: 16px; color: var(--paper);
-  background: rgba(23, 23, 21, 0.82); border: 1px solid var(--rule-strong); border-radius: 22px;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  position: relative; width: 100%; height: 44px; padding: 0 18px; font-size: 16px; color: var(--paper);
+  background: transparent; border: 0; border-radius: 22px; outline: none;
 }
-.skyhome-input::placeholder { color: var(--muted); }
-.skyhome-input:focus { border-color: var(--paper); }
+.skyhome-input::placeholder { color: rgba(247, 242, 231, 0.7); }
+.skyhome-inputwrap:focus-within { box-shadow: 0 0 0 1.5px rgba(247, 242, 231, 0.75); }
 .skyhome-field .btn { height: 44px; padding: 0 20px; border-radius: 22px; font-size: 14px; }
-.skyhome-status { min-height: 16px; padding-left: 16px; font-size: 12px; color: var(--muted); }
+.skyhome-status { min-height: 18px; padding-left: 18px; font-size: 13.5px; color: var(--paper); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
 .skyhome-status.is-error { color: #ff8a78; }
 .skyhome-actions { display: flex; justify-content: flex-end; padding-top: 6px; }
-.skyhome-actions .btn { background: rgba(23, 23, 21, 0.7); border-radius: 18px; padding: 0 14px; }
+.skyhome-mode { height: 36px; padding: 0 16px; border: 0; border-radius: 18px; font: inherit; font-size: 13px; color: var(--paper); cursor: pointer; }
 .skyhome-hint {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, 110px); z-index: 4; margin: 0; padding: 9px 16px;
-  font-size: 14px; color: var(--paper); background: rgba(23, 23, 21, 0.72); border-radius: 20px; pointer-events: none;
+  font-size: 14px; color: var(--paper); border-radius: 20px; pointer-events: none;
   transition: opacity 500ms var(--ease); white-space: nowrap;
 }
 .skyhome-hint.is-gone { opacity: 0; }
 .skyhome-card {
   position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 14px;
-  max-width: calc(100vw - 32px); padding: 12px 12px 12px 20px; background: rgba(23, 23, 21, 0.92); border: 1px solid var(--rule-strong);
-  border-radius: 16px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  max-width: calc(100vw - 32px); padding: 12px 12px 12px 22px; color: var(--paper);
+  border-radius: 33px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
+.skyhome-card[hidden] { display: none; }
 .skyhome-card-text { display: grid; gap: 2px; min-width: 0; }
 .skyhome-card-name { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.skyhome-card-line { font-size: 13px; color: var(--muted); }
+.skyhome-card-line { font-size: 13px; color: rgba(247, 242, 231, 0.82); }
 .skyhome-go { flex: none; height: 42px; padding: 0 18px; border-radius: 21px; font-size: 14px; background: var(--signal); border-color: var(--signal); color: #fff; white-space: nowrap; }
 .skyhome-go:hover { background: #f2513c; border-color: #f2513c; }
 .skyhome-x { flex: none; height: 32px; width: 32px; padding: 0; border-radius: 16px; font-size: 20px; line-height: 1; }
 .skyhome-bottom {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
-  padding: 44px 20px 30px; background: linear-gradient(to top, rgba(5, 6, 10, 0.88), rgba(5, 6, 10, 0)); pointer-events: none;
+  padding: 44px 20px 30px; background: linear-gradient(to top, rgba(5, 6, 10, 0.55), rgba(5, 6, 10, 0)); pointer-events: none;
 }
 .skyhome-bottom > * { pointer-events: auto; }
 .skyhome-starts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .skyhome-starts-label { margin-right: 4px; font-size: 13px; color: var(--muted); }
-.skyhome-chip {
-  height: 34px; padding: 0 14px; font-size: 13px; color: var(--paper); background: rgba(23, 23, 21, 0.8); border: 1px solid var(--rule-strong);
-  border-radius: 17px; cursor: pointer; transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-}
-.skyhome-chip::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border: 1.5px solid var(--signal); border-radius: 50%; vertical-align: 0; }
-.skyhome-chip:hover { background: rgba(247, 242, 231, 0.14); border-color: var(--paper); }
+.skyhome-chip { height: 36px; padding: 0 16px; font: inherit; font-size: 13px; color: var(--paper); border: 0; border-radius: 18px; cursor: pointer; }
+.skyhome-orbit { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1.5px solid var(--paper); border-radius: 50%; vertical-align: -1px; box-shadow: inset 0 0 0 2.5px transparent; background: radial-gradient(circle at 50% 50%, var(--paper) 0 1.6px, transparent 2px); }
+.skyhome-menu { position: absolute; left: 20px; bottom: 84px; z-index: 7; width: min(320px, calc(100vw - 40px)); border-radius: 22px; color: var(--paper); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45); }
+.skyhome-menu[hidden] { display: none; }
+.skyhome-menu-list { position: relative; display: grid; max-height: min(56vh, 460px); overflow-y: auto; overscroll-behavior: contain; padding: 8px; border-radius: inherit; }
+.skyhome-menu-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 9px 12px; background: transparent; border: 0; border-radius: 12px; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.skyhome-menu-row:hover, .skyhome-menu-row:focus-visible { background: rgba(247, 242, 231, 0.14); }
+.skyhome-menu-row span { font-size: 12px; color: rgba(247, 242, 231, 0.72); white-space: nowrap; }
+.skyhome-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border: 1.5px solid var(--signal); border-radius: 50%; }
 .skyhome-zoom { display: flex; gap: 6px; }
-.skyhome-zoom-btn { width: 38px; height: 38px; padding: 0; border-radius: 19px; font-size: 20px; line-height: 1; background: rgba(23, 23, 21, 0.8); }
+.skyhome-zoom-btn { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 20px; font: inherit; font-size: 20px; line-height: 1; color: var(--paper); cursor: pointer; }
+.skyhome-chip, .skyhome-zoom-btn, .skyhome-mode { background: transparent; }
 .skyhome-credit { position: absolute; left: 20px; bottom: 6px; z-index: 7; max-width: min(560px, calc(100vw - 40px)); font-size: 11px; color: var(--muted); }
 .skyhome-credit > summary { cursor: pointer; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.85; }
 .skyhome-credit > summary::-webkit-details-marker { display: none; }

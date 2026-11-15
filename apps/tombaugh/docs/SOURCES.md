@@ -55,6 +55,7 @@ Multilateral Agreement."
 | S2 | **SIMBAD** astronomical database, CDS (TAP at `https://simbad.cds.unistra.fr/simbad/sim-tap/sync`) | Fallback for name resolution; proper motion and parallax of named objects; the catalogued objects near a clicked position ("What is this?"). The tool also links to SIMBAD | <https://simbad.cds.unistra.fr/simbad/> | checked 2026-11-15 |
 | S3 | **VizieR** TAP service, CDS, catalogue `I/355/gaiadr3` | Second fallback for the Gaia cone search | `https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync` | fallback, not checked separately |
 | S5 | **d3-celestial** data files (`stars.6.json`, `starnames.json`, `constellations.lines.json`), Olaf Frohn, BSD 3-Clause licence; positions from the Hipparcos catalogue (ESA 1997) | The 5,044 bright stars, 468 proper names and constellation figures drawn on the start page and listed in the search box. Reduced to `web/src/sky/stardata.js` by `tools/make-sky-data.mjs`; the licence text is in that file and in NOTICE. No d3-celestial code is used | <https://github.com/ofrohn/d3-celestial> | fetched 2026-11-15 |
+| S6 | **HYG database v4.1** (`hyg/CURRENT/hygdata_v41.csv`), astronexus, licensed CC BY-SA 4.0; distances from the Hipparcos parallaxes | The distance of 4,938 of the 5,044 bright stars, matched by Hipparcos number, used only to show depth on the start page while the view is moving (near stars shift more than far ones). Only the distance column is kept, in `web/src/sky/stardata.js`; those values stay under CC BY-SA 4.0 (see NOTICE). No HYG code is used | <https://github.com/astronexus/HYG-Database> (now kept at <https://codeberg.org/astronexus/hyg>) | fetched 2026-11-15 |
 | S4 | **WiseView** (Backyard Worlds: Planet 9) | The model for a blink tool. Tombaugh links to it at the same coordinates for WISE epochs. No WiseView code or data is included | <http://byw.tools/wiseview> | given |
 
 A built-in table holds approximate coordinates and proper motions for the five challenge targets,
@@ -101,8 +102,10 @@ time, and uses published values for the two brown dwarfs, which Gaia does not li
 
 ## 6. Software and tools
 
-**No third-party code libraries are bundled; all code in the repository was generated for this
-project.** There are no npm dependencies and no CDN imports. Astropy is used only as an
+**One third-party code library is bundled, for looks only:** Liquid Glass for the Web v1.3.0 (MIT,
+`web/vendor/liquid-glass/`), the glass look of the Batchly site that hosts the tool. It draws the
+glass bars, cards and buttons and takes no part in the science. All other code in the repository
+was generated for this project. There are no npm dependencies and no CDN imports. Astropy is used only as an
 independent check during development. Aladin is not used.
 
 | # | Tool | Role | Link |
