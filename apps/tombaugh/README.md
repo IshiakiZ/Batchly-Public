@@ -71,6 +71,8 @@ Live tool: **<https://batch-ly.com/tombaugh/index.html>**
 Type a position (`269.45 4.69`, `17h57m48.5s +04d41m36s`, `17:57:48.5 +04:41:36`) or a name
 (`Barnard's Star`), or take the five-target tour from the first screen.
 
+![Simple mode on Barnard's Star, real data: the picture, a two-way switch, and plain-language answers](docs/real/simple-mode.jpg)
+
 The page has two modes. **Simple** is the default: the picture with play and blink, a two-way
 switch between "The sky" and "What changed", and a side column that says in plain words what the
 field is, what changed in it and, for any star you click, whether it is moving and whether its
