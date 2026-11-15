@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T09:59:38.316Z, sources sha256 b71f0e3740b37b59.
+Single-file build of 111 modules, 2026-11-15T10:07:35.849Z, sources sha256 490ecb8754091392.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -32766,7 +32766,8 @@ const star = near.star;
 const id = star.id !== undefined && star.id !== null && /^\d{1,25}$/.test(String(star.id)) ? String(star.id) : '';
 const title = id ? `Gaia DR3 ${id}` : 'Gaia DR3 star';
 const lines = [];
-const where = near.sepArcsec <= GAIA_MATCH_ARCSEC ? 'close enough to be this source' : 'too far to be this source';
+const mismatch = motionMismatch(sel, near);
+const where = near.sepArcsec > GAIA_MATCH_ARCSEC ? 'too far to be this source' : mismatch ? 'close on the sky, but not this source' : 'close enough to be this source';
 lines.push(el('p', null, el('b', { text: sepText(near.sepArcsec) }), `, ${where}`, isNum(star.gmag) ? [' · G magnitude ', el('b', { text: star.gmag.toFixed(1) })] : null));
 if (near.pmTotal !== null) {
 const perYear = formatMotion(near.pmTotal);
@@ -32787,10 +32788,20 @@ lines.push(el('p', null, parts));
 } else {
 lines.push(el('p', { text: 'Gaia lists no proper motion for it.' }));
 }
+if (mismatch) {
+lines.push(el('p', null, 'This source was measured moving ', el('b', { text: formatMotion(mismatch.measured) }), `, ${mismatch.factor >= 10 ? Math.round(mismatch.factor / 10) * 10 : Math.round(mismatch.factor)} times what Gaia lists for that star. Gaia has no entry for the thing that moved.`));
+}
 if (isNum(star.parallax) && star.parallax > 0.5) {
 lines.push(el('p', null, 'Parallax puts it about ', el('b', { text: `${lightYears(star.parallax)} light-years` }), ' away.'));
 }
 host.append(el('div', { class: 'tbi-gaia' }, id ? outLink(simbadIdUrl(title), title, 'tbi-name') : el('span', { class: 'tbi-name', text: title }), lines));
+}
+function motionMismatch(sel, near) {
+const m = sel && sel.motion && sel.motion.measured;
+if (!m || !isNum(m.total) || !isNum(m.errTotal) || near.pmTotal === null) return null;
+if (m.total < 500 || m.total < 5 * m.errTotal) return null;
+const factor = m.total / Math.max(near.pmTotal, 1);
+return factor >= 5 ? { measured: m.total, factor } : null;
 }
 function drawHints(sel, near) {
 const host = view.hints;
@@ -41085,9 +41096,10 @@ const sig = isNum(mo.significance) ? mo.significance : 0;
 rows.push(row(g, 'Proper motion, total', fmtValErr(me.total, me.errTotal, 'mas/yr'), {
 reference: ex ? `${fmt(ex.total, d)} mas/yr` : '', difference: df ? `${fmtSigned(df.total, d)} mas/yr` : '',
 sigma: df ? df.sigmaTotal : null,
-note: mo.moving
+note: (mo.moving
 ? `Motion detected at ${fmt(sig, 1)} sigma.`
-: `No motion detected: ${fmt(sig, 1)} sigma, below the 3 sigma needed. The value is an upper bound on what could hide here.`,
+: `No motion detected: ${fmt(sig, 1)} sigma, below the 3 sigma needed. The value is an upper bound on what could hide here.`)
++ (mo.saturated ? ' The star saturates the detector, so each position is taken from the unsaturated light around its flagged core.' : ''),
 }));
 rows.push(row(g, 'Proper motion, east', fmtValErr(me.pmra, me.errPmra, 'mas/yr'), {
 reference: ex ? `${fmt(ex.pmra, d)} mas/yr` : '', difference: df ? `${fmtSigned(df.pmra, d)} mas/yr` : '',
@@ -41137,6 +41149,9 @@ return rows;
 function changeText(p) {
 return `${TIMES}${fmt(p.ratio, 3)} ${PM} ${fmt(p.err, 3)} (${fmt(p.significance, 1)} sigma)`;
 }
+function blendText(b) {
+return `In ${b.pass} a Gaia star${isNum(b.gmag) ? ` (G ${fmt(b.gmag, 1)})` : ''} lies ${fmt(b.sepArcsec, 1)} arcsec from the target, inside the aperture, so the change is partly that star's light and is not counted as the target varying.`;
+}
 function variabilityRows(m) {
 const g = 'Brightness';
 const v = m.variability || {};
@@ -41146,10 +41161,14 @@ const top = v.largest;
 const floorNote = v.floor > 0 ? ` Errors include a ${fmt(v.floor * 100, 0)} percent repeatability floor per pass.` : '';
 rows.push(row(g, 'Largest change between passes', v.varied
 ? `${changeText(top)}, ${top.from} ${ARROW} ${top.to}, D${top.det}`
+: top.blend
+? `not counted: ${changeText(top)} is blended with a Gaia star`
 : `none detected; largest is ${changeText(top)}`, {
 difference: `${fmtSigned(v.percent, Math.abs(v.percent) < 10 ? 1 : 0)} %`,
 note: v.varied
 ? `Brightness relative to the smooth spectrum, later pass over earlier pass. Method: ${v.method}.${floorNote}`
+: top.blend
+? `${blendText(top.blend)} Method: ${v.method}.${floorNote}`
 : `Below the 3 sigma needed to call it a change. Method: ${v.method}.${floorNote}`,
 }));
 for (const d of v.perDet || []) {
@@ -41161,6 +41180,7 @@ for (const p of d.pairs || []) {
 if (p.toIndex !== p.fromIndex + 1 && (d.pairs || []).length > 1 && p !== d.largest) continue;
 rows.push(row(g, `D${d.det}, ${p.from} ${ARROW} ${p.to}`, changeText(p), {
 difference: `${fmtSigned((p.ratio - 1) * 100, Math.abs(p.ratio - 1) < 0.1 ? 1 : 0)} %`,
+note: p.blend ? blendText(p.blend) : '',
 }));
 }
 }
@@ -41789,7 +41809,7 @@ fracWithin2Sigma: dof > 0 ? within / dof : NaN, detectable3Sigma: 3 * scatter, c
 };
 }
 });
-__tb_define("src/plugins/validate/measure.js", function (__tb_self) { __tb_export(__tb_self, { DEFAULT_FLOOR_ARCSEC: () => DEFAULT_FLOOR_ARCSEC, DEFAULT_PHOT_FLOOR: () => DEFAULT_PHOT_FLOOR, METHANE_BAND: () => METHANE_BAND, bandDepth: () => bandDepth, buildPassStacks: () => buildPassStacks, measureField: () => measureField, measureTarget: () => measureTarget }); const { propagate, centroid, fitMotion, fitMotionWithParallax, matchGaia, tangentOffset, offsetBy, separationArcsec } = __tb_require("src/core/astrometry.js"); const { gridSkyToPix, gridPixToSky } = __tb_require("src/core/wcs.js"); const { splitPasses, medianMjd, passLabel, DETECTORS } = __tb_require("src/core/frames.js"); const { stackLayers, normalizeBackground } = __tb_require("src/core/stack.js"); const { fitSkyModel, residualLayer, evalModelAt } = __tb_require("src/core/skymodel.js"); const { reproject } = __tb_require("src/core/reproject.js"); const { extractSpectrum, lightCurve } = __tb_require("src/core/photometry.js"); const { LENSES } = __tb_require("src/core/lenses.js"); const { mjdToIso } = __tb_require("src/core/time.js"); const { buildPassStacks, measureFieldStars, alignment, nullTest, median, robustSigma, NATIVE_PIXEL_ARCSEC, GAIA_EPOCH } = __tb_require("src/plugins/validate/fieldstars.js");
+__tb_define("src/plugins/validate/measure.js", function (__tb_self) { __tb_export(__tb_self, { BLEND_ARCSEC: () => BLEND_ARCSEC, DEFAULT_FLOOR_ARCSEC: () => DEFAULT_FLOOR_ARCSEC, DEFAULT_PHOT_FLOOR: () => DEFAULT_PHOT_FLOOR, METHANE_BAND: () => METHANE_BAND, bandDepth: () => bandDepth, blendAt: () => blendAt, buildPassStacks: () => buildPassStacks, measureField: () => measureField, measureTarget: () => measureTarget }); const { propagate, centroid, fitMotion, fitMotionWithParallax, matchGaia, tangentOffset, offsetBy, separationArcsec, maskedCoreRadius, centroidWings } = __tb_require("src/core/astrometry.js"); const { gridSkyToPix, gridPixToSky } = __tb_require("src/core/wcs.js"); const { splitPasses, medianMjd, passLabel, DETECTORS } = __tb_require("src/core/frames.js"); const { stackLayers, normalizeBackground } = __tb_require("src/core/stack.js"); const { fitSkyModel, residualLayer, evalModelAt } = __tb_require("src/core/skymodel.js"); const { reproject } = __tb_require("src/core/reproject.js"); const { extractSpectrum, lightCurve } = __tb_require("src/core/photometry.js"); const { LENSES } = __tb_require("src/core/lenses.js"); const { mjdToIso } = __tb_require("src/core/time.js"); const { buildPassStacks, measureFieldStars, alignment, nullTest, median, robustSigma, NATIVE_PIXEL_ARCSEC, GAIA_EPOCH } = __tb_require("src/plugins/validate/fieldstars.js");
 ;
 ;
 ;
@@ -41803,7 +41823,7 @@ __tb_define("src/plugins/validate/measure.js", function (__tb_self) { __tb_expor
 ;
 const CORE = {
 propagate, centroid, fitMotion, fitMotionWithParallax, matchGaia, tangentOffset, offsetBy,
-separationArcsec, gridSkyToPix, gridPixToSky, splitPasses, medianMjd, passLabel, stackLayers,
+separationArcsec, maskedCoreRadius, centroidWings, gridSkyToPix, gridPixToSky, splitPasses, medianMjd, passLabel, stackLayers,
 normalizeBackground, fitSkyModel, residualLayer, evalModelAt, extractSpectrum, lightCurve, mjdToIso,
 reproject,
 };
@@ -41902,7 +41922,10 @@ const locate = (stack, x, y) => {
 if (!isNum(x) || !isNum(y)) return null;
 let c = null;
 try {
-c = L.centroid(stack.image, stack.mask, n, x, y, { box });
+const core = typeof L.maskedCoreRadius === 'function' ? L.maskedCoreRadius(stack.image, stack.mask, n, x, y) : 0;
+c = core > 0 && typeof L.centroidWings === 'function'
+? L.centroidWings(stack.image, stack.mask, n, x, y)
+: L.centroid(stack.image, stack.mask, n, x, y, { box });
 } catch {
 c = null;
 }
@@ -41951,9 +41974,13 @@ points.push({
 pass: stack.index, label: stack.label, mjd: stack.mjd, ra, dec, x: c.x, y: c.y,
 sigma: Math.hypot(statPix * grid.scale, floorArcsec), statArcsec: statPix * grid.scale,
 snr: isNum(c.snr) ? c.snr : null, flux: isNum(c.flux) ? c.flux : null,
+...(c.method === 'wings' ? { method: 'wings' } : {}),
 });
 });
-const base = { det, nPasses: stacks.length, nFound: points.length, floorArcsec, points, catalogue: catalogue || null };
+const base = {
+det, nPasses: stacks.length, nFound: points.length, floorArcsec, points, catalogue: catalogue || null,
+saturated: points.some((p) => p.method === 'wings'),
+};
 if (points.length < 2) {
 const reason = stacks.length < 2
 ? 'Only one survey pass is loaded; a motion needs two'
@@ -42077,17 +42104,51 @@ if (!(a.mean > 0) || !(b.mean > 0)) continue;
 const ratio = b.mean / a.mean;
 const err = ratio * Math.hypot(a.err / a.mean, b.err / b.mean);
 const significance = Math.abs(b.mean - a.mean) / Math.hypot(a.err, b.err);
-pairs.push({ from: a.label, to: b.label, fromIndex: a.index, toIndex: b.index, ratio, err, significance });
+const ba = a.blend || null;
+const bb = b.blend || null;
+const blended = (ba || bb) && (!ba || !bb || ba.id !== bb.id || Math.abs(ba.sepArcsec - bb.sepArcsec) > 2);
+const pair = { from: a.label, to: b.label, fromIndex: a.index, toIndex: b.index, ratio, err, significance };
+if (blended) pair.blend = { ...(bb || ba), pass: bb ? b.label : a.label };
+pairs.push(pair);
 }
 }
 return pairs;
 }
 function largestPair(pairs) {
 let best = null;
-for (const p of pairs) if (!best || p.significance > best.significance) best = p;
+const clean = pairs.filter((p) => !p.blend);
+for (const p of clean.length ? clean : pairs) if (!best || p.significance > best.significance) best = p;
 return best;
 }
-function variabilityFromPhotometry(env, pointsByDet) {
+const BLEND_ARCSEC = 9;
+function blendAt(env, tracker, mjd) {
+const { L, stars, catalogue, gaiaEpoch } = env;
+if (!Array.isArray(stars) || !stars.length || typeof tracker !== 'function' || !isNum(mjd)) return null;
+const pos = tracker(mjd);
+if (!pos || !isNum(pos.ra) || !isNum(pos.dec)) return null;
+const own = catalogue && catalogue.source === 'Gaia DR3' ? String(catalogue.id) : null;
+let best = null;
+for (const st of stars) {
+if (!st || !isNum(st.ra) || !isNum(st.dec)) continue;
+if (own !== null && st.id != null && String(st.id) === own) continue;
+let at = st;
+if (isNum(st.pmra) && isNum(st.pmdec)) {
+try {
+at = L.propagate({ ...st, epoch: isNum(st.epoch) ? st.epoch : gaiaEpoch, parallax: 0 }, mjd);
+} catch {
+at = st;
+}
+}
+const sep = L.separationArcsec(pos.ra, pos.dec, at.ra, at.dec);
+if (catalogue && sep < 3 && isNum(st.pmra) && isNum(st.pmdec) && isNum(catalogue.pmra) && isNum(catalogue.pmdec)) {
+const want = Math.hypot(catalogue.pmra, catalogue.pmdec);
+if (Math.hypot(st.pmra - catalogue.pmra, st.pmdec - catalogue.pmdec) <= Math.max(100, 0.2 * want)) continue;
+}
+if (sep <= BLEND_ARCSEC && (!best || sep < best.sepArcsec)) best = { sepArcsec: sep, gmag: isNum(st.gmag) ? st.gmag : null, id: st.id != null ? String(st.id) : '' };
+}
+return best;
+}
+function variabilityFromPhotometry(env, pointsByDet, tracker = null) {
 const { L } = env;
 const perDet = [];
 for (const [det, points] of [...pointsByDet.entries()].sort((a, b) => a[0] - b[0])) {
@@ -42105,7 +42166,9 @@ if (group.length < 2) return;
 const m = robustMean(group.map((c) => ({ value: c.ratio, err: c.err })));
 if (!m) return;
 const err = Math.hypot(m.err, env.photFloor * Math.abs(m.mean));
-passes.push({ index, label: L.passLabel(group), mjd: L.medianMjd(group), n: m.n, mean: m.mean, err, statErr: m.err });
+const mjd = L.medianMjd(group);
+const blend = tracker ? blendAt(env, tracker, mjd) : null;
+passes.push({ index, label: L.passLabel(group), mjd, n: m.n, mean: m.mean, err, statErr: m.err, ...(blend ? { blend } : {}) });
 });
 if (passes.length < 2) {
 perDet.push({ det, ...fail(passes.length ? 'Usable photometry in one pass only' : 'No usable photometry (flagged, off the frame or undetected)'), nPoints: curve.length, passes });
@@ -42149,9 +42212,10 @@ const reason = perDet.length ? perDet.map((d) => `D${d.det}: ${d.reason || 'no p
 return { ...fail(reason), method, perDet };
 }
 let top = null;
-for (const d of good) if (!top || d.largest.significance > top.significance) top = { det: d.det, ...d.largest };
+const better = (a, b) => (!!a.blend !== !!b.blend ? !a.blend : a.significance > b.significance);
+for (const d of good) if (!top || better(d.largest, top)) top = { det: d.det, ...d.largest };
 return {
-ok: true, method, perDet, largest: top, varied: top.significance >= 3,
+ok: true, method, perDet, largest: top, varied: top.significance >= 3 && !top.blend,
 percent: (top.ratio - 1) * 100, floor: photFloor,
 };
 }
@@ -42437,6 +42501,7 @@ const env = {
 L, grid: ctx.grid, det, layers, stacks, frames, catalogue, target: { ...t, ...here }, tick, signal,
 floorArcsec: isNum(ctx.floorArcsec) && ctx.floorArcsec >= 0 ? ctx.floorArcsec : DEFAULT_FLOOR_ARCSEC,
 photFloor: isNum(ctx.photFloor) && ctx.photFloor >= 0 ? ctx.photFloor : DEFAULT_PHOT_FLOOR,
+stars: starsOf(ctx.gaia), gaiaEpoch,
 };
 const cancelled = () => {
 if (signal && signal.aborted) { out.cancelled = true; return true; }
@@ -42472,7 +42537,7 @@ await tick();
 }
 await run('variability', () => {
 if (pointsByDet.size && typeof L.lightCurve === 'function') {
-const v = summariseVariability(variabilityFromPhotometry(env, pointsByDet), 'native aperture photometry against a smooth spectrum', env.photFloor);
+const v = summariseVariability(variabilityFromPhotometry(env, pointsByDet, tracker), 'native aperture photometry against a smooth spectrum', env.photFloor);
 if (v.ok) return v;
 }
 const stacksByDet = new Map();
