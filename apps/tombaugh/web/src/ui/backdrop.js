@@ -15,7 +15,7 @@
 //     kinds   [{ selector, bevel, bend, frost, tint, gain }] in paint order (cards before their buttons)
 //     root    where to look for the glass elements (default: the whole document)
 //     source  leave out for the ground above. On the sky page it is { canvases: () => [...] }: the
-//             sky's own canvases. They are copied small into a texture each time the sky is drawn
+//             sky's own canvases. They are copied into a texture each time the sky is drawn
 //             (call sourceDrawn() right after), and the lenses bend that picture instead; the
 //             canvas is then clear everywhere else and sits between the sky and the controls.
 //
@@ -24,18 +24,19 @@
 
 /** The glass shapes of the page, largest first: a child is drawn over its parent. */
 export const SKY_GLASS_KINDS = [
-  { name: 'card', selector: '.skyhome-card, .skyhome-inputwrap', bevel: 9, bend: 1, frost: 0.55, tint: 0.055, gain: 0.8 },
-  { name: 'button', selector: '.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn', bevel: 6, bend: 1, frost: 0.25, tint: 0.06, gain: 0.85 },
-  { name: 'hint', selector: '.skyhome-hint', bevel: 6, bend: 1, frost: 0.4, tint: 0.06, gain: 0.85, fades: true },
+  // Clear glass (frost 0): the sky stays sharp behind it, so the bend at the edge is plain to see.
+  { name: 'card', selector: '.skyhome-card, .skyhome-inputwrap', bevel: 9, bend: 1, frost: 0.1, tint: 0.05, gain: 0.85 },
+  { name: 'button', selector: '.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn', bevel: 6, bend: 1, frost: 0, tint: 0.055, gain: 0.85 },
+  { name: 'hint', selector: '.skyhome-hint', bevel: 6, bend: 1, frost: 0, tint: 0.055, gain: 0.85, fades: true },
   // Last, so an open list covers whatever glass lies under it.
-  { name: 'panel', selector: '.skyhome-menu, .picklist', bevel: 12, bend: 1, frost: 1, tint: 0.075, gain: 0.45 },
+  { name: 'panel', selector: '.skyhome-menu, .picklist', bevel: 12, bend: 1, frost: 0.7, tint: 0.075, gain: 0.5 },
 ];
 
 export const GLASS_KINDS = [
-  { name: 'bar', selector: '.topbar', bevel: 13, bend: 1, frost: 0.55, tint: 0.035 },
-  { name: 'card', selector: '.simple-card, .controls, .glass-panel, html[data-mode="advanced"] .side', bevel: 14, bend: 1, frost: 0.75, tint: 0.03 },
-  { name: 'field', selector: '.search-input', bevel: 7, bend: 0.8, frost: 0.8, tint: -0.012 },
-  { name: 'button', selector: '.btn:not(.btn-solid), .seg, .simple-change, .chip, .tool-group, select.select', bevel: 5, bend: 0.9, frost: 0.5, tint: 0.05 },
+  { name: 'bar', selector: '.topbar', bevel: 13, bend: 1, frost: 0.2, tint: 0.035 },
+  { name: 'card', selector: '.simple-card, .controls, .glass-panel, html[data-mode="advanced"] .side', bevel: 14, bend: 1, frost: 0.25, tint: 0.03 },
+  { name: 'field', selector: '.search-input', bevel: 7, bend: 1, frost: 0.3, tint: -0.012 },
+  { name: 'button', selector: '.btn:not(.btn-solid), .seg, .simple-change, .chip, .tool-group, select.select', bevel: 5, bend: 1, frost: 0.1, tint: 0.05 },
 ];
 
 /** A corner radius in px from a computed style value ("12px", "50%", "999px"), limited to the box. Pure. */
@@ -111,7 +112,7 @@ vec3 ground(vec2 p, float soft) {
   float d = abs(fract(n - 0.5) - 0.5);
   float line = 1.0 - smoothstep(0.0, fw * (0.9 + soft * 7.0), d);
   float major = 1.0 - smoothstep(0.0, fw * (1.4 + soft * 7.0), abs(fract(n * 0.25 - 0.5) - 0.5) * 4.0);
-  col += vec3(0.97, 0.95, 0.91) * (0.05 * line + 0.05 * major) * (1.0 - 0.72 * soft);
+  col += vec3(0.97, 0.95, 0.91) * (0.06 * line + 0.06 * major) * (1.0 - 0.72 * soft);
   return col;
 }
 float grain(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453) - 0.5; }
@@ -130,7 +131,8 @@ float grain(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.54
 // Eight taps on two rings, turned by a different angle at every pixel: a star behind the glass
 // becomes a soft glow with a fine frosted grain instead of eight sharp copies.
 vec3 ground(vec2 p, float soft) {
-  float r = 2.0 + soft * 11.0;
+  if (soft < 0.02) return texAt(p);              // clear glass: the view stays sharp
+  float r = 1.0 + soft * 12.0;
   float a = (grain(floor(p * 2.0)) + 0.5) * 6.2832;
   vec2 u = vec2(cos(a), sin(a)) * r;
   vec2 v = vec2(-u.y, u.x);
@@ -191,16 +193,22 @@ void main() {
   vec2 n = g / max(length(g), 0.0001);          // points out of the glass
   float bevel = max(1.0, min(uOpt.x, min(hs.x, hs.y)));
   float k = 1.0 - clamp(-d / bevel, 0.0, 1.0);   // 1 at the rim, 0 on the flat face
-  float slope = k * k;
-  // The round edge magnifies: it shows what lies further in.
-  vec2 off = -n * slope * bevel * uOpt.y * 2.0;
-  // No branch here: the three samples meet where the edge ends, so no seam shows.
-  vec3 col = vec3(ground(p + off * 1.14, uOpt.z).r, ground(p + off, uOpt.z).g, ground(p + off * 0.86, uOpt.z).b);
-  col = col * uGain + uOpt.w;
+  // The glass is a low dome: its face bends the view a little, its round edge bends it hard.
+  // The bend reaches further in than the bevel you can see, as it does in a real lens.
+  float zone = max(1.0, min(bevel * 2.4, min(hs.x, hs.y)));
+  float s = 1.0 - clamp(-d / zone, 0.0, 1.0);    // 1 at the rim, 0 where the face is flat
+  float slope = s * s * s / sqrt(1.0 - 0.96 * s * s);
+  // The edge shows what lies further in, squeezed: a line behind the glass breaks at the rim.
+  vec2 off = -n * slope * zone * uOpt.y * 0.32;
+  // No branch here: the three samples meet where the edge ends, so no seam shows. Red and blue
+  // bend by different amounts, so a star near the rim grows a thin colour fringe.
+  vec3 col = vec3(ground(p + off * 1.2, uOpt.z).r, ground(p + off, uOpt.z).g, ground(p + off * 0.8, uOpt.z).b);
+  col = col * uGain * (1.0 + 0.35 * min(slope, 2.0)) + uOpt.w;
+  col += vec3(0.022) * (0.5 - o.y / max(hs.y, 1.0) * 0.5); // the face catches a little more light at the top
   vec2 L = normalize(vec2(-0.55, -0.83));        // toward the light: up and to the left
   float lit = max(dot(n, L), 0.0);
   float back = max(dot(n, -L), 0.0);
-  col += vec3(1.0, 0.98, 0.95) * ((0.30 * lit + 0.10 * back) * pow(k, 5.0) + (0.07 * lit + 0.02) * pow(k, 2.0));
+  col += vec3(1.0, 0.98, 0.95) * ((0.46 * lit + 0.20 * back) * pow(k, 5.0) + (0.09 * lit + 0.03) * pow(k, 2.0));
   col += vec3(0.035) * pow(k, 4.0);
   col -= vec3(0.03) * back * k * (1.0 - k) * 4.0; // a thin shade inside the far edge
   col += grain(gl_FragCoord.xy) / 255.0;
@@ -449,8 +457,9 @@ export function createBackdrop(opts = {}) {
     const ch = canvas.clientHeight;
     if (!cw || !ch) return;
     try {
-      const w = Math.max(2, Math.round(cw / 2));
-      const hgt = Math.max(2, Math.round(ch / 2));
+      // One texture pixel per CSS pixel: sharp enough for clear glass, cheap enough to copy every frame.
+      const w = Math.max(2, Math.min(2048, Math.round(cw)));
+      const hgt = Math.max(2, Math.round((ch * w) / cw));
       if (!small) {
         small = doc.createElement('canvas');
         small2d = small.getContext('2d');
