@@ -287,7 +287,22 @@ sign across the star between the first and last pass means the star moved, and t
 reported; a residual of one sign all round means it brightened or faded. On real data this turned
 12 false "changed brightness" entries on Barnard's field into one entry, "Moved. Saturated star:
 its halo shifted north", at 10.2 sigma. R Draconis gives one entry, "its halo faded", at
-13.1 sigma. A control field gives none ([docs/RESULTS.md](RESULTS.md), section 5).
+13.1 sigma ([docs/RESULTS.md](RESULTS.md), section 5).
+
+**Stars that are not saturated: the net-light test.** Run on eight empty control fields of real
+data, the search at first raised eight "changed brightness" alarms. Every one sat on the flank
+of an ordinary bright star. A fixed star never subtracts perfectly: its image is sampled by
+6-arcsecond pixels and the telescope is rotated by half a turn between passes, so the image
+differs a little from pass to pass. The difference is a bright patch on one flank and a dark one
+on the other. Each can be many sigma, because the star is bright, yet the star's total light is
+unchanged. So for a patch that sits on a fixed source (the model there is at least three times
+brighter than the patch), Tombaugh adds up the residuals of each pass in a disc of radius 3.5
+grid pixels (about 11 arcsec) round the source and compares the sum with the model's light in
+the same disc. The patch is listed only if that net change reaches 5 sigma; on a bright star
+that is a change of about 9 %. On the control stars the net change was 1 to 5 % and at most
+3.0 sigma. After the change all nine control fields list nothing, every challenge target is still
+listed, and the panel reports how many patches were set aside. A patch with no source under it (a
+new object, a mover in one pass) is not subject to the test.
 
 ![Residual view of Barnard's Star: one candidate, labelled Moved](real/barnard-residual-one-mover.jpg)
 
@@ -433,8 +448,13 @@ limits). The Injection test tab plants a simulated body in copies of the real fr
 track for a chosen distance and brightness, then runs the tool's own pipeline on them: the
 per-pass residual at the body's position, and the shift-and-stack along its track that the dial
 performs at the right distance. The body counts as recovered at 5 sigma in either. Every frame
-with a planted body is labelled SIMULATED. No injection or dial result was recorded in the run of
-15 November 2026, so none is quoted here.
+with a planted body is labelled SIMULATED. On 15 November 2026 the test was run on the empty
+control field at RA 202.5, Dec −7.5 (detector 3, three passes, 54 exposures) for a body at 500 AU:
+half of the planted bodies are recovered at 51 µJy at 2 µm, and the blind candidate list flags
+them above about 110 µJy. A Neptune-size planet at that distance would be about 25 µJy in
+reflected sunlight with a grey albedo of 0.4, about twice too faint
+([docs/RESULTS.md](RESULTS.md), section 5). No distance-dial result was recorded, so none is
+quoted here.
 
 **A known body instead of a hypothetical one** (`?body=pluto`, "Solar system" tab, "Follow body"
 view). The same shift-and-stack works for a body whose track is known. The tool asks JPL Horizons
@@ -499,7 +519,7 @@ These were done on real files or are enforced by tests that run without network 
 | TAN-SIP forward transform against a real header | Unit test: FITS pixel (30, 30) of a real cutout header must map to RA 210.8023, Dec 54.3490 within 0.003 deg. This tolerance is loose (10.8 arcsec); the tight tests are the Astropy comparison and the offsets from Gaia below |
 | Pixel solid angle: 1 MJy/sr over a 6.15 arcsec pixel = 889 microJy | Arithmetic, checked |
 | Parallax worked number: 2 AU at 500 AU = 13.75 arcmin | Arithmetic, checked |
-| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 993 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
+| Recovery of a synthetic 10 arcsec/yr mover, a factor-2 variable and a methane-like absorber from synthetic SPHEREx-style files | 995 unit tests pass (`node --test`). 12 end-to-end browser checks pass on the bundled page. See also [VALIDATION-SYNTHETIC.md](VALIDATION-SYNTHETIC.md) |
 | The same inputs given to this code and to Astropy (FITS reading, world coordinates, wavelength lookup, frame format, RICE decompression, ephemeris and motion, reprojection) | 232 comparisons pass, none fails ([CROSSCHECK.md](CROSSCHECK.md)) |
 
 ### Checks on real data
@@ -546,8 +566,9 @@ the same fields by the same code:
 | Offset between Gaia-predicted and measured centroids of field stars | Frame astrometry and resampling are right | Field stars land within 0.3 arcsec of where Gaia says they are, about one twentieth of a 6.15-arcsec pixel |
 | Null test: mean measured motion of field stars that Gaia says do not move | Empirical error of the proper-motion measurement | Zero within its error in every field (table above, mas/yr) |
 | Residual noise: standard deviation of residual / sigma on blank sky | Whether the noise model is right | Between 0.94 and 1.69, where 1 is ideal. The noise model is right to within tens of percent and slightly optimistic in the crowded Epsilon Indi field. The fraction of pixels beyond 5 sigma was not measured |
-| Blind candidate list in a field with no known mover or variable | False alarms of the change search | Control field at RA 56.25, Dec +34.22887 (373 exposures, 3 passes): 0 candidates. One field only |
-| Blind candidate list on the targets | Whether the change search finds them unaided | Barnard's Star: 1 candidate, "Moved", 10.2 sigma. R Draconis: 1, "its halo faded", 13.1 sigma. RW Aurigae: 3, the star itself at 18.6 sigma and two bright blended stars. WISE 0855-0714: 1, the brown dwarf |
+| Blind candidate list in a field with no known mover or variable | False alarms of the change search | Nine control fields (53 to 86 exposures each in detector 3, 3 or 4 passes): 0 candidates in all nine after the net-light test; 8 false alarms in 5 of 8 fields before it |
+| Blind candidate list on the targets | Whether the change search finds them unaided | Barnard's Star: 1 candidate, "Moved", 10.2 sigma. R Draconis: 1, "its halo faded", 13.1 sigma. RW Aurigae: 1, the star itself at 18.6 sigma (four patches on neighbouring stars set aside). WISE 0855-0714: 1, the brown dwarf. Epsilon Indi Ba,Bb: 1, "Moved", 29.5 sigma |
+| Bodies planted in the real frames of an empty field (Injection test tab) | How faint a body the search would catch | Field 202.5, −7.5, detector 3, body at 500 AU: half recovered at 51 µJy at 2 µm; flagged by the blind list above about 110 µJy. A Neptune-size planet there: about 25 µJy |
 | Injection and recovery for the distance dial | The dial focuses at the right distance | Not measured in this run (see section 8) |
 
 ## Limits and failure modes
@@ -602,7 +623,9 @@ ratio are designed to remove this; the plain stack blink is not.
 signal-to-noise is 4.7 per exposure. Its motion of about 4 arcsec per pass is under one pixel.
 It was measured from three passes in detector 6, and its methane band is seen at only 2.5 sigma.
 
-**No new object is claimed.** The blind search was checked on one control field. A real search
+**No new object is claimed.** The blind search was checked on nine control fields (0.04 square
+degrees), and the injection test says a Neptune-size planet at 500 AU is about twice too faint
+for a typical three-pass patch. A real search
 for an unknown body needs many fields and a human to look at each candidate, which is what the
 tool is built for.
 

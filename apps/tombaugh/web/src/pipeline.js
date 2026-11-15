@@ -708,7 +708,10 @@ export function findChangeCandidates(lib, model, layers, grid, { max = 12 } = {}
       label: `${kind} · ${Number.isFinite(score) ? score.toFixed(1) : '?'}σ`,
     });
   }
-  return clusterCandidates(out, grid, max);
+  const list = clusterCandidates(out, grid, max);
+  // How many residual patches on bright fixed stars the search set aside (core findCandidates).
+  list.setAside = Number.isFinite(raw.setAside) ? raw.setAside : 0;
+  return list;
 }
 
 /**

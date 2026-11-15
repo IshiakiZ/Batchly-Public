@@ -105,8 +105,9 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
       candHost.append(emptyBlock('Nothing searched yet', text || 'Once the exposures are loaded, Tombaugh looks for places that moved or changed brightness and lists them here.'));
       return;
     }
+    const aside = setAsideNote(candidates);
     if (!candidates.length) {
-      candHost.append(emptyBlock('Nothing stands out', 'No pixel in this field changed by more than the noise allows. Try another detector or a wider field.'));
+      candHost.append(emptyBlock('Nothing stands out', aside ? `Nothing in this field moved or changed its brightness by more than the noise allows. ${aside}` : 'No pixel in this field changed by more than the noise allows. Try another detector or a wider field.'));
       return;
     }
     const list = h('div', { class: 'cand-list', role: 'list' });
@@ -123,14 +124,14 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
           onclick: () => onPickCandidate(c, i),
         },
         h('span', { class: 'cand-n' }, String(i + 1)),
-        h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec)), saturatedNote(c) ? h('span', { class: 'cand-why' }, saturatedNote(c)) : null),
+        h('span', { class: 'cand-main' }, h('span', { class: 'cand-kind' }, kind), h('span', { class: 'cand-pos' }, fmtPos(lib.formatCoord, c.ra, c.dec)), whyNote(c) ? h('span', { class: 'cand-why' }, whyNote(c)) : null),
         h('span', { class: 'cand-score' }, Number.isFinite(c.score) ? `${c.score.toFixed(1)}σ` : ''),
       );
       list.append(btn);
     });
     candHost.append(list);
     candNote.textContent =
-      'Numbered marks appear on the image in the Residual view. Click a candidate to mark it and read its spectrum, light curve and motion. A candidate is a place to look, not a discovery: bright stars, image edges and cosmic rays can all leave residue.';
+      `Numbered marks appear on the image in the Residual view. Click a candidate to mark it and read its spectrum, light curve and motion. A candidate is a place to look, not a discovery: bright stars, image edges and cosmic rays can all leave residue.${aside ? ` ${aside}` : ''}`;
   }
   renderCandidates('idle');
 
@@ -141,6 +142,24 @@ export function createPanels({ layout, plots = {}, lib = {}, onFullSpectrum = ()
   const factsHead = h('p', { class: 'subhead' }, 'This field');
   const facts = h('dl', { class: 'facts' });
   clear(els.aboutBody).append(aboutText, aboutNotes, explainHost, factsHead, facts);
+
+  /** What the search set aside: the patches every bright fixed star leaves. '' when none. */
+  function setAsideNote(list) {
+    const k = list && Number.isFinite(list.setAside) ? list.setAside : 0;
+    if (!(k > 0)) return '';
+    return `${k} leftover patch${k === 1 ? '' : 'es'} on bright fixed stars ${k === 1 ? 'was' : 'were'} set aside: the star's total light did not change, only its image did.`;
+  }
+
+  /** One line on why a candidate is listed: a saturated star's halo, or a source whose total light changed. */
+  function whyNote(c) {
+    const sat = saturatedNote(c);
+    if (sat) return sat;
+    const net = c && c.net;
+    if (!net || !net.onSource || !Number.isFinite(net.frac) || !Number.isFinite(net.sigma)) return '';
+    const pct = Math.abs(100 * net.frac);
+    const size = pct >= 10 ? pct.toFixed(0) : pct.toFixed(1);
+    return `The total light of this source ${net.frac > 0 ? 'rose' : 'fell'} by ${size} %${net.label ? ` in ${net.label}` : ''} (${Math.abs(net.sigma).toFixed(1)} sigma).`;
+  }
 
   /** One line on a candidate that is a saturated star: what its halo did between the passes. */
   function saturatedNote(c) {

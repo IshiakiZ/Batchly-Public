@@ -65,7 +65,7 @@ and keep the repository link in the first lines of the detailed description.
 ## Detailed Project Description
 
 *What it does, how it works, benefits, what you hope to achieve, tools and languages used. (About
-990 words. If the form allows fewer, cut the list of views first, then BENEFITS.)*
+1,040 words. If the form allows fewer, cut the list of views first, then BENEFITS.)*
 
 ```
 Live tool: https://batch-ly.com/tombaugh/index.html
@@ -106,9 +106,9 @@ Measured by the tool itself, in a browser, on SPHEREx Data Release 1 and Quick R
 - RW Aurigae: brightness ×1.397 ± 0.041 (11.0 sigma) between September 2025 and March 2026.
 - R Draconis: brightness ×0.717 ± 0.056 (4.3 sigma) between March and April 2026.
 
-Field stars that should not move show zero motion within the error in every field, and they land within 0.3 arcseconds of where Gaia puts them. With no catalogue input, the candidate list on Barnard's field holds one entry, "moved"; on a control field it holds none. Pluto, followed across 225 exposures, gives a spectrum from 0.76 to 4.97 micrometres with methane-ice bands at 0.89, 1.16, 1.38, 1.72, 2.3 and 3.3 micrometres.
+Field stars that should not move show zero motion within the error in every field, and they land within 0.3 arcseconds of where Gaia puts them. With no catalogue input, every challenge target is the one entry in its own field's candidate list, and nine empty control fields list nothing. Bodies planted in the real frames of an empty field give the search's reach: a body at 500 AU is recovered half of the time at 51 microjansky, about twice as bright as a Neptune-size planet there would be. Pluto, followed across 225 exposures, gives a spectrum from 0.76 to 4.97 micrometres with methane-ice bands at 0.89, 1.16, 1.38, 1.72, 2.3 and 3.3 micrometres.
 
-Limits: motions under about 1 arcsecond per year cannot be seen with this pixel size and time span. The two saturated stars are less certain than their formal errors. The control field is one field. No new object is claimed.
+Limits: motions under about 1 arcsecond per year cannot be seen with this pixel size and time span. The two saturated stars are less certain than their formal errors. Nine control fields are a tiny part of the sky. No new object is claimed.
 
 BENEFITS
 
@@ -304,7 +304,7 @@ live services on 15 November 2026.
 - [ ] `LICENSE` (Apache 2.0) and `NOTICE` are present at the top level.
 - [ ] `NOTICE` lists the same DOIs as `docs/SOURCES.md` (Data Release 1 10.26131/IRSA678, Quick
       Release 3 10.26131/IRSA662).
-- [ ] `node --test` passes on the submitted commit (993 tests at the time of writing).
+- [ ] `node --test` passes on the submitted commit (995 tests at the time of writing).
 - [ ] `node tools/build.mjs` produces `dist/tombaugh.html`, and the hosted page is that build.
 - [ ] No secrets in the repository (service keys, tokens).
 - [ ] The first commit is dated after the event start (14 November 2026, 9 a.m. local time).

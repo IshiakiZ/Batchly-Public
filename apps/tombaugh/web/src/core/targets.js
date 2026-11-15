@@ -118,9 +118,11 @@ export const TARGETS = [
   {
     id: 'luhman16',
     name: 'Luhman 16',
-    // WISE J104915.57-531906.1, approximate position at epoch 2010.4.
-    ra: 162.3288, dec: -53.3194, epoch: 2010.4,
-    pmra: -2759, pmdec: 354, parallax: 501,
+    // WISE J104915.57-531906.1. Position, motion and parallax as SIMBAD lists them, ICRS at
+    // epoch 2000.0 (checked 2026-11-15). An earlier version of this table gave the same
+    // position as epoch 2010.4, which put the pair 29 arcsec from where it is.
+    ra: 162.328814, dec: -53.319466, epoch: 2000.0,
+    pmra: -2767.5, pmdec: 356.9, parallax: 501.6,
     det: 4, fov: 4,
     kind: 'pair', challenge: false,
     aliases: ['Luhman 16AB', 'WISE 1049-5319', 'WISE J1049-5319', 'WISE J104915.57-531906.1', 'W1049'],

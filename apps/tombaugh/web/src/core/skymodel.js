@@ -903,6 +903,102 @@ export function haloChange(stacks, n, core, rHalo) {
   return { ...none, dipole, monopole };
 }
 
+/**
+ * Did the total light at a residual blob change, or was it only rearranged?
+ *
+ * A fixed star never subtracts perfectly. SPHEREx samples its image with 6-arcsecond pixels,
+ * the telescope is rotated by half a turn between passes, and the frames line up to a few
+ * tenths of an arcsecond, so the star's image differs slightly from pass to pass. That leaves a
+ * bright patch on one flank and a dark one on the other, each of which can be many sigma on a
+ * bright star, while the star's total light is the same. A star that really brightened or
+ * faded leaves residuals that do not cancel.
+ *
+ * So: find the brightest model pixel within `rSearch` grid pixels of the blob. If it is at
+ * least `onSourceRatio` times brighter (above the local sky) than the blob's own strongest
+ * residual, the blob sits on a fixed source. Then add the residuals of each pass in a disc of
+ * radius `rAp` around that source, and compare with the model's light in the same disc.
+ *
+ * -> { onSource, x, y (centre of the disc), flux (model light in the disc above the sky, at
+ *      the reference wavelength, summed MJy/sr), frac (net residual / flux in the pass where
+ *      it is most significant), sigma (that net residual / its error, signed), passIndex }
+ * `frac` and `sigma` are 0 when no pass has enough unflagged pixels in the disc. When the blob
+ * is not on a source the disc is centred on the blob and `frac` is NaN.
+ */
+export function netChange(model, stacks, blob, { rSearch = 4, rAp = 3.5, onSourceRatio = 3 } = {}) {
+  const n = model.n;
+  const K = model.order + 1;
+  const c = model.coeffs;
+  const none = { onSource: false, x: blob.x, y: blob.y, flux: 0, frac: NaN, sigma: 0, passIndex: -1 };
+  if (!(n > 2) || !stacks || !stacks.length) return none;
+  const level = (i) => c[i * K];
+  // The brightest model pixel near the blob.
+  let best = -Infinity;
+  let bx = Math.round(blob.x);
+  let by = Math.round(blob.y);
+  const reach = Math.ceil(rSearch);
+  for (let y = Math.max(0, Math.round(blob.y) - reach); y <= Math.min(n - 1, Math.round(blob.y) + reach); y++) {
+    for (let x = Math.max(0, Math.round(blob.x) - reach); x <= Math.min(n - 1, Math.round(blob.x) + reach); x++) {
+      if (Math.hypot(x - blob.x, y - blob.y) > rSearch) continue;
+      const v = level(y * n + x);
+      if (v > best) { best = v; bx = x; by = y; }
+    }
+  }
+  // Local sky: the median model level in a ring round that pixel.
+  const ring = [];
+  const r0 = rAp + 2.5;
+  const r1 = rAp + 6;
+  for (let y = Math.max(0, Math.floor(by - r1)); y <= Math.min(n - 1, Math.ceil(by + r1)); y++) {
+    for (let x = Math.max(0, Math.floor(bx - r1)); x <= Math.min(n - 1, Math.ceil(bx + r1)); x++) {
+      const r = Math.hypot(x - bx, y - by);
+      const v = level(y * n + x);
+      if (r >= r0 && r <= r1 && v - v === 0) ring.push(v);
+    }
+  }
+  if (ring.length < 8 || !(best > -Infinity)) return none;
+  ring.sort((p, q) => p - q);
+  const sky = ring[ring.length >> 1];
+  const st0 = stacks[blob.passIndex] || stacks[0];
+  const at = Number.isInteger(blob.px) && Number.isInteger(blob.py) ? blob.py * n + blob.px : Math.round(blob.y) * n + Math.round(blob.x);
+  const amp = Math.abs(st0.image[at]);
+  const onSource = best - sky > 0 && amp - amp === 0 && best - sky >= onSourceRatio * amp;
+  const cx = onSource ? bx : blob.x;
+  const cy = onSource ? by : blob.y;
+  // Model light and net residual of each pass in the disc.
+  let flux = 0;
+  let nAp = 0;
+  const P = stacks.length;
+  const net = new Float64Array(P);
+  const vsum = new Float64Array(P);
+  const used = new Uint16Array(P);
+  for (let y = Math.max(0, Math.floor(cy - rAp)); y <= Math.min(n - 1, Math.ceil(cy + rAp)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - rAp)); x <= Math.min(n - 1, Math.ceil(cx + rAp)); x++) {
+      if (Math.hypot(x - cx, y - cy) > rAp) continue;
+      const i = y * n + x;
+      nAp++;
+      const v = level(i);
+      if (v - v === 0) flux += v - sky;
+      for (let p = 0; p < P; p++) {
+        const st = stacks[p];
+        const r = st.image[i];
+        const s2 = st.variance ? st.variance[i] : NaN;
+        if (st.mask[i] !== 0 || r - r !== 0 || !(s2 > 0)) continue;
+        net[p] += r;
+        vsum[p] += s2;
+        used[p]++;
+      }
+    }
+  }
+  let sigma = 0;
+  let passIndex = -1;
+  for (let p = 0; p < P; p++) {
+    if (used[p] < 0.6 * nAp || !(vsum[p] > 0)) continue; // a disc that is mostly flagged says nothing
+    const z = net[p] / Math.sqrt(vsum[p]);
+    if (Math.abs(z) > Math.abs(sigma)) { sigma = z; passIndex = p; }
+  }
+  const frac = onSource && passIndex >= 0 && flux > 0 ? net[passIndex] / flux : NaN;
+  return { onSource, x: cx, y: cy, flux, frac, sigma, passIndex };
+}
+
 /** Equivalent Gaussian sigma of a chi-square value with k degrees of freedom (Wilson-Hilferty). */
 function chi2ToSigma(chi2, k) {
   const c = 2 / (9 * k);
@@ -970,10 +1066,18 @@ export function changeMap(model, layers, opts = {}) {
  * again (a variable in a second pass, the other sign of a two-pass change) and is not listed
  * twice.
  *
- * Options: minSnr (default 5), max (default 20), radius, minSep, stacks (as for changeMap).
+ * A blob that changed in place (kind 1) on a fixed source is listed only if the source's total
+ * light changed by at least `minNet` sigma (see netChange): otherwise it is the pattern every
+ * bright star leaves, not a change. Such entries carry `net` = the netChange result plus
+ * `label`, the pass in which the net change is largest. The
+ * returned array has a property `setAside`: how many blobs were dropped for that reason.
+ * `starLobes: true` lists them anyway.
+ *
+ * Options: minSnr (default 5), minNet (default 5), max (default 20), radius, minSep, stacks (as
+ * for changeMap), starLobes (default false).
  */
 export function findCandidates(model, layers, opts = {}) {
-  const { minSnr = 5, max = 20, radius = 4, minSep = 1.5 } = opts;
+  const { minSnr = 5, minNet = 5, max = 20, radius = 4, minSep = 1.5, starLobes = false } = opts;
   const stacks = opts.stacks || residualPassStacks(model, layers, opts);
   let blobs = classifyBlobs(findBlobs(stacks, model.n, minSnr), radius, minSep);
   const out = [];
@@ -1008,10 +1112,20 @@ export function findCandidates(model, layers, opts = {}) {
     });
   }
   out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
+  let setAside = 0;
   for (const b of blobs) { // already sorted by |snr|, strongest first
     if (out.length >= max) break;
     if (out.some((c) => Math.hypot(c.x - b.x, c.y - b.y) < minSep)) continue;
+    let net = null;
+    if (b.kind === 1) {
+      net = netChange(model, stacks, b);
+      if (net.onSource && !(Math.abs(net.sigma) >= minNet)) {
+        if (!starLobes) { setAside++; continue; }
+      } else if (!net.onSource) net = null;
+      if (net && net.passIndex >= 0) net.label = stacks[net.passIndex].label;
+    }
     out.push({
+      ...(net ? { net } : {}),
       x: b.x,
       y: b.y,
       snr: b.snr,
@@ -1024,5 +1138,6 @@ export function findCandidates(model, layers, opts = {}) {
       npix: b.npix,
     });
   }
+  out.setAside = setAside;
   return out;
 }

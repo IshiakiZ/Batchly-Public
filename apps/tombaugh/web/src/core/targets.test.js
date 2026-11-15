@@ -52,7 +52,7 @@ test('TARGETS: values match the brief', () => {
   assert.ok(Math.abs(motionSummary(e).arcsecPerYr - 4.70) < 0.01);
   assert.ok(Math.abs(motionSummary(w).arcsecPerYr - 8.15) < 0.01);
   assert.ok(Math.abs(motionSummary(byId('proxima')).arcsecPerYr - 3.86) < 0.01);
-  assert.ok(Math.abs(motionSummary(byId('luhman16')).arcsecPerYr - 2.78) < 0.01);
+  assert.ok(Math.abs(motionSummary(byId('luhman16')).arcsecPerYr - 2.79) < 0.01); // SIMBAD values, epoch 2000.0
   assert.ok(Math.abs(motionSummary(byId('teegarden')).arcsecPerYr - 5.12) < 0.01);
   assert.ok(Math.abs(motionSummary(byId('teegarden')).paDeg - 138) < 1, 'south-east');
   assert.equal(motionSummary(byId('m101')).arcsecPerYr, 0);

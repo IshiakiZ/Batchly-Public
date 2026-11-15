@@ -25,9 +25,9 @@ Demo: `[DEMO-URL]`
 | **Validity** | Five of five challenge targets measured against catalogues. All 34 comparisons agree within 3 sigma | Validation tab, "Run the five challenge targets"; [docs/RESULTS.md section 2](RESULTS.md#2-the-five-challenge-targets) |
 | | Barnard's Star: 11903 ± 2426 mas/yr at 355 ± 12 deg, against 10380 mas/yr at 356 deg (+0.6 sigma). Clicking the star in the main view gives the same answer: 11 ± 3 arcsec/yr at 357°, Gaia 10.39 arcsec/yr at 356° | Validation tab; Motion tab; [docs/RESULTS.md sections 2 and 4](RESULTS.md#2-the-five-challenge-targets) |
 | | Controls on ordinary field stars: they land within 0.3 arcsec of Gaia; stars that should not move show zero motion within the error in every field; residual noise is 0.94 to 1.69 times the model | [docs/RESULTS.md section 3](RESULTS.md#3-controls-how-far-the-numbers-can-be-trusted) |
-| | Blind search: one candidate on Barnard's field ("Moved", 10.2 sigma), none on a control field of 373 exposures | Candidates tab; [docs/RESULTS.md section 5](RESULTS.md#5-blind-search-for-things-that-changed) |
+| | Blind search: every challenge target is the one candidate in its own field; none on nine empty control fields (eight false alarms on bright stars were found there first, traced, and removed by a net-light test). Planted bodies give the reach: half recovered at 51 µJy at 500 AU | Candidates tab; [docs/RESULTS.md section 5](RESULTS.md#5-blind-search-for-things-that-changed) |
 | | The tool declines a false result: a ×2.19 jump on WISE 0855 is rejected because a Gaia star sits 3.3 arcsec away on those dates | [docs/RESULTS.md section 2](RESULTS.md#2-the-five-challenge-targets), Brightness |
-| | The code agrees with Astropy on 232 comparisons. 993 unit tests and 12 end-to-end browser checks pass | [CROSSCHECK.md](CROSSCHECK.md); `node --test` |
+| | The code agrees with Astropy on 232 comparisons. 995 unit tests and 12 end-to-end browser checks pass | [CROSSCHECK.md](CROSSCHECK.md); `node --test` |
 | | Failure modes named: undersampling, PSF change with wavelength, sharp spectral features, saturation, crowding, few passes | [SCIENCE.md limits](SCIENCE.md#limits-and-failure-modes) |
 | | Uses the pipeline's own flags, variance and zodiacal model; follows FITS WCS, SIP and HEALPix as published | [SOURCES.md](SOURCES.md#4-standards-and-methods) |
 | **Relevance** | Meets the objective as written: public web tool, RA and Dec in, a movie of SPHEREx images out, moving objects made easy to spot, tested on the five named targets | Table below |
@@ -86,8 +86,9 @@ give.
 Stated here so that it is not found by surprise.
 
 - The 16-year SPHEREx-plus-WISE movie was planned and not built.
-- No new object is claimed. The blind search was checked on one control field.
-- The distance dial and the injection test were not measured in the recorded run; no number is
-  quoted for them.
+- No new object is claimed. The blind search was checked on nine control fields.
+- The injection test was run on one control field: half of the planted bodies at 500 AU are
+  recovered at 51 µJy, about twice as bright as a Neptune-size planet there. The distance dial
+  was not measured in the recorded run; no number is quoted for it.
 - Motions under about 1 arcsec/yr cannot be seen with this pixel size and this time span.
 - Aladin is not used. Astropy is used only to check the code.

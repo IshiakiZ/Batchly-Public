@@ -38,8 +38,10 @@ Quick Release 3) on 15 November 2026. Full tables, controls and limits:
   two to four visits.
 - Two variables recovered: RW Aurigae rose by 40 %, R Draconis fell by 28 %.
 - Methane seen twice: in the T dwarfs Epsilon Indi Ba,Bb, and as ice on Pluto.
-- Blind search: on Barnard's field the candidate list holds one entry, "moved"; on a control
-  field it holds none.
+- Blind search: every challenge target is the one entry in its own field's candidate list. On
+  nine empty control fields the list holds none.
+- The search's reach, from planted bodies in real frames: a body at 500 AU is recovered half of
+  the time at 51 µJy. A Neptune-size planet there would be about 25 µJy, twice too faint.
 - No new object is claimed.
 
 | Target | Tombaugh measures | Catalogue |
@@ -59,6 +61,8 @@ included (Gaia DR3 for the star; published values for the two brown dwarfs).
 | Barnard's Star, residual view. One candidate: "Moved", 10.2 sigma. | R Draconis. One candidate: "its halo faded", 13.1 sigma. |
 | ![Motion of Barnard's Star measured from three passes, beside Gaia's value](docs/real/barnard-motion.jpg) | ![Validation tab after measuring the five challenge targets](docs/real/validation.jpg) |
 | Motion tab: "Measured 12 ± 2 arcsec/yr; Gaia says 10.4. Agreement within 0.6 sigma." | Validation tab: "Measured 5 of 5 targets. All 34 comparisons agree within 3 sigma." |
+| ![An empty control field: patches on the stars in the residual image, and an empty candidate list](docs/real/control-field.jpg) | ![Recovery curve of bodies planted in real frames, against brightness](docs/real/injection-limit.jpg) |
+| An empty control field. "Nothing stands out. 5 leftover patches on bright fixed stars were set aside." | Injection test on an empty field: half of the bodies planted at 500 AU are recovered at 51 µJy. |
 
 ## Try it
 
@@ -205,7 +209,8 @@ The method, its noise model and its failure modes are in [docs/SCIENCE.md](docs/
   that distance would show and stacks. A body at that distance adds up; everything else smears.
   At 500 AU the shift between two passes is 13.75 arcminutes.
 - **Injection test.** Plant a simulated body in the real frames and see whether the tool finds
-  it. Every such frame is labelled SIMULATED.
+  it. Every such frame is labelled SIMULATED. On an empty field of real data, half of the bodies
+  planted at 500 AU are recovered at 51 µJy.
 - **What is this?** Looks a clicked source up in SIMBAD and Gaia and says what its SPHEREx
   measurements suggest, marked as automated hints.
 - **Listen.** Plays the spectrum and light curve of a source as sound, with a text description.
@@ -290,7 +295,7 @@ TOMBAUGH_BACKEND=irsa node proxy/dev-server.mjs
 # live data through IRSA's services only
 
 node --test
-# 993 unit tests; they do not touch the network
+# 995 unit tests; they do not touch the network
 
 node tools/build.mjs
 # writes dist/tombaugh.html, the whole app in one file
@@ -347,8 +352,9 @@ complete list, with papers and standards, is in [docs/SOURCES.md](docs/SOURCES.m
   exposure). Its motion was measured from three passes in detector 6.
 - **A real Planet X is probably too faint for SPHEREx.** Tombaugh is a tool for looking, and for
   the bright, nearby, fast things SPHEREx can see. No new object is claimed. The blind search was
-  checked on one control field; a real search needs many fields and a human to look at each
-  candidate.
+  checked on nine control fields, and the injection test puts a Neptune-size planet at 500 AU
+  about twice too faint for a typical patch; a real search needs many fields and a human to look
+  at each candidate.
 - **The residual method assumes a smooth spectrum within one detector.** Sharp spectral features,
   very bright stars and crowded fields leave residuals that are not change.
 - **Fog of war counts views through Tombaugh only.** It says nothing about who has looked with

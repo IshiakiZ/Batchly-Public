@@ -24,7 +24,9 @@ Screenshots from these runs are in [real/](real/).
   as ice on Pluto, whose spectrum shows the methane-ice bands at 0.89, 1.16, 1.38, 1.72, 2.3 and
   3.3 µm.
 - **Blind search works**: with no catalogue input, the candidate list on Barnard's field holds one
-  entry, "moved, halo shifted north"; on a control field it holds none.
+  entry, "moved, halo shifted north". On nine empty control fields it holds none.
+- **The search's reach is measured**: in a typical patch, a planted body at 500 AU is recovered
+  half of the time at 51 µJy (2 µm). A Neptune-size planet there would be about 25 µJy.
 
 ## 2. The five challenge targets
 
@@ -118,16 +120,87 @@ Clicking the target in the main view (no Validation tab) gives the same answers:
 The Candidates tab subtracts a model of the unchanging sky and lists what is left, with no
 catalogue input.
 
+### On the targets
+
 | Field | Candidates | Top entry |
 |---|---|---|
 | Barnard's Star | 1 | "Moved. Saturated star: its halo shifted north between Aug 2025 and Aug 2026; 25 residual patches belong to it." 10.2 sigma |
-| R Draconis | 1 | "Saturated star: its halo faded; 14 residual patches belong to it." 13.1 sigma |
-| RW Aurigae | 3 | "Saturated star: its halo brightened between Sep 2025 and Mar 2026; 5 residual patches belong to it." 18.6 sigma; the other two are bright blended stars |
-| WISE 0855-0714 | 1 | the brown dwarf |
-| Control field, RA 56.25, Dec +34.22887 (373 exposures, 3 passes) | 0 | "Nothing stands out" |
+| Epsilon Indi Ba,Bb | 1 | "Moved", 29.5 sigma |
+| WISE 0855-0714 | 1 | the brown dwarf, 6.3 sigma |
+| R Draconis | 1 | "Saturated star: its halo faded between May 2025 and Apr 2026; 14 residual patches belong to it." 13.1 sigma |
+| RW Aurigae | 1 | "Saturated star: its halo brightened between Sep 2025 and Mar 2026; 5 residual patches belong to it." 18.6 sigma. Four patches on neighbouring stars set aside |
+
+Every challenge target is the only entry in its own field's list. Two more nearby objects were
+tried the same way: Teegarden's Star is one entry, "Moved, halo shifted east", 31.2 sigma; the
+Luhman 16 field, in the crowded Galactic plane, lists four.
+
+### On empty sky: the false-alarm test
+
+A search is only worth as much as its false-alarm rate, so the same search was run on fields
+with nothing known in them. Eight positions were drawn from a fixed grid (15 degrees in RA,
+15 degrees in Dec, seeded shuffle) at Galactic latitude above 45 degrees and ecliptic latitude
+below 60 degrees, plus the control field used earlier. Detector 3, 4-arcminute field.
+
+| Field (RA, Dec) | Exposures | Passes | Candidates, first run | Candidates, final | Patches set aside |
+|---|---|---|---|---|---|
+| 172.5, −7.5 | 54 | 3 | 1 (12.4 sigma) | 0 | 3 |
+| 202.5, −7.5 | 54 | 3 | 0 | 0 | 0 |
+| 7.5, −37.5 | 86 | 3 | 2 (14.3, 5.9 sigma) | 0 | 3 |
+| 322.5, −52.5 | 75 | 4 | 1 (5.1 sigma) | 0 | 1 |
+| 337.5, −22.5 | 61 | 3 | 0 | 0 | 0 |
+| 7.5, −7.5 | 55 | 3 | 0 | 0 | 0 |
+| 37.5, +7.5 | 53 | 3 | 1 (5.4 sigma) | 0 | 1 |
+| 352.5, −52.5 | 64 | 3 | 3 (11.6, 11.6, 10.3 sigma) | 0 | 5 |
+| 56.25, +34.22887 | 66 | 3 | 0 | 0 | 4 |
+
+**First run: eight false alarms in five of eight new fields**, all labelled "changed
+brightness". Each one sat on the flank of an ordinary bright star. The cause: a fixed star never
+subtracts perfectly. SPHEREx samples its image with 6-arcsecond pixels and the telescope is
+rotated by half a turn between passes, so the star's image differs a little from pass to pass.
+That leaves a bright patch on one flank and a dark one on the other, each many sigma on a bright
+star. Measured on those stars, the total light inside a 10-arcsecond disc changed by 1 to 5 %
+(at most 3.0 sigma), while single patches reached 14 sigma.
+
+**The fix** (the net-light test): a patch on a fixed source is listed only if the source's total
+light in that disc changed by 5 sigma, which for a bright star is about 9 %. The panel says how
+many patches were set aside, and a listed source says by how much its light changed.
+
+**Final run: no candidate in any of the nine fields**, and every challenge target still found.
+Two entries in the Luhman 16 field show the other side of the test: "The total light of this
+source rose by 229 % in Dec 2025 (12.9 sigma)" and "rose by 30 % (8.2 sigma)".
+
+![An empty control field: the residual image shows patches on the stars, and the list is empty](real/control-field.jpg)
+
+*Control field 352.5, −52.5. The residual image still shows the red and blue patches on the
+stars. The list is empty, and says why.*
+
+What this does and does not show: nine fields of 4 arcminutes are 0.04 square degrees. Zero in
+nine fields is consistent with a false-alarm rate anywhere below about one field in three (95 %
+confidence). A patch on a star's flank that the pairing step labels "moved" is not covered by
+this test; none appeared in these fields.
+
+### How faint a body the search would catch: the injection test
+
+The Injection test tab plants a simulated body in copies of the real exposures and runs the
+same search on them. Ten bodies at each of eight or more brightnesses give a recovery curve.
+Run on the control field 202.5, −7.5 (3 passes, 54 exposures, detector 3), body at 500 AU:
+
+- Recovered at least half of the time when brighter than **51 µJy at 2 µm** (AB magnitude 19.6),
+  when the search is told where the body is.
+- Flagged by the blind candidate list above about **110 µJy** (AB magnitude 18.8).
+- A Neptune-size planet at 500 AU would be about 25 µJy (reflected sunlight, grey albedo 0.4,
+  which is generous in the infrared): **about 2 times too faint** for this patch.
+- At 500 AU a body hops 13.8 arcminutes between passes by parallax, so it is in a 4-arcminute
+  field in only one pass: on average each planted body was in view in 25 of the 54 exposures.
+
+![Recovery curve of planted bodies against brightness](real/injection-limit.jpg)
+
+This is a test of the tool, not a detection. It turns "nothing was found here" into a number:
+nothing brighter than about 110 µJy moved through this patch during these exposures.
 
 Before the saturated-star step was added, Barnard's field listed 12 false "changed brightness"
-entries, all of them pieces of one moving halo. That fix came from looking at real data.
+entries, all of them pieces of one moving halo. That fix, and the net-light test above, both came
+from looking at real data.
 
 ## 6. Pluto: following a body that moves
 
@@ -158,7 +231,10 @@ search, with 102 colours, done by a web page.
   error on a single target is 0.6 to 2.4 arcsec/yr.
 - Saturated stars (Barnard's Star, R Draconis) have every aperture pixel flagged, so their
   brightness ratios come from the unsaturated wings and are less certain than the formal error.
-- No new object is claimed. The control field is one field. A real search for an unknown body
-  needs many fields and a human to look at each candidate, which is what the tool is built for.
+- No new object is claimed. Nine control fields are 0.04 square degrees of a 41,000 square
+  degree sky. A real search for an unknown body needs many fields and a human to look at each
+  candidate, which is what the tool is built for.
+- The injection test says a Neptune-size body at 500 AU is about twice too faint for a typical
+  three-pass patch. The deep fields at the ecliptic poles, and later passes, go deeper.
 - The Epsilon Indi field's noise ratio of 1.69 means the noise there is underestimated, so
   significances quoted in that field are somewhat overstated.

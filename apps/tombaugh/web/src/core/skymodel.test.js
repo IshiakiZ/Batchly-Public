@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fitSkyModel, predictLayer, residualLayer, evalModelAt, changeMap, residualPassStacks,
-  findCandidates, CHANGE_KINDS, saturatedCores, haloChange,
+  findCandidates, CHANGE_KINDS, saturatedCores, haloChange, netChange,
 } from './skymodel.js';
 
 const NOISE = 0.02; // MJy/sr per pixel per exposure
@@ -546,4 +546,87 @@ test('a saturated star that brightened is a change in place; an unsaturated fiel
     for (let y = 0; y < 40; y++) { layer.mask[y * 40] = 1; layer.mask[y * 40 + 1] = 1; layer.mask[y * 40 + 20] = 1; }
   }
   assert.deepEqual(saturatedCores(plain.layers, 40), []);
+});
+
+// ---- A bright fixed star's leftover pattern is not a change of brightness ------------------------
+
+/** A Gaussian of any width, for the wide skirt of a bright star. */
+function wideBlob(image, n, x0, y0, amp, sigma) {
+  const reach = Math.ceil(4 * sigma);
+  for (let y = Math.max(0, Math.floor(y0 - reach)); y <= Math.min(n - 1, Math.ceil(y0 + reach)); y++) {
+    for (let x = Math.max(0, Math.floor(x0 - reach)); x <= Math.min(n - 1, Math.ceil(x0 + reach)); x++) {
+      image[y * n + x] += amp * Math.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma * sigma));
+    }
+  }
+}
+
+/**
+ * A bright star with a jittery undersampled core and a wide skirt. In the middle pass the skirt
+ * sits `shift` pixels to one side (the telescope is rotated between passes and the image of a
+ * star is not symmetric), and the whole star is `gain` times as bright.
+ */
+function brightStarField({ shift = 0, gain = 1, seed = 41 }) {
+  const n = 48;
+  const star = { x: 24, y: 26 };
+  const { layers } = makeField({
+    n,
+    stars: STARS.slice(3),
+    seed,
+    extra(layer, p, j, r) {
+      const g = p === 1 ? gain : 1;
+      blob(layer.image, n, star.x, star.y, 8 * g * (1 + 0.05 * r.g()));
+      wideBlob(layer.image, n, star.x + (p === 1 ? shift : 0), star.y, 1.5 * g, 3);
+    },
+  });
+  return { n, star, layers };
+}
+
+test('the leftover pattern of a bright fixed star is set aside; a real change of its light is listed', () => {
+  // 1. The skirt sits 0.7 pixels to one side in one pass: bright and dark patches on the
+  //    flanks, many sigma each, and the same total light.
+  const lop = brightStarField({ shift: 0.7 });
+  const model = fitSkyModel(lop.layers);
+  const stacks = residualPassStacks(model, lop.layers);
+  const nearStar = (c) => Math.hypot(c.x - lop.star.x, c.y - lop.star.y) <= 8;
+  const all = findCandidates(model, lop.layers, { stacks, starLobes: true }).filter(nearStar);
+  const lobes = all.filter((c) => c.kind === 1);
+  assert.ok(lobes.length >= 1, `the flanks leave patches when asked for (${all.length} near the star, ${lobes.length} in place)`);
+  for (const c of lobes) {
+    assert.ok(c.net && c.net.onSource, 'each patch is recognised as sitting on a source');
+    assert.ok(Math.abs(c.net.sigma) < 5, `net change ${c.net.sigma.toFixed(1)} sigma`);
+    assert.ok(Math.abs(c.net.frac) < 0.05, `net change ${(100 * c.net.frac).toFixed(1)} %`);
+  }
+  const listed = findCandidates(model, lop.layers, { stacks });
+  assert.equal(listed.filter((c) => nearStar(c) && c.kind === 1).length, 0, 'none of them is listed');
+  assert.ok(listed.setAside >= lobes.length, `${listed.setAside} set aside`);
+
+  // 2. The same star, a quarter brighter in the middle pass, with no shift: listed, with the size
+  //    of the change.
+  const up = brightStarField({ gain: 1.25 });
+  const model2 = fitSkyModel(up.layers);
+  const found = findCandidates(model2, up.layers).filter((c) => Math.hypot(c.x - up.star.x, c.y - up.star.y) <= 8);
+  assert.ok(found.length >= 1, 'the brightening is listed');
+  const lead = found[0];
+  assert.equal(lead.kind, 1);
+  assert.ok(lead.net && lead.net.onSource && lead.net.sigma >= 5, `net ${lead.net ? lead.net.sigma.toFixed(1) : 'none'} sigma`);
+  assert.ok(Math.abs(lead.net.frac - 0.25) < 0.08, `net change ${(100 * lead.net.frac).toFixed(1)} %`);
+  assert.equal(lead.net.passIndex, 1);
+  assert.equal(lead.net.label, 'Dec 2025');
+  const direct = netChange(model2, residualPassStacks(model2, up.layers), { x: up.star.x + 2, y: up.star.y, px: up.star.x + 2, py: up.star.y, passIndex: 1 });
+  assert.ok(direct.onSource && direct.x === up.star.x && direct.y === up.star.y, 'the disc is centred on the star, not on the patch');
+
+  // 3. Both at once: the change wins.
+  const both = brightStarField({ shift: 0.7, gain: 1.25 });
+  const model3 = fitSkyModel(both.layers);
+  assert.ok(findCandidates(model3, both.layers).some((c) => Math.hypot(c.x - both.star.x, c.y - both.star.y) <= 8 && c.kind === 1));
+});
+
+test('a new source where the model has none is not subject to the net-light test', () => {
+  const n = 40;
+  const { layers } = makeField({ n, stars: STARS.slice(3), seed: 57, extra(layer, p) { if (p === 2) blob(layer.image, n, 20, 30, 0.3); } });
+  const model = fitSkyModel(layers);
+  const found = findCandidates(model, layers).filter((c) => Math.hypot(c.x - 20, c.y - 30) < 1.5);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].kind, 1);
+  assert.equal(found[0].net, undefined);
 });
