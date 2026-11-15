@@ -3,7 +3,7 @@
 <!--
 Tombaugh 0.1.0 - SPHEREx blink comparator. Apache-2.0.
 AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
-Single-file build of 111 modules, 2026-11-15T10:23:27.296Z, sources sha256 e709715950ce3d13.
+Single-file build of 111 modules, 2026-11-15T10:33:44.149Z, sources sha256 9838d4739e7794f2.
 -->
 <html lang="en" data-screen="boot">
 <head>
@@ -458,9 +458,31 @@ transition: background var(--t-fast) var(--ease);
 .fs-notes { display: grid; gap: 3px; }
 .fs-note { font-size: 11px; line-height: 1.45; color: var(--muted); }
 .fs-empty { font-size: 12px; color: var(--muted); }
+.fs-head-right { display: inline-flex; align-items: baseline; gap: 12px; min-width: 0; }
+.fs-toggle {
+appearance: none; background: none; border: 0; padding: 0; font: inherit; font-size: 11px; color: var(--muted);
+text-decoration: underline; text-decoration-color: var(--stone); text-underline-offset: 3px; cursor: pointer; white-space: nowrap;
+}
+.fs-toggle:hover { color: var(--paper); text-decoration-color: var(--paper); }
+.fs-toggle:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.fieldsum.is-folded > .fs-block, .fieldsum.is-folded > .fs-notes { display: none; }
 @media (min-width: 1100px) and (max-height: 959px) {
 .fs-strip-row:not(.fs-strip-head):not(.is-current) { display: none; }
 .fieldsum { gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+}
+@media (min-width: 1100px) and (max-height: 859px) {
+.fs-head { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 0 14px; }
+.fs-head > .fs-row { order: 3; margin-left: auto; flex: 0 0 auto; }
+.fs-head > .fs-row > .fs-label { display: none; }
+.fs-name { flex: 0 1 auto; max-width: 45%; }
+.fs-coords { display: block; flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs-coords > span + span { margin-left: 16px; }
+.fieldsum { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+.fs-strip-head { margin-bottom: 1px; }
+.cite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding-top: 8px; padding-bottom: 8px; }
+.cite-text { flex: 1 1 320px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cite-row { flex: 0 0 auto; flex-wrap: nowrap; }
+.cite-links { flex-wrap: nowrap; }
 }
 .status-found { display: grid; gap: 6px; }
 .status-found-line { font-family: var(--font-num); font-size: 12px; color: var(--paper); }
@@ -5199,9 +5221,10 @@ clear(els.aboutBody).append(aboutText, aboutNotes, explainHost, factsHead, facts
 function saturatedNote(c) {
 if (!c || !c.saturated) return '';
 const lumps = c.peaks > 1 ? `; ${c.peaks} residual patches belong to it` : '';
-if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} between the passes${lumps}.`;
-if (c.brighter === true) return `Saturated star: its halo brightened between the passes${lumps}.`;
-if (c.brighter === false) return `Saturated star: its halo faded between the passes${lumps}.`;
+const when = Array.isArray(c.between) && c.between[0] && c.between[1] && c.between[0] !== c.between[1] ? `between ${c.between[0]} and ${c.between[1]}` : 'between the passes';
+if (c.kind === 'moved') return `Saturated star: its halo shifted${c.towards ? ` ${c.towards}` : ''} ${when}${lumps}.`;
+if (c.brighter === true) return `Saturated star: its halo brightened ${when}${lumps}.`;
+if (c.brighter === false) return `Saturated star: its halo faded ${when}${lumps}.`;
 return `Saturated star: its halo changed between the passes${lumps}.`;
 }
 function setSourceHeader(target, source) {
@@ -5229,7 +5252,7 @@ if (motionMeter) motionMeter.clear();
 btnFull.hidden = true;
 }
 },
-setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null, colorBy = undefined, heading = '' } = {}) {
+setSpectrum({ points = [], binned = [], title = '', lens = null, note = '', more = null, colorBy = undefined, heading = '', features = null } = {}) {
 if (heading) {
 spec.head.hidden = false;
 clear(spec.what).append(heading);
@@ -5238,6 +5261,7 @@ if (spectrumPlot) {
 try {
 const data = { points, binned, lens: lens || undefined, title };
 if (colorBy) data.colorBy = colorBy;
+if (Array.isArray(features) && features.length) data.features = features;
 spectrumPlot.setData(data);
 } catch (err) {
 console.warn('[tombaugh] spectrum plot', err);
@@ -5376,9 +5400,11 @@ row.append(copy, png, links);
 container.append(text, row);
 let current = citationText({});
 text.textContent = current;
+text.title = current;
 function update({ releases = [], retrieved = null, ra = null, dec = null, canPng = true } = {}) {
 current = citationText({ releases, retrieved });
 text.textContent = current;
+text.title = current;
 png.disabled = !canPng;
 png.title = canPng ? 'Save the current frame as an image' : 'Nothing to save yet: no frame is showing';
 links.textContent = '';
@@ -5422,6 +5448,14 @@ const b = isoDay(mjd1);
 if (a === b) return a;
 if (a.slice(0, 7) === b.slice(0, 7)) return `${a} to ${b.slice(8)}`;
 return `${a} to ${b}`;
+}
+const FOLD_KEY = 'tombaugh.fieldsum.folded';
+function readFolded() {
+try {
+return globalThis.localStorage.getItem(FOLD_KEY) === '1';
+} catch {
+return false;
+}
 }
 function summarizePasses(refs, gapDays = 45, maxSpanDays = 120) {
 const list = (refs || []).filter((r) => r && Number.isFinite(r.mjd)).slice().sort((a, b) => a.mjd - b.mjd);
@@ -5515,8 +5549,28 @@ const name = el(doc, 'p', 'fs-name');
 const coords = el(doc, 'p', 'fs-coords num');
 const head = el(doc, 'div', 'fs-head');
 const headLine = el(doc, 'div', 'fs-row');
-headLine.append(kicker, releases);
+const toggle = el(doc, 'button', 'fs-toggle');
+toggle.type = 'button';
+const headRight = el(doc, 'span', 'fs-head-right');
+headRight.append(releases, toggle);
+headLine.append(kicker, headRight);
 head.append(headLine, name, coords);
+let folded = readFolded();
+function applyFolded() {
+container.classList.toggle('is-folded', folded);
+toggle.textContent = folded ? 'Show passes' : 'Hide';
+toggle.setAttribute('aria-expanded', folded ? 'false' : 'true');
+toggle.title = folded ? 'Show the survey passes and the wavelength of this frame' : 'Fold the passes and the wavelength ruler away to give the plots more room';
+}
+toggle.addEventListener('click', () => {
+folded = !folded;
+try {
+globalThis.localStorage.setItem(FOLD_KEY, folded ? '1' : '0');
+} catch {
+}
+applyFolded();
+});
+applyFolded();
 const passLabel = el(doc, 'span', 'fs-label', 'Passes');
 const passValue = el(doc, 'span', 'fs-value num');
 const passHead = el(doc, 'div', 'fs-row');
@@ -7898,9 +7952,9 @@ return Promise.reject(err);
 }
 return Promise.resolve(app.selection());
 },
-showSpectrum({ points = [], binned = [], title = '', colorBy = undefined, note = '' } = {}) {
+showSpectrum({ points = [], binned = [], title = '', colorBy = undefined, note = '', features = null } = {}) {
 panels.setSource(null);
-panels.setSpectrum({ points, binned, title: title || 'Spectrum', colorBy, heading: title || 'Spectrum', note: note || `${points.length} point${points.length === 1 ? '' : 's'} supplied by a tool, not measured from a click on this image.` });
+panels.setSpectrum({ points, binned, title: title || 'Spectrum', colorBy, features, heading: title || 'Spectrum', note: note || `${points.length} point${points.length === 1 ? '' : 's'} supplied by a tool, not measured from a click on this image.` });
 layout.selectTab('spectrum', { reveal: true });
 },
 setCaptionNote(text) {
@@ -9152,21 +9206,35 @@ m += v; a += Math.abs(v); dx += v * ex; dy += v * ey; ar += Math.abs(v) * r;
 }
 return { m, a, dx, dy, ar, np };
 };
-const usable = stacks.map(moments).filter((q) => q.np >= 12);
-const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0 };
+const usable = stacks.map((st, index) => ({ ...moments(st), index })).filter((q) => q.np >= 12);
+const none = { kind: 1, dx: 0, dy: 0, brighter: null, dipole: 0, monopole: 0, from: -1, to: -1 };
 if (usable.length < 2) return none;
-const f = usable[0];
-const l = usable[usable.length - 1];
-if (!(f.a + l.a > 0) || !(f.ar + l.ar > 0)) return none;
+let dip = null;
+let mono = null;
+for (let i = 0; i < usable.length; i++) {
+for (let j = i + 1; j < usable.length; j++) {
+const f = usable[i];
+const l = usable[j];
+if (f.ar + l.ar > 0) {
 const ddx = l.dx - f.dx;
 const ddy = l.dy - f.dy;
-const dipole = Math.hypot(ddx, ddy) / (f.ar + l.ar);
-const monopole = Math.abs(l.m - f.m) / (f.a + l.a);
-if (dipole >= 0.3 && dipole >= monopole) {
-const norm = Math.hypot(ddx, ddy);
-return { kind: 2, dx: ddx / norm, dy: ddy / norm, brighter: null, dipole, monopole };
+const value = Math.hypot(ddx, ddy) / (f.ar + l.ar);
+if (!dip || value > dip.value) dip = { value, ddx, ddy, from: f.index, to: l.index };
 }
-return { ...none, brighter: monopole >= 0.3 ? l.m > f.m : null, dipole, monopole };
+if (f.a + l.a > 0) {
+const value = Math.abs(l.m - f.m) / (f.a + l.a);
+if (!mono || value > mono.value) mono = { value, brighter: l.m > f.m, from: f.index, to: l.index };
+}
+}
+}
+const dipole = dip ? dip.value : 0;
+const monopole = mono ? mono.value : 0;
+if (dip && dipole >= 0.3 && dipole >= monopole) {
+const norm = Math.hypot(dip.ddx, dip.ddy);
+return { kind: 2, dx: dip.ddx / norm, dy: dip.ddy / norm, brighter: null, dipole, monopole, from: dip.from, to: dip.to };
+}
+if (mono && monopole >= 0.3) return { ...none, brighter: mono.brighter, dipole, monopole, from: mono.from, to: mono.to };
+return { ...none, dipole, monopole };
 }
 function chi2ToSigma(chi2, k) {
 const c = 2 / (9 * k);
@@ -9229,6 +9297,7 @@ rHalo,
 peaks: members.length,
 shift: change.kind === 2 ? { dx: change.dx, dy: change.dy } : null,
 brighter: change.kind === 1 ? change.brighter : null,
+between: change.from >= 0 && change.to >= 0 ? [stacks[change.from].label, stacks[change.to].label] : null,
 });
 }
 out.sort((p, q) => Math.abs(q.snr) - Math.abs(p.snr));
@@ -14571,7 +14640,8 @@ flash(btnDown, 'Download blocked');
 function featureRows(xs, wide) {
 const rows = [[], []];
 const placed = [];
-for (const f of FEATURES) {
+for (const f of state.featureList || FEATURES) {
+if (!(f.wave >= WAVE_MIN && f.wave <= WAVE_MAX)) continue;
 const label = f.id === 'ch4' && wide ? 'CH4 / PAH' : f.label;
 const w = label.length * 6.1 + 2;
 const x = xs(f.wave);
@@ -14925,6 +14995,10 @@ state.binned = (Array.isArray(d.binned) ? d.binned : [])
 .filter((p) => p && p.ok !== false && isNum(p.wave) && isNum(p.flux_uJy))
 .sort((a, b) => a.wave - b.wave);
 state.model = normalizeModel(d.model);
+const own = (Array.isArray(d.features) ? d.features : [])
+.filter((f) => f && isNum(f.wave) && typeof f.label === 'string' && f.label)
+.map((f) => ({ id: '', label: f.label, wave: f.wave, note: String(f.note || f.what || f.label) }));
+state.featureList = own.length ? own : null;
 state.lens = d.lens && typeof d.lens === 'object' ? d.lens : null;
 state.title = d.title ? String(d.title) : '';
 if (d.colorBy === 'pass' || d.colorBy === 'none') state.colorBy = d.colorBy;
@@ -34861,6 +34935,9 @@ __tb_define("src/plugins/moving/bodies.js", function (__tb_self) { __tb_export(_
 const DEG = Math.PI / 180;
 const SURVEY_START_MJD = 60770;
 const CH4_ICE = [
+{ wave: 0.89, label: 'CH4 ice', what: 'Methane ice, 0.89 um' },
+{ wave: 1.16, label: 'CH4 ice', what: 'Methane ice, 1.16 um' },
+{ wave: 1.38, label: 'CH4 ice', what: 'Methane ice, the bands at 1.33 and 1.40 um' },
 { wave: 1.72, label: 'CH4 ice', what: 'Methane ice, a group of bands near 1.7 um' },
 { wave: 2.3, label: 'CH4 ice', what: 'Methane ice, the strong bands at 2.2 to 2.4 um' },
 { wave: 3.3, label: 'CH4 ice', what: 'Methane ice, the deep band at 3.3 um' },
@@ -34882,7 +34959,7 @@ kind: 'dwarf planet',
 command: '999',
 stepHours: 12,
 blurb: 'About 34 AU away at magnitude 14.4: visible in single exposures, in a crowded star field.',
-lookFor: 'Methane ice bands near 2.3 and 3.3 um. They are deep enough to show without stacking; the stack sharpens them.',
+lookFor: 'Methane ice bands, the deepest near 1.7, 2.3 and 3.3 um. They are deep enough to show in single exposures; following the body across all of them draws the whole spectrum.',
 bands: CH4_ICE,
 },
 {
@@ -34976,7 +35053,7 @@ stepHours: 12,
 faint: true,
 blurb: 'About 89 AU away at magnitude 21.4, one of the reddest large bodies known.',
 lookFor: 'Probably nothing: it is expected to stay below the stack. An honest upper limit is the result.',
-bands: CH4_ICE.slice(1),
+bands: CH4_ICE.slice(4),
 },
 {
 id: 'sedna',
@@ -34987,7 +35064,7 @@ stepHours: 12,
 faint: true,
 blurb: 'About 83 AU away at magnitude 20.8, on an 11,000-year orbit that never comes near Neptune.',
 lookFor: 'Probably too faint. A fair test of the limit: the stack either reaches it or says how close it came.',
-bands: CH4_ICE.slice(1),
+bands: CH4_ICE.slice(4),
 },
 {
 id: 'chiron',
@@ -36108,6 +36185,7 @@ mjd: e.mjdMid,
 pass: e.visit >= 0 ? e.visit : 0,
 key: e.key,
 comoving: true,
+...(Array.isArray(e.band) && e.band.length === 2 && e.band.every(isNum) ? { band: [e.band[0], e.band[1]] } : {}),
 });
 }
 return frames;
@@ -36949,7 +37027,14 @@ return out;
 function publishSpectrum() {
 if (!st.spectrum || typeof app.showSpectrum !== 'function') return;
 try {
-app.showSpectrum({ points: st.spectrum.kept, binned: st.spectrum.binned, title: `${st.name}, followed across ${st.items.length} exposures` });
+const bands = st.chosen && Array.isArray(st.chosen.bands) ? st.chosen.bands : [];
+app.showSpectrum({
+points: st.spectrum.kept,
+binned: st.spectrum.binned,
+title: `${st.name}, followed across ${st.items.length} exposures`,
+features: bands.map((b) => ({ wave: b.wave, label: b.label, note: b.what })),
+note: `Aperture photometry at the body's position in each exposure; ${st.spectrum.kept.length} of ${st.items.length} exposures gave a clean measurement.${bands.length ? ' The marks are the features to look for on this body.' : ''}`,
+});
 } catch (err) {
 warn('showSpectrum failed', err);
 }
@@ -36980,6 +37065,7 @@ caption: { title: frame.caption.title, date: dateRangeLabel(fixed.mjdStart, fixe
 short: `${frame.short} fixed`,
 mjd: frame.mjd,
 pass: frame.pass,
+...(frame.band ? { band: frame.band } : {}),
 key: `${entry.key}-fixed`,
 grid: fixed.grid,
 comoving: false,
