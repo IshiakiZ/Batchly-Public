@@ -656,7 +656,7 @@ Folders `web/src/local/` and `web/src/plugins/datasource/`.
   `withIndexSource()`, a read-through layer on the cache for keys under `index/`, because the
   handler reads the exposure index from its cache and a browser has no copy of it.
 - **Direct search needs a public copy of the index. Not configured anywhere yet.** `createLocalApi`
-  takes `indexSource` (a URL prefix such that `<prefix>/index/v1/manifest.json` exists, or a function
+  takes `indexSource` (a URL prefix such that `<prefix>/index/v2/manifest.json` exists, or a function
   `(key) -> bytes`), and `createPageApi` reads `window.TOMBAUGH_INDEX`. The 16-byte `TBC1` prefix of
   the Supabase cache objects is stripped if present. Without an index the handler falls back to IRSA
   TAP, which did not answer from a browser here; the search then fails with a 503 that says what is

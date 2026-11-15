@@ -121,7 +121,7 @@ function stripCachePrefix(bytes) {
 
 /**
  * indexSource -> (key) => Promise<Uint8Array|null>. A string is a URL prefix (`<prefix>/<key>`,
- * for example `<prefix>/index/v1/manifest.json`); a function is used as it is; anything else
+ * for example `<prefix>/index/v2/manifest.json`); a function is used as it is; anything else
  * means "no index published".
  */
 export function makeIndexSource(indexSource, { fetchImpl = globalThis.fetch } = {}) {

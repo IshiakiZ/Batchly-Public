@@ -137,19 +137,19 @@ header of each file is always used for the science.
 ## Index design (owner: s3-index)
 
 Storage goes through the same `cache` object as everything else (`get(key)`, `put(key, u8, type)`),
-keys under `index/v1/`:
+keys under `index/v2/`:
 
-- `index/v1/dirs.json`: the S3 directory list `[{ release, dir, prefix, version }]`, refreshed when older
+- `index/v2/dirs.json`: the S3 directory list `[{ release, dir, prefix, version }]`, refreshed when older
   than 6 hours (store `fetchedAt` inside).
-- `index/v1/<release>/<dir>/list.json`: `{ release, dir, version, exposures: ["0001_1", ...] }` from the
+- `index/v2/<release>/<dir>/<version>/list.json`: `{ release, dir, version, exposures: ["0001_1", ...] }` from the
   D1 listing (the part after `<dir>_` in the OBSID), sorted.
-- `index/v1/<release>/<dir>/part-<k>.bin`: container `"TBX1"`, uint32 LE JSON length (padded so data
+- `index/v2/<release>/<dir>/<version>/part-<k>.bin`: container `"TBX1"`, uint32 LE JSON length (padded so data
   starts on a multiple of 8), JSON `{ v:1, release, dir, version, start, count, exposures:[...] }`, then
   `Float64Array(count*7)` little-endian rows `mjd, crval1, crval2, pc11, pc12, pc21, pc22` of detector 1
   (`NaN` row when a header could not be read).
-- `index/v1/<release>/<dir>/meta.json`: written when every part exists: `{ release, dir, version, n,
+- `index/v2/<release>/<dir>/<version>/meta.json`: written when every part exists: `{ release, dir, version, n,
   parts, mjdMin, mjdMax, cells: "<base64 bitmap>" }`.
-- `index/v1/manifest.json`: `{ builtAt, dirs: [meta...] }` assembled from the metas.
+- `index/v2/manifest.json`: `{ builtAt, dirs: [meta...] }` assembled from the metas.
 
 Coverage bitmap: 10-degree cells, 36 in RA by 18 in Dec (cell = floor(ra/10) + 36*floor((dec+90)/10),
 648 bits), plus: treat Dec bands above +80 and below -80 as a single cell each (set all 36 bits). A cell

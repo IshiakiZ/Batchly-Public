@@ -288,7 +288,7 @@ export function coverageCells(rows) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * The week directories to index. Uses index/v1/dirs.json when it is younger than 6 hours
+ * The week directories to index. Uses index/v2/dirs.json when it is younger than 6 hours
  * (opts.maxAgeMs), otherwise lists the bucket again (only new directories cost a request each)
  * and stores the result. With force = true the bucket is always listed. If S3 cannot be reached
  * and an older list exists, the older list is returned (unless forced).

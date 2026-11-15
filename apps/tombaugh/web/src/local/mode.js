@@ -487,7 +487,7 @@ export function createAutoApi({
  *
  * `direct` and `practice` share one IndexedDB cache (./idbcache.js). `indexSource` (or
  * window.TOMBAUGH_INDEX) tells `direct` where a public copy of the exposure index lives: a URL
- * prefix such that `<prefix>/index/v1/manifest.json` exists, or a function (key) -> bytes.
+ * prefix such that `<prefix>/index/v2/manifest.json` exists, or a function (key) -> bytes.
  */
 export function createPageApi({ remote, win = globalThis, indexSource, cache = null, ...rest } = {}) {
   let url = '';

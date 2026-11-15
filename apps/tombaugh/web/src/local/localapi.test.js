@@ -367,8 +367,8 @@ function tinyIndex() {
   const meta = { release: 'qr3', dir: '2026W25_2A', version: 'l2b-v27-2026-273', n: 1, parts: 1, partSize: 900, mjdMin: D1_ROW[0], mjdMax: D1_ROW[0], bad: 0, cells: btoa(b64), all: true, builtAt: '2026-11-15T00:00:00Z' };
   const enc = (v) => new TextEncoder().encode(JSON.stringify(v));
   return new Map([
-    ['index/v1/manifest.json', enc({ builtAt: meta.builtAt, dirs: [meta] })],
-    ['index/v1/qr3/2026W25_2A/all.bin', expindex.encodePart({ release: 'qr3', dir: '2026W25_2A', version: meta.version, start: 0, exposures: ['0279_1'], rows, dets: [63] })],
+    [expindex.MANIFEST_KEY, enc({ builtAt: meta.builtAt, dirs: [meta] })],
+    [`${expindex.INDEX_ROOT}/qr3/2026W25_2A/${meta.version}/all.bin`, expindex.encodePart({ release: 'qr3', dir: '2026W25_2A', version: meta.version, start: 0, exposures: ['0279_1'], rows, dets: [63] })],
   ]);
 }
 
@@ -395,7 +395,7 @@ test('direct mode: search reads the published index and answers like /search', {
   assert.equal(d2.release, 'qr3');
   assert.ok(Number.isFinite(d2.mjd));
   assert.ok(res.counts, 'exposures per detector are passed on as the handler reports them');
-  assert.ok(asked.includes('index/v1/manifest.json'));
+  assert.ok(asked.includes(expindex.MANIFEST_KEY));
   // Somewhere the exposure does not cover: an empty, valid answer.
   const empty = await api.search(30, -40);
   assert.deepEqual(empty.frames, []);
