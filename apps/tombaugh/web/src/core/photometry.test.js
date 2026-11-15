@@ -424,6 +424,88 @@ test('a saturated star with a ragged core: frames that lose part of the ring sta
   assert.ok(Math.abs(ragged.step - 1) < 0.05, `ragged frames against whole ones: ${ragged.step}`);
 });
 
+test('a heavily saturated star whose core is blank (NaN) still gets a light curve from its wings', () => {
+  const [x0, y0] = [22.3, 21.6];
+  const frames = [];
+  const truth = [];
+  for (let k = 0; k < 40; k++) {
+    const mjd = 60800 + k * 9;
+    const vary = 1 + 0.35 * Math.sin((2 * Math.PI * k) / 27);
+    truth.push(vary);
+    const f = saturatedFrame({ x0, y0, flux: 9000 * vary, wave0: 1.63 * Math.pow(2.41 / 1.63, (k * 0.618) % 1), mjd, seed: 900 + k, rCore: 3.4 });
+    // three frames in four the pipeline leaves the core without any value at all
+    if (k % 4 !== 0) for (let i = 0; i < f.image.length; i++) if (f.flags[i] & (1 << 26)) f.image[i] = NaN;
+    frames.push(f);
+  }
+  const [ra, dec] = skyOf(x0, y0);
+  const pts = extractSpectrum(frames, ra, dec, { wcsFactory });
+  assert.equal(pts.length, 40, 'blank-core frames are kept for their wings');
+  assert.equal(pts.filter((p) => p.ok).length, 10);
+  assert.ok(pts.every((p) => p.sat && p.wingOk && p.wave > 0));
+  assert.equal(binSpectrum(pts).length, 0);
+  const lc = lightCurve(pts);
+  assert.equal(lc.length, 40);
+  const scale = lc.reduce((a, p, k) => a + p.ratio / truth[k], 0) / lc.length;
+  let worst = 0;
+  lc.forEach((p, k) => { worst = Math.max(worst, Math.abs(p.ratio / scale / truth[k] - 1)); });
+  assert.ok(worst < 0.08, `largest departure from the injected light curve: ${worst}`);
+  // keepFailed keeps the old contract: one point per frame, failed ones included once
+  assert.equal(extractSpectrum(frames, ra, dec, { wcsFactory, keepFailed: true }).length, 40);
+  // a blank patch that is not a saturated star (no wings to speak of) adds nothing
+  const dark = [];
+  for (let k = 0; k < 10; k++) {
+    const f = makeFrame({ seed: 40 + k, flux: 0, wave0: 1.7 + 0.03 * k, mjd: 60800 + k });
+    for (let y = 17; y <= 23; y++) for (let x = 17; x <= 23; x++) { f.image[y * f.nx + x] = NaN; f.flags[y * f.nx + x] = 1 << 6; }
+    dark.push(f);
+  }
+  const dp = extractSpectrum(dark, ...skyOf(20.3, 19.6), { wcsFactory });
+  assert.ok(lightCurve(dp).length === 0, 'no light curve from a dead patch');
+});
+
+test('lightCurve: a deep field with a molecular band the polynomial cannot follow', () => {
+  // 240 measurements over 480 days, wavelengths in no order, a deep notch at 1.9 um, and a
+  // slow 30% swing in brightness.
+  let seed = 11;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const band = (w) => 1 - 0.6 * Math.exp(-0.5 * ((w - 1.9) / 0.035) ** 2);
+  const make = (n, tOf, wOf) => {
+    const pts = [];
+    for (let k = 0; k < n; k++) {
+      const mjd = tOf(k);
+      const wave = wOf(k);
+      const vary = 1 + 0.3 * Math.sin((2 * Math.PI * (mjd - 60800)) / 245);
+      const flux = 5000 * Math.pow(wave / 2, -1) * band(wave) * vary * (1 + 0.02 * (rnd() - 0.5));
+      pts.push({ flux_uJy: flux, err_uJy: 0.02 * flux, wave, bw: 0.04, mjd, det: 3, flagged: false, ok: true, vary });
+    }
+    return pts;
+  };
+  const deep = make(240, (k) => 60800 + k * 2, () => 1.64 + 0.78 * rnd());
+  const lc = lightCurve(deep);
+  assert.equal(lc.length, 240);
+  assert.ok(lc.every((p) => p.refined));
+  const byMjd = new Map(deep.map((p) => [p.mjd, p.vary]));
+  const scale = lc.reduce((a, p) => a + p.ratio / byMjd.get(p.mjd), 0) / lc.length;
+  const dev = lc.map((p) => Math.abs(p.ratio / scale / byMjd.get(p.mjd) - 1)).sort((a, b) => a - b);
+  assert.ok(dev[Math.floor(0.9 * dev.length)] < 0.12, `90% of points within ${dev[Math.floor(0.9 * dev.length)]} of the injected curve`);
+  // In the notch the polynomial alone is off by tens of percent.
+  const notch = lc.filter((p) => Math.abs(p.wave - 1.9) < 0.03);
+  assert.ok(notch.length >= 5);
+  for (const p of notch) assert.ok(Math.abs(p.ratio / scale / byMjd.get(p.mjd) - 1) < 0.25, `notch point off by ${p.ratio / scale / byMjd.get(p.mjd) - 1}`);
+
+  // Two passes, wavelength marching with time inside each: a change between the passes must
+  // survive (the time part of the split carries it), whether or not the step runs.
+  const twoPass = make(120, (k) => (k < 60 ? 60800 + k * 0.2 : 60980 + (k - 60) * 0.2), (k) => 1.64 + 0.78 * ((k % 60) / 60));
+  for (const p of twoPass) if (p.mjd > 60900) p.flux_uJy *= 1.5;
+  const lc2 = lightCurve(twoPass);
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  const up = mean(lc2.filter((p) => p.mjd > 60900).map((p) => p.ratio)) / mean(lc2.filter((p) => p.mjd < 60900).map((p) => p.ratio));
+  const want = 1.5 * mean(twoPass.filter((p) => p.mjd > 60900).map((p) => p.vary)) / mean(twoPass.filter((p) => p.mjd < 60900).map((p) => p.vary));
+  assert.ok(Math.abs(up / want - 1) < 0.06, `second pass against first: ${up}, injected ${want}`);
+  // One pass: wavelength and time are the same thing, so the step does not run.
+  const onePass = make(60, (k) => 60800 + k * 0.2, (k) => 1.64 + 0.78 * (k / 60));
+  assert.ok(lightCurve(onePass).every((p) => !p.refined));
+});
+
 test('fluxToABmag', () => {
   assert.ok(Math.abs(fluxToABmag(3631e6)) < 1e-3); // 3631 Jy is magnitude 0
   assert.ok(Math.abs(fluxToABmag(1) - 23.9) < 1e-12);

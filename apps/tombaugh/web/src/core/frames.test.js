@@ -131,3 +131,21 @@ test('groupLayers: passes in time order and channels in wavelength order', () =>
   assert.deepEqual(byChannel.get(9).map((l) => l.mjd), [60831, 61012]);
   assert.equal(byChannel.get(0).length, 1);
 });
+
+test('splitPasses: a deep field visited all year is cut into seasons of at most 90 days', () => {
+  const items = [];
+  for (let d = 0; d <= 520; d += 2) items.push({ mjd: 60790 + d });
+  const seasons = splitPasses(items);
+  assert.equal(seasons.length, 6);
+  assert.equal(seasons.reduce((n, s) => n + s.length, 0), items.length);
+  for (const s of seasons) assert.ok(s[s.length - 1].mjd - s[0].mjd <= 90);
+  // an ordinary pass, however densely sampled, stays whole; so does a 100-day one
+  assert.equal(splitPasses(items.slice(0, 20)).length, 1);
+  assert.equal(splitPasses(items.slice(0, 51)).length, 1);
+  // a long run next to a short pass: only the long run is cut
+  const mixed = [{ mjd: 60000 }, { mjd: 60003 }, ...items];
+  assert.deepEqual(splitPasses(mixed).map((s) => s.length).slice(0, 1), [2]);
+  assert.equal(splitPasses(mixed).length, 7);
+  // the limit can be lifted
+  assert.equal(splitPasses(items, 45, Infinity).length, 1);
+});

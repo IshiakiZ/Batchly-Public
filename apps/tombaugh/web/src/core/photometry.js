@@ -89,6 +89,8 @@ function sampleAt(arr, nx, ny, x, y) {
  *      that these aperture weights catch at this sub-pixel position. Skipped (apcor = 1) when
  *      the frame has no PSF width or opts.apCorr is false.
  *
+ * A position whose aperture pixels are all blank (the core of a heavily saturated star) comes
+ * back with ok = false, masked = true, and its x, y, wave and bw filled in.
  * Returns { flux_uJy, err_uJy, wave, bw, mjd, flagged, ok } plus det, id, x, y (0-based pixel
  * position), bg (MJy/sr), nAnnulus, npix (aperture area in pixels), apcor.
  *   ok       false when the position is not finite or the aperture is not entirely on the frame
@@ -190,7 +192,16 @@ export function aperturePhot(frame, ra, dec, opts = {}) {
       varSum += f * f * (pv > 0 && Number.isFinite(pv) ? pv : bgSigma * bgSigma);
     }
   }
-  if (!(area > 0)) return failed(frame, { x: x0, y: y0 });
+  if (!(area > 0)) {
+    // Every aperture pixel is blank: the core of a saturated star, which the pipeline leaves
+    // without a value. No flux here, but the position and wavelength are known, and the wings
+    // can still be measured (see addWings), so say so.
+    const w = sampleAt(frame.wave, nx, ny, x0, y0);
+    const wAt = Number.isFinite(w) && w > 0 ? w : frame.waveCenter;
+    let b = frame.bwCenter;
+    if (b > 0 && frame.waveCenter > 0 && wAt > 0) b = b * wAt / frame.waveCenter;
+    return failed(frame, { x: x0, y: y0, wave: wAt, bw: Number.isFinite(b) ? b : NaN, masked: true });
+  }
 
   const apcor = apCorr && caught > 0.2 ? caught : 1; // below 0.2 the model clearly does not apply
   const net = (sum - bg * area) / apcor;
@@ -380,12 +391,15 @@ export function extractSpectrum(frames, ra, dec, opts = {}) {
       if (pos && Number.isFinite(pos.ra) && Number.isFinite(pos.dec)) { r = pos.ra; d = pos.dec; }
     }
     const p = aperturePhot(frame, r, d, opts);
-    if (p.ok || opts.keepFailed) {
-      points.push(p);
-      used.push({ frame, ra: r, dec: d, p });
-    }
+    if (p.ok || opts.keepFailed) points.push(p);
+    if (p.ok || p.masked) used.push({ frame, ra: r, dec: d, p });
   }
-  if (opts.wings !== false) addWings(used, opts);
+  if (opts.wings !== false) {
+    addWings(used, opts);
+    // A blank core gives no aperture flux, but a point with a good wing measurement is kept:
+    // it is the only way a heavily saturated star gets a light curve.
+    if (!opts.keepFailed) for (const u of used) if (!u.p.ok && u.p.wingOk) points.push(u.p);
+  }
   points.sort((a, b) => (Number.isFinite(a.wave) ? a.wave : Infinity) - (Number.isFinite(b.wave) ? b.wave : Infinity));
   return points;
 }
@@ -402,7 +416,7 @@ export function extractSpectrum(frames, ra, dec, opts = {}) {
  * a frame that has lost some of its ring to flags is still on the same scale as the others.
  */
 function addWings(used, opts) {
-  const ok = used.filter((u) => u.p.ok);
+  const ok = used.filter((u) => u.p.ok || u.p.masked);
   if (ok.length < 3) return;
   const radii = [];
   for (const u of ok) {
@@ -461,6 +475,15 @@ function addWings(used, opts) {
     }
     for (const u of group) u.shaped = !!shape;
   }
+
+  // A blank or flagged patch with nothing shining around it is a dead region of the detector,
+  // not a saturated star: its "wings" are sky noise. Only go on when the ring is clearly lit.
+  const snr = [];
+  for (const u of ok) {
+    const e = Number.isFinite(u.ampErr) ? u.ampErr : u.ring.errMean;
+    if (Number.isFinite(u.amp) && e > 0) snr.push(u.amp / e);
+  }
+  if (snr.length < 3 || medianInPlace(Float64Array.from(snr), snr.length) < 5) return;
 
   const area = Math.PI * (r2 * r2 - r1 * r1);
   for (const u of ok) {
@@ -755,7 +778,8 @@ export function fitSpectrumModel(points) {
  * flux by the smooth spectrum model (fitSpectrumModel) at its wavelength. A steady source gives
  * ratio 1 at all times whatever its colour; a variable one departs from 1.
  *
- * Returns [{ mjd, ratio, err, wave, det, flux_uJy, model_uJy }] sorted by time. Flagged and
+ * Returns [{ mjd, ratio, err, wave, det, flux_uJy, model_uJy }] sorted by time (plus
+ * refined = true where the wavelength-bin step below was applied). Flagged and
  * failed points are left out, as are points where the model is not positive (the ratio is
  * meaningless for an undetected source).
  */
@@ -779,7 +803,117 @@ export function lightCurve(points) {
       flux_uJy: p.flux_uJy, model_uJy: m, method,
     });
   }
+  refineByWavelength(out);
   out.sort((a, b) => a.mjd - b.mjd);
+  return out;
+}
+
+/**
+ * Second step of the light curve, for sources seen many times (deep fields): a low-order
+ * polynomial cannot follow a molecular band, or the way the wings of a saturated star change
+ * with wavelength, and what it misses comes back as scatter because every exposure is at a
+ * different wavelength. Where a detector has at least 40 points, the points are sorted into
+ * equal-count wavelength bins and each ratio is divided by the median ratio of its bin
+ * (interpolated between bin centres), with the change over time taken out first so that it
+ * cannot leak into the wavelength part. Only done when every bin's points are spread over at
+ * least a month: within a single pass a wavelength is seen at one moment only, wavelength and
+ * time are the same thing, and this would erase the very change being looked for. Edits the
+ * points in place.
+ */
+function refineByWavelength(points, { minPoints = 40, perBin = 8, minSpanDays = 60, minBinDays = 30 } = {}) {
+  const groups = new Map();
+  for (const p of points) {
+    if (!groups.has(p.det)) groups.set(p.det, []);
+    groups.get(p.det).push(p);
+  }
+  for (const pts of groups.values()) {
+    const n = pts.length;
+    if (n < minPoints) continue;
+    let t0 = Infinity;
+    let t1 = -Infinity;
+    for (const p of pts) { if (p.mjd < t0) t0 = p.mjd; if (p.mjd > t1) t1 = p.mjd; }
+    const span = t1 - t0;
+    if (!(span >= minSpanDays)) continue;
+    const nb = Math.max(4, Math.min(24, Math.floor(n / perBin)));
+    const lnw = Float64Array.from(pts, (p) => Math.log(p.wave));
+    const mjd = Float64Array.from(pts, (p) => p.mjd);
+    // Every wavelength bin must hold points spread over at least a month: within one pass a
+    // wavelength is seen at one moment only, and there this step must not run.
+    const byWave = binOrder(lnw, nb);
+    if (byWave.some((bin) => {
+      let b0 = Infinity;
+      let b1 = -Infinity;
+      for (const k of bin) { if (mjd[k] < b0) b0 = mjd[k]; if (mjd[k] > b1) b1 = mjd[k]; }
+      return bin.length < 5 || b1 - b0 < minBinDays;
+    })) continue;
+    // ratio = (change with time) x (what the polynomial missed at this wavelength) x noise.
+    // Take the two apart by turns, each as binned medians of the ratio divided by the other,
+    // so the swing of a variable star does not leak into the wavelength correction.
+    const ratio = Float64Array.from(pts, (p) => p.ratio);
+    let inTime = new Float64Array(n).fill(1);
+    let inWave = new Float64Array(n).fill(1);
+    let ok = true;
+    // Time goes first: in a field with a few passes each time bin lies inside one pass, so a
+    // change between passes is taken up there and never reaches the wavelength part.
+    for (let round = 0; round < 3 && ok; round++) {
+      const next = binnedMedianCurve(mjd, ratio.map((r, k) => r / inWave[k]), nb);
+      if (!next) { ok = false; break; }
+      inTime = next;
+      const w = binnedMedianCurve(lnw, ratio.map((r, k) => r / inTime[k]), nb);
+      if (!w) { ok = false; break; }
+      inWave = w;
+    }
+    if (!ok) continue;
+    // Keep the overall level in the time part: the correction has median 1.
+    const norm = medianInPlace(Float64Array.from(inWave), n);
+    if (!(norm > 0)) continue;
+    pts.forEach((p, k) => {
+      const c = inWave[k] / norm;
+      if (!(c > 0)) return;
+      p.ratio /= c;
+      p.err /= c;
+      p.model_uJy *= c;
+      p.refined = true;
+    });
+  }
+}
+
+/** Indices of x sorted and cut into nb equal-count bins. */
+function binOrder(x, nb) {
+  const order = Array.from(x.keys()).sort((a, b) => x[a] - x[b]);
+  const bins = [];
+  for (let b = 0; b < nb; b++) bins.push(order.slice(Math.floor((b * order.length) / nb), Math.floor(((b + 1) * order.length) / nb)));
+  return bins;
+}
+
+/**
+ * y smoothed against x: medians of y in nb equal-count bins of x, joined by straight lines
+ * between the bins' median x (flat beyond the first and last). Returns the curve evaluated at
+ * every x, or null when a bin's median is not positive.
+ */
+function binnedMedianCurve(x, y, nb) {
+  const bins = binOrder(x, nb);
+  const cx = [];
+  const cy = [];
+  for (const bin of bins) {
+    if (!bin.length) return null;
+    const m = medianInPlace(Float64Array.from(bin, (k) => y[k]), bin.length);
+    if (!(m > 0)) return null;
+    cx.push(medianInPlace(Float64Array.from(bin, (k) => x[k]), bin.length));
+    cy.push(m);
+  }
+  const out = new Float64Array(x.length);
+  for (let i = 0; i < x.length; i++) {
+    const v = x[i];
+    if (v <= cx[0]) out[i] = cy[0];
+    else if (v >= cx[nb - 1]) out[i] = cy[nb - 1];
+    else {
+      let k = 0;
+      while (k < nb - 2 && v > cx[k + 1]) k++;
+      const f = cx[k + 1] > cx[k] ? (v - cx[k]) / (cx[k + 1] - cx[k]) : 0;
+      out[i] = cy[k] + f * (cy[k + 1] - cy[k]);
+    }
+  }
   return out;
 }
 
@@ -794,7 +928,7 @@ export function wingPoints(points) {
   if (wing.length < 5) return null;
   const core = all.filter((p) => usablePoint(p));
   if (core.length >= wing.length) return null;
-  return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, method: 'wings' }));
+  return wing.map((p) => ({ ...p, flux_uJy: p.wing_uJy, err_uJy: p.wingErr_uJy, flagged: false, ok: true, method: 'wings' }));
 }
 
 /** AB magnitude of a flux density in microjansky (NaN for zero or negative flux). */

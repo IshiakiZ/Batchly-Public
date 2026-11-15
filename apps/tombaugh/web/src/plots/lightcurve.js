@@ -66,7 +66,7 @@ export function epochMeans(points, opts = {}) {
     }
     for (const b of bins) {
       if (!b.length) continue;
-      const m = weightedMean(b.map((p) => p.ratio), b.map((p) => p.err));
+      const m = robustCentre(b);
       let t = 0;
       for (const p of b) t += p.mjd;
       epochs.push({
@@ -89,6 +89,26 @@ export function epochMeans(points, opts = {}) {
   }
   for (const e of epochs) if (count.get(e.label) > 1) e.label = formatDayMonthYear(e.mjd);
   return epochs;
+}
+
+/**
+ * The level of one bin. Normally the error-weighted mean. When the points scatter far more than
+ * their errors allow (five or more points, robust scatter over twice the typical error), the
+ * errors are not telling the truth, as for the wings of a saturated star, whose brightness
+ * jumps from exposure to exposure: then the median is used, with an error from the scatter
+ * itself (1.253 x scatter / sqrt(n), the standard error of a median).
+ */
+function robustCentre(bin) {
+  const mean = weightedMean(bin.map((p) => p.ratio), bin.map((p) => p.err));
+  if (bin.length < 5) return mean;
+  const v = bin.map((p) => p.ratio).sort((a, b) => a - b);
+  const med = quantile(v, 0.5);
+  const dev = v.map((x) => Math.abs(x - med)).sort((a, b) => a - b);
+  const scatter = 1.4826 * quantile(dev, 0.5);
+  const errs = bin.map((p) => p.err).filter((e) => isNum(e) && e > 0).sort((a, b) => a - b);
+  const typical = errs.length ? quantile(errs, 0.5) : 0;
+  if (!(scatter > 2 * typical)) return mean;
+  return { mean: med, err: (1.253 * scatter) / Math.sqrt(bin.length), robust: true };
 }
 
 const PERCENT_STEPS = [1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100];
@@ -458,7 +478,7 @@ export function createLightCurvePlot(container) {
     const ms = svgEl('svg', { width: 14, height: 14, viewBox: '0 0 14 14', 'aria-hidden': 'true' }, mean);
     svgEl('path', { d: 'M7 1V13M4.5 1h5M4.5 13h5', stroke: PAPER, 'stroke-width': 1.25, fill: 'none' }, ms);
     svgEl('circle', { cx: 7, cy: 7, r: 3.5, fill: PAPER, stroke: INK, 'stroke-width': 1 }, ms);
-    htmlEl('span', { text: 'pass mean' }, mean);
+    htmlEl('span', { text: 'mean per pass or month' }, mean);
 
     const one = htmlEl('span', { class: 'tbp-legend-item' }, legend);
     const os = svgEl('svg', { width: 18, height: 12, viewBox: '0 0 18 12', 'aria-hidden': 'true' }, one);
@@ -479,7 +499,13 @@ export function createLightCurvePlot(container) {
     const v = state.verdict;
     const n = state.points.length;
     const passes = splitPasses(state.points).length;
-    subEl.textContent = `${n} measurement${n === 1 ? '' : 's'} · ${passes} survey pass${passes === 1 ? '' : 'es'}`;
+    // A deep field is watched all year: counting "passes" there says little, the time span does.
+    const t = state.points.map((p) => p.mjd).filter(isNum);
+    const spanDays = t.length ? Math.max(...t) - Math.min(...t) : 0;
+    const where = v.epochs.length > passes && spanDays > 120
+      ? `over ${Math.round(spanDays / 30.44)} months`
+      : `${passes} survey pass${passes === 1 ? '' : 'es'}`;
+    subEl.textContent = `${n} measurement${n === 1 ? '' : 's'} · ${where}`;
     verdictText.textContent = v.text;
     const means = v.epochs.map((e) => `${e.label} ${e.mean.toFixed(2)}`).join(', ');
     svg.setAttribute('aria-label',

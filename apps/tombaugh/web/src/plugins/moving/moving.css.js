@@ -100,7 +100,7 @@ export const MOVING_CSS = `
 .tbm-visits .tbm-r { text-align: right; }
 .tbm-dets { color: var(--tbm-muted); font-family: var(--tbm-num); font-size: 11px; white-space: nowrap; }
 
-.tbm-track { display: block; width: 100%; height: auto; background: var(--tbm-sunken); border: 1px solid var(--tbm-rule); border-radius: 3px; }
+.tbm-track { display: block; width: 100%; max-width: 460px; height: auto; background: var(--tbm-sunken); border: 1px solid var(--tbm-rule); border-radius: 3px; }
 .tbm-figcap { color: var(--tbm-muted); font-size: 12px; margin-top: 4px; }
 
 .tbm-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

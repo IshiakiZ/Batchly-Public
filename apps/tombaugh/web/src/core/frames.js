@@ -75,24 +75,45 @@ export function channelCenter(det, ch) {
  * Split exposures into survey passes. Items need a numeric `.mjd`; they are sorted by time and a
  * new pass starts wherever two consecutive exposures are more than `gapDays` apart. Items
  * without a finite `.mjd` are dropped. The input array is not modified.
+ *
+ * Near the ecliptic poles (the deep fields) SPHEREx comes back every orbit and there is no gap
+ * at all: a year and a half of data would be one "pass" with nothing to compare it with. A run
+ * longer than `maxSpanDays` (default 120) is therefore cut into equal seasons of at most 90
+ * days. An ordinary pass lasts days to a few weeks and is never cut.
  */
-export function splitPasses(items, gapDays = 45) {
+export function splitPasses(items, gapDays = 45, maxSpanDays = 120) {
   const sorted = [];
   for (const it of items || []) if (it && Number.isFinite(it.mjd)) sorted.push(it);
   sorted.sort((a, b) => a.mjd - b.mjd);
-  const passes = [];
+  const runs = [];
   let current = null;
   let last = -Infinity;
   for (const it of sorted) {
     if (!current || it.mjd - last > gapDays) {
       current = [];
-      passes.push(current);
+      runs.push(current);
     }
     current.push(it);
     last = it.mjd;
   }
+  const passes = [];
+  for (const run of runs) {
+    const t0 = run[0].mjd;
+    const span = run[run.length - 1].mjd - t0;
+    if (!(span > maxSpanDays)) {
+      passes.push(run);
+      continue;
+    }
+    const k = Math.ceil(span / SEASON_DAYS);
+    const seasons = Array.from({ length: k }, () => []);
+    for (const it of run) seasons[Math.min(k - 1, Math.floor(((it.mjd - t0) / span) * k))].push(it);
+    for (const season of seasons) if (season.length) passes.push(season);
+  }
   return passes;
 }
+
+/** Longest season a long continuous run is cut into (days). */
+export const SEASON_DAYS = 90;
 
 /** Median MJD of a list of items with `.mjd` (NaN for an empty list). */
 export function medianMjd(items) {

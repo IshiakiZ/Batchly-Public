@@ -158,18 +158,32 @@ function localRobustStats(data, mask) {
   return { median, sigma: 1.4826 * quantileSorted(dev, 50) };
 }
 
-function localSplitPasses(items, gapDays = 45) {
+function localSplitPasses(items, gapDays = 45, maxSpanDays = 120) {
   const sorted = [...items].sort((a, b) => a.mjd - b.mjd);
-  const passes = [];
+  const runs = [];
   let current = [];
   for (const item of sorted) {
     if (current.length && item.mjd - current[current.length - 1].mjd > gapDays) {
-      passes.push(current);
+      runs.push(current);
       current = [];
     }
     current.push(item);
   }
-  if (current.length) passes.push(current);
+  if (current.length) runs.push(current);
+  // A run longer than maxSpanDays is cut into seasons (see core/frames.js splitPasses).
+  const passes = [];
+  for (const run of runs) {
+    const t0 = run[0].mjd;
+    const span = run[run.length - 1].mjd - t0;
+    if (!(span > maxSpanDays)) {
+      passes.push(run);
+      continue;
+    }
+    const k = Math.ceil(span / 90);
+    const seasons = Array.from({ length: k }, () => []);
+    for (const item of run) seasons[Math.min(k - 1, Math.floor(((item.mjd - t0) / span) * k))].push(item);
+    for (const season of seasons) if (season.length) passes.push(season);
+  }
   return passes;
 }
 
@@ -1389,14 +1403,14 @@ export function measureMotion(lib, layers, grid, ra, dec, { stars = [], startMjd
  * using the original image and mask.
  *
  * A hole is filled when it does not touch the edge of the image and covers at most `maxFrac`
- * of it (default 3%), so the sky a detector never covered stays empty. Filling works inward
+ * of it (default 8%, enough for the core of a first-magnitude star in a 4 arcmin view), so the sky a detector never covered stays empty. Filling works inward
  * ring by ring: a pixel takes the mean of its already-known neighbours, which gives a
  * saturated star a flat top at the level of its rim instead of a hatched patch.
  *
  * -> { image, mask, filled } where mask marks only what is still missing and `filled` counts
  *    the pixels filled, or null when there was nothing to fill.
  */
-export function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.03 } = {}) {
+export function fillMaskedForDisplay(image, mask, n, { maxFrac = 0.08 } = {}) {
   if (!image || !(n > 0)) return null;
   const ny = Math.floor(image.length / n);
   const total = n * ny;

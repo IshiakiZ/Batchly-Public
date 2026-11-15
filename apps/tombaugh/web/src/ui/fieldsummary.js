@@ -49,25 +49,41 @@ export function dayRange(mjd0, mjd1) {
  * Group exposure references (all detectors) into survey passes: a new pass starts after a gap of
  * more than `gapDays`. -> [{ index, mjd0, mjd1, label, dates, total, perDet: { 1..6: refs[] } }]
  */
-export function summarizePasses(refs, gapDays = 45) {
+export function summarizePasses(refs, gapDays = 45, maxSpanDays = 120) {
   const list = (refs || []).filter((r) => r && Number.isFinite(r.mjd)).slice().sort((a, b) => a.mjd - b.mjd);
-  const passes = [];
-  let cur = null;
+  // Runs separated by gaps; a run longer than maxSpanDays (a deep field, visited every orbit)
+  // is cut into equal seasons of at most 90 days, as core/frames.js splitPasses does.
+  const runs = [];
+  let run = null;
   let last = -Infinity;
   for (const ref of list) {
-    if (!cur || ref.mjd - last > gapDays) {
-      cur = { index: passes.length, mjd0: ref.mjd, mjd1: ref.mjd, total: 0, perDet: {} };
-      passes.push(cur);
+    if (!run || ref.mjd - last > gapDays) {
+      run = [];
+      runs.push(run);
     }
-    cur.mjd1 = ref.mjd;
-    cur.total += 1;
-    (cur.perDet[ref.det] || (cur.perDet[ref.det] = [])).push(ref);
+    run.push(ref);
     last = ref.mjd;
   }
-  for (const p of passes) {
+  const groups = [];
+  for (const r of runs) {
+    const t0 = r[0].mjd;
+    const span = r[r.length - 1].mjd - t0;
+    if (!(span > maxSpanDays)) {
+      groups.push(r);
+      continue;
+    }
+    const k = Math.ceil(span / 90);
+    const seasons = Array.from({ length: k }, () => []);
+    for (const ref of r) seasons[Math.min(k - 1, Math.floor(((ref.mjd - t0) / span) * k))].push(ref);
+    for (const season of seasons) if (season.length) groups.push(season);
+  }
+  const passes = groups.map((g, index) => {
+    const p = { index, mjd0: g[0].mjd, mjd1: g[g.length - 1].mjd, total: g.length, perDet: {} };
+    for (const ref of g) (p.perDet[ref.det] || (p.perDet[ref.det] = [])).push(ref);
     p.label = monthLabel((p.mjd0 + p.mjd1) / 2);
     p.dates = dayRange(p.mjd0, p.mjd1);
-  }
+    return p;
+  });
   return passes;
 }
 

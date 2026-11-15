@@ -1259,6 +1259,7 @@ export function install(app) {
         id: VIEW_ID,
         label: 'Follow body',
         title: 'Stacks that follow a solar-system body: it stays at the centre while the stars streak',
+        empty: 'No body is being followed yet. Open the Solar system tab on the right, pick a body such as Pluto, and load its exposures: the stacks that follow it play here.',
         build: buildView,
       });
     }

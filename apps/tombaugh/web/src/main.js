@@ -957,7 +957,7 @@ async function boot() {
         if (stale()) return;
         const passes = pipeline.describePasses(lib, data.layers);
         const frames = normalizePluginFrames(built, passes);
-        movie = { view, frames, empty: frames.length ? null : `The ${pluginView.label} view has nothing to show for this field.`, notes: [], candidates: [], passes };
+        movie = { view, frames, empty: frames.length ? null : pluginView.empty || `The ${pluginView.label} view has nothing to show for this field.`, notes: [], candidates: [], passes };
       } else {
         if (view === 'residual' && complete) {
           if (!session.models.has(s.det)) {
@@ -1267,8 +1267,12 @@ async function boot() {
     const s = store.get();
     const frame = player.frame();
     const overlays = { gaia: null, flags: null, markers: [], trail: null };
+    // A plugin view (a stack that follows a moving body, say) is not on this field's sky grid:
+    // the field's Gaia circles and the selected source do not belong on it. The plugin draws
+    // its own through frame.markers or addOverlay.
+    const ownSky = !pluginViews.has(s.view);
     if (frame && session.grid) {
-      if (s.gaia && session.gaia.stars.length && lib.gridSkyToPix) {
+      if (ownSky && s.gaia && session.gaia.stars.length && lib.gridSkyToPix) {
         try {
           overlays.gaia = ghostsFor(frame);
         } catch (err) {
@@ -1279,7 +1283,7 @@ async function boot() {
       if (Array.isArray(frame.markers)) overlays.markers.push(...frame.markers);
     }
     const sel = session.selection;
-    if (sel) {
+    if (sel && ownSky) {
       overlays.markers.push({ ra: sel.ra, dec: sel.dec, kind: 'click', label: sel.label || '' });
       const track = sel.motion && sel.motion.track ? sel.motion.track : [];
       if (track.length >= 2) overlays.trail = track.map((p) => ({ ra: p.ra, dec: p.dec, mjd: p.mjd }));
@@ -1379,12 +1383,19 @@ async function boot() {
     const m = sel.motion;
     const verdict = m ? pipeline.compareWithGaia(m) : { verdict: 'none' };
     sel.identity = verdict.verdict;
-    if (verdict.verdict === 'different' && (!sel.label || sel.label === 'Gaia star')) {
-      // The click landed on a Gaia circle, but what was followed from pass to pass is not that star.
+    // A click on a Gaia circle snaps to that star. When what was followed from pass to pass
+    // moves and is not that star (its motion differs, or Gaia has nothing where it was found),
+    // the selection belongs on the moving source, at the pass now on screen.
+    const fast = !!(m && m.measured && m.measured.total > 500 && m.measured.total > 3 * Math.max(300, m.measured.errTotal || 0));
+    if ((verdict.verdict === 'different' || (verdict.verdict === 'none' && fast)) && (!sel.label || sel.label === 'Gaia star')) {
       sel.label = 'Moving source';
       if (m.track.length) {
-        sel.ra = m.track[0].ra;
-        sel.dec = m.track[0].dec;
+        const frameNow = player.frame();
+        const when = frameNow && Number.isFinite(frameNow.mjd) ? frameNow.mjd : m.track[0].mjd;
+        let best = m.track[0];
+        for (const p of m.track) if (Math.abs(p.mjd - when) < Math.abs(best.mjd - when)) best = p;
+        sel.ra = best.ra;
+        sel.dec = best.dec;
       }
       panels.setSource({ ra: sel.ra, dec: sel.dec, label: sel.label });
     }
@@ -1432,7 +1443,7 @@ async function boot() {
     const lc = sel.lightCurve || [];
     const wing = (sel.spectrum || []).find((p) => p && p.sat && Number.isFinite(p.wingR1));
     if (lc.length && lc[0].method === 'wings' && wing) {
-      return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux.`;
+      return `This star is bright enough to saturate the detector, so its core is flagged and cannot be measured. Its brightness is followed instead in a ring of unsaturated light ${wing.wingR1.toFixed(1)} to ${wing.wingR2.toFixed(1)} pixels from the centre, which rises and falls with the star. The level is relative to the star\u2019s own average, not an absolute flux. Single exposures of a saturated star scatter by tens of percent, so read the means, not the dots.`;
     }
     if (!lc.length && (sel.spectrum || []).length && (sel.spectrum || []).every((p) => p.flagged)) {
       return 'Every exposure of this source has flagged pixels in the aperture (often a saturated star), and the light around it is too faint or too crowded to follow instead.';
@@ -2031,6 +2042,7 @@ async function boot() {
     emit('state', { state: s, changed });
     if (has('embed')) layout.setEmbed(s.embed);
     if (has('ra') || has('dec')) {
+      document.title = titleFor(s);
       if (hasTarget()) startTarget();
       else showLanding();
       return;
@@ -2164,9 +2176,9 @@ async function boot() {
         },
       };
     },
-    addView({ id, label, title, needs, build } = {}) {
+    addView({ id, label, title, needs, build, empty } = {}) {
       if (!id || typeof build !== 'function' || pluginViews.has(id) || VIEWS.includes(id)) return { remove() {} };
-      pluginViews.set(id, { id, label: label || id, title: title || '', needs, build });
+      pluginViews.set(id, { id, label: label || id, title: title || '', needs, build, empty: typeof empty === 'string' ? empty : '' });
       controls.addView({ id, label: label || id, title: title || '' });
       if (store.get().view === id && currentData()) scheduleRebuild({ reset: true });
       return {
