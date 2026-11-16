@@ -200,6 +200,11 @@ export function hush() {
   if (current) current.hush();
 }
 
+/** speaking(): true while a line is being spoken, or is about to be. The tours wait on it. */
+export function speaking() {
+  return current ? current.speaking() : false;
+}
+
 function dataUriBytes(uri, win) {
   const comma = uri.indexOf(',');
   if (comma < 0 || !/;base64/i.test(uri.slice(0, comma))) return null;
@@ -455,9 +460,11 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
   let speaking = '';
 
   let nextLine = ''; // a line asked for while another is still being spoken
+  let voiceUntil = 0; // the latest moment the line in hand can still be heard, ms
   function hush() {
     nextLine = '';
     speaking = '';
+    voiceUntil = 0;
     if (!voice) return;
     try {
       voice.stop();
@@ -478,8 +485,16 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
     const uri = recorded[`say-${id}`];
     if (!ctx || isMuted || typeof uri !== 'string' || !uri.startsWith('data:audio/')) return false;
     speaking = id;
+    voiceUntil = now() + 4000; // room to decode the clip
     const go = (buf) => {
-      if (speaking !== id || isMuted || !ctx || !buf) return;
+      if (speaking !== id) return;
+      if (isMuted || !ctx || !buf) {
+        // Nothing will be heard: do not keep a tour waiting for it.
+        speaking = '';
+        voiceUntil = 0;
+        return;
+      }
+      voiceUntil = now() + buf.duration * 1000 + 400;
       const src = ctx.createBufferSource();
       src.buffer = buf;
       const gain = ctx.createGain();
@@ -488,7 +503,10 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       gain.connect(master);
       src.onended = () => {
         const mine = voice === src;
-        if (mine) voice = null;
+        if (mine) {
+          voice = null;
+          speaking = '';
+        }
         try {
           gain.disconnect();
         } catch {
@@ -511,7 +529,9 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
           lines.set(id, buf);
           go(buf);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (speaking === id) speaking = '';
+        });
     }
     return true;
   }
@@ -673,6 +693,8 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
     play,
     say,
     hush,
+    /** True while a line is being spoken or queued, and can still be heard. */
+    speaking: () => (speaking !== '' || nextLine !== '') && now() < voiceUntil,
     muted: () => isMuted,
     setMuted,
     toggle: () => setMuted(!isMuted),

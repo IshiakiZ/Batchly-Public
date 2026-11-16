@@ -22,7 +22,7 @@ import { createCaptions, BAND_UNITS } from './captions.js';
 import { createSpotlight } from './spotlight.js';
 import { createAdapter } from './adapter.js';
 import { injectStyles } from './story.css.js';
-import { say, hush } from '../../ui/sound.js';
+import { say, hush, speaking } from '../../ui/sound.js';
 
 export const meta = {
   id: 'story',
@@ -116,7 +116,7 @@ export function install(app, opts = {}) {
 
     let runner;
     try {
-      runner = createRunner({ story, adapter: { perform: adapter.perform, check: adapter.check, resolve: adapter.resolve }, speed });
+      runner = createRunner({ story, adapter: { perform: adapter.perform, check: adapter.check, resolve: adapter.resolve, busy: speaking }, speed });
     } catch (err) {
       console.warn('[story]', err && err.message ? err.message : err);
       return false;

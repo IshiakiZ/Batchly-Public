@@ -520,6 +520,85 @@ test('toggle() starts, pauses and resumes', () => {
   assert.equal(runner.state(), 'running');
 });
 
+test('a step is held while the adapter is busy (a spoken line), and the ending waits too', () => {
+  const clock = createFakeClock();
+  const adapter = fakeAdapter(clock);
+  // The line of step a lasts 3.5 s, the line of step b 2.2 s; each step is 1 s long.
+  let until = 0;
+  adapter.busy = () => clock.now() < until;
+  const story = {
+    id: 'tour',
+    steps: [
+      { id: 'a', duration: 1, caption: { title: 'A', text: 'one' } },
+      { id: 'b', duration: 1, caption: { title: 'B', text: 'two' }, do: [{ type: 'play' }] },
+    ],
+  };
+  const runner = createRunner({ story, adapter, clock });
+  const events = record(runner, clock);
+  runner.on('step', (e) => {
+    until = clock.now() + (e.id === 'a' ? 3500 : 2200);
+  });
+  runner.start();
+  clock.advance(1000);
+  assert.equal(runner.state(), 'waiting');
+  assert.deepEqual(events.of('waiting').map((e) => [e.reason, e.at]), [['busy', 1000]]);
+  clock.advance(2000);
+  assert.equal(runner.state(), 'waiting');
+  assert.deepEqual(adapter.types(), []);
+  clock.advance(600);
+  assert.equal(runner.state(), 'running');
+  assert.equal(adapter.log.length, 1);
+  assert.ok(adapter.log[0].t >= 3500 && adapter.log[0].t <= 3600);
+  clock.advance(1000);
+  assert.equal(runner.state(), 'waiting'); // the last line is still being spoken
+  assert.equal(events.of('done').length, 0);
+  clock.advance(1400);
+  assert.equal(runner.state(), 'done');
+  assert.equal(events.of('done').length, 1);
+});
+
+test('a busy hold ends on Space, gives up after its limit, and a timed story never holds', () => {
+  const story = { id: 'tour', steps: [{ id: 'a', duration: 1 }, { id: 'b', duration: 1 }] };
+  {
+    const clock = createFakeClock();
+    const adapter = fakeAdapter(clock);
+    adapter.busy = () => true;
+    const runner = createRunner({ story, adapter, clock });
+    runner.start();
+    clock.advance(1500);
+    assert.equal(runner.state(), 'waiting');
+    assert.equal(runner.index(), 0);
+    runner.toggle(); // Space
+    assert.equal(runner.state(), 'running');
+    assert.equal(runner.index(), 1);
+    clock.advance(1000);
+    assert.equal(runner.state(), 'waiting');
+    clock.advance(21000); // something that never ends cannot hold a tour for ever
+    assert.equal(runner.state(), 'done');
+  }
+  {
+    const clock = createFakeClock();
+    const adapter = fakeAdapter(clock);
+    adapter.busy = () => true;
+    const runner = createRunner({ story: { ...story, maxSeconds: 5 }, adapter, clock });
+    runner.start();
+    clock.advance(2000);
+    assert.equal(runner.state(), 'done');
+  }
+  {
+    const clock = createFakeClock();
+    const adapter = fakeAdapter(clock);
+    adapter.busy = () => true;
+    const runner = createRunner({ story, adapter, clock });
+    runner.start();
+    clock.advance(1500);
+    runner.stop();
+    assert.equal(runner.state(), 'stopped');
+    clock.advance(30000);
+    assert.equal(runner.state(), 'stopped');
+  }
+});
+
 test('a step with key: true waits for the user at its end', () => {
   const clock = createFakeClock();
   const adapter = fakeAdapter(clock);

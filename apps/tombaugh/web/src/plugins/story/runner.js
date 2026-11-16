@@ -32,9 +32,12 @@
 // Adapter (every member optional):
 //   perform(action, ctx) -> false when the action could not be carried out (reported as 'skipped')
 //   check(cond) -> boolean          resolve(name) -> text for a {name} placeholder in a caption
+//   busy() -> true while something of the current step is still going (its line is being spoken):
+//   the step is held, with the story clock frozen, until it ends. Not used with maxSeconds.
 //
 // Events (runner.on(type, fn)): 'preload' { done, total, label }, 'ready', 'start', 'step',
-//   'caption' { caption | null }, 'spotlight' { spotlight | null }, 'action', 'waiting' { reason },
+//   'caption' { caption | null }, 'spotlight' { spotlight | null }, 'action',
+//   'waiting' { reason: 'condition' | 'key' | 'busy' },
 //   'skipped' { reason: 'unsupported' | 'timeout' | 'error', ... }, 'pause', 'resume', 'seek',
 //   'done' { storyMs, wallMs }, 'stop' { reason }.
 
@@ -43,6 +46,7 @@ export const CONDITIONS = Object.freeze(['frames', 'loaded', 'selection']);
 const FRAME_WORDS = ['next', 'prev', 'first', 'last'];
 const EPS_MS = 0.01;
 const DEFAULT_TIMEOUT_MS = 1500;
+const BUSY_LIMIT_MS = 20000; // the longest a step is held for adapter.busy() (a spoken line)
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -655,7 +659,44 @@ export function createRunner({ story, adapter = {}, clock = systemClock(), speed
       emit('waiting', { reason: 'key', index: i });
       return;
     }
+    if (plan.maxSeconds === null && typeof adapter.busy === 'function' && isBusy()) {
+      // Something of this step is still going (its line is being spoken): hold the story clock
+      // until it ends, so no step and no ending ever talks over it or cuts it short.
+      freeze();
+      state = 'waiting';
+      const w = { kind: 'busy', owner: i, poll: null, elapsed: 0, last: clock.now() };
+      wait = w;
+      emit('waiting', { reason: 'busy', index: i });
+      const look = () => {
+        if (wait !== w) return;
+        w.poll = null;
+        const now = clock.now();
+        w.elapsed += now - w.last;
+        w.last = now;
+        if (w.elapsed >= BUSY_LIMIT_MS - EPS_MS || !isBusy()) endBusy(w);
+        else w.poll = clock.setTimeout(look, pollMs);
+      };
+      w.poll = clock.setTimeout(look, pollMs);
+      return;
+    }
     advance(i);
+  }
+
+  function isBusy() {
+    try {
+      return adapter.busy() === true;
+    } catch {
+      return false;
+    }
+  }
+
+  function endBusy(w) {
+    if (wait !== w) return;
+    if (w.poll !== null) clock.clearTimeout(w.poll);
+    wait = null;
+    state = 'running';
+    thaw();
+    advance(w.owner);
   }
 
   function advance(i) {
@@ -770,6 +811,11 @@ export function createRunner({ story, adapter = {}, clock = systemClock(), speed
       thaw();
       emit('resume', { index, key: true });
       advance(i);
+      return true;
+    }
+    if (state === 'waiting' && wait && wait.kind === 'busy') {
+      // Space while the story is held for a spoken line: move on now.
+      endBusy(wait);
       return true;
     }
     if (state === 'waiting' && wait && wait.kind === 'cond') {
