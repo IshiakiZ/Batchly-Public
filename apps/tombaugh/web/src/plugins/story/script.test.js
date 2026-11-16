@@ -287,12 +287,12 @@ test('demo: still exactly 29 seconds when nothing loads and nothing is supported
 
 // ---- the tour and the target stories ----------------------------------------------------------
 
-test('tour: about 90 seconds, explains the controls, waits for the visitor', () => {
+test('tour: about 90 seconds, explains the controls, runs without waiting for a key', () => {
   const tour = getStory('tour');
   const plan = planTimeline(tour);
   assert.ok(plan.total >= 80 && plan.total <= 100, `the tour runs ${plan.total} s`);
   assert.equal(tour.maxSeconds, undefined, 'the tour may wait, so it has no hard limit');
-  assert.ok(plan.steps.filter((s) => s.key).length >= 2, 'at least two "press Space to continue" stops');
+  assert.equal(plan.steps.filter((s) => s.key).length, 0, 'no step waits for a key: a phone has none');
   assert.ok(plan.steps.some((s) => s.waitFor && s.waitFor.hold), 'it holds while frames load');
   for (const step of plan.steps) assert.ok(step.caption && step.caption.text, `${step.id} has a caption`);
   const spots = plan.steps.map((s) => s.spotlight && s.spotlight.element).filter(Boolean);
@@ -301,7 +301,7 @@ test('tour: about 90 seconds, explains the controls, waits for the visitor', () 
   for (const v of ['passes', 'exposures', 'residual', 'lens']) assert.ok(views.includes(v), `the tour shows the ${v} view`);
 });
 
-test('tour: runs to the end with a fake app, stopping where it asks for a key', () => {
+test('tour: runs to the end with a fake app and never asks for a key', () => {
   const clock = createFakeClock();
   const app = slowApp(clock, { movieDelay: 800 });
   const runner = createRunner({ story: getStory('tour'), adapter: app, clock });
@@ -315,7 +315,7 @@ test('tour: runs to the end with a fake app, stopping where it asks for a key', 
     if (runner.state() === 'waiting') runner.toggle();
   }
   assert.equal(runner.state(), 'done');
-  assert.equal(keys, 2);
+  assert.equal(keys, 0);
 });
 
 test('one short story per challenge target', () => {

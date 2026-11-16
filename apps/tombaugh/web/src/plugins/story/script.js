@@ -172,7 +172,6 @@ const tour = {
     {
       id: 'views',
       duration: 6,
-      key: true,
       caption: { title: 'View modes', text: 'These buttons change what each frame shows.' },
       spotlight: { element: 'view-seg', label: 'View modes' },
     },
@@ -210,7 +209,6 @@ const tour = {
     {
       id: 'click',
       duration: 8,
-      key: true,
       caption: { title: 'Measure', text: 'Click any source for its spectrum, light curve and motion.' },
       do: [{ type: 'select', where: 'target' }, { type: 'panel', id: 'spectrum' }],
       spotlight: { element: 'panel-spectrum', label: 'Spectrum' },

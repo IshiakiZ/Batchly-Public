@@ -133,9 +133,9 @@ export function install(app, opts = {}) {
       onShield: () => {
         // A click during a take: never trap the user. Pause and show the way out.
         if (s.endHeld) finish({ restore: true });
-        else if (runner.state() === 'running') runner.pause();
-        else if (runner.state() === 'paused') runner.resume(); // a second press carries on: a phone has no Space key
-        else s.captions.showControls(true);
+        else if (runner.state() === 'paused') runner.resume(); // a press carries on: a phone has no Space key
+        else if (recording && runner.state() === 'running') runner.pause();
+        else s.captions.showControls(true); // a tour keeps running; the press only shows the way out
       },
     });
     s.captions.setStopLabel(story.kind === 'film' ? 'Stop the film' : 'Stop tour');
