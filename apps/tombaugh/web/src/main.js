@@ -280,6 +280,7 @@ async function boot() {
     onPickCandidate: (c, i) => {
       select({ ra: c.ra, dec: c.dec, label: `Candidate ${i + 1}`, candidate: i });
       if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
+      showPicture();
     },
     onClearSource: () => select(null),
   });
@@ -319,8 +320,10 @@ async function boot() {
       if (store.get().view !== view) store.set({ view, t: 0 });
     },
     onPickCandidate: (c, i) => {
+      simple.holdScroll();
       select({ ra: c.ra, dec: c.dec, label: `Candidate ${i + 1}`, candidate: i });
       if (store.get().view !== 'residual' && lib.fitSkyModel) store.set({ view: 'residual', t: 0 });
+      showPicture();
     },
     onClear: () => select(null),
     onSpeed: (value) => {
@@ -1671,6 +1674,19 @@ async function boot() {
   }
 
   // ---- selection: spectrum, light curve, motion -----------------------------------------------
+  /** A pick made in a list: bring the picture into view, where the pick is marked. */
+  function showPicture() {
+    setTimeout(() => {
+      const frame = document.getElementById('viewer-frame');
+      if (!frame || typeof frame.scrollIntoView !== 'function') return;
+      const r = frame.getBoundingClientRect();
+      const height = window.innerHeight || 0;
+      if (!height || (r.top >= 0 && r.bottom <= height)) return;
+      const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      frame.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: r.height > height * 0.9 ? 'start' : 'center' });
+    }, 90);
+  }
+
   function select(sel) {
     if (!sel) {
       session.selection = null;

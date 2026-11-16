@@ -454,7 +454,9 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
   let voice = null;
   let speaking = '';
 
+  let nextLine = ''; // a line asked for while another is still being spoken
   function hush() {
+    nextLine = '';
     speaking = '';
     if (!voice) return;
     try {
@@ -466,6 +468,11 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
   }
 
   function say(id) {
+    // A line is never cut short: the next one waits for it to end.
+    if (voice) {
+      nextLine = id;
+      return true;
+    }
     hush();
     if (doc && doc.documentElement.dataset.voice === 'off') return false;
     const uri = recorded[`say-${id}`];
@@ -480,11 +487,17 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       src.connect(gain);
       gain.connect(master);
       src.onended = () => {
-        if (voice === src) voice = null;
+        const mine = voice === src;
+        if (mine) voice = null;
         try {
           gain.disconnect();
         } catch {
           // already gone
+        }
+        if (mine && nextLine) {
+          const next = nextLine;
+          nextLine = '';
+          say(next);
         }
       };
       src.start();

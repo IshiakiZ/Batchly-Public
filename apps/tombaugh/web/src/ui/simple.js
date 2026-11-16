@@ -485,6 +485,7 @@ export function createSimpleView({
   const pickCard = h('section', { class: 'simple-card' }, h('div', { class: 'simple-card-head' }, pickTitle, btnClear), pickBody, pickMore.el, specMore.el, curveMore.el);
 
   let selection = null;
+  let quietUntil = 0; // until then a new pick does not scroll to its answers (see holdScroll)
   let spectrumPlot = null;
   let curvePlot = null;
   let spectrum = null;
@@ -647,13 +648,17 @@ export function createSimpleView({
      * key names the pick (a new key scrolls the answers into view).
      * measured / gaia are what the motion meter is given; lightCurve is its points.
      */
+    /** The next pick came from the list: the page is going to the picture, not to the answers. */
+    holdScroll(ms = 1500) {
+      quietUntil = Date.now() + ms;
+    },
     setSelection(sel) {
       const fresh = !!sel && (!selection || selection.key !== sel.key);
       selection = sel || null;
       if (!selection) spectrum = null;
       renderPick();
       // A new pick: bring its answers into view (they sit below the list of changes).
-      if (fresh && host && host.offsetParent !== null && typeof pickCard.scrollIntoView === 'function') {
+      if (fresh && Date.now() > quietUntil && host && host.offsetParent !== null && typeof pickCard.scrollIntoView === 'function') {
         try {
           pickCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         } catch {

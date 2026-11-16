@@ -204,8 +204,8 @@ export function install(app, opts = {}) {
       else if (e.caption.card) s.captions.card({ ...e.caption, id: e.id });
       else s.captions.show({ ...e.caption, id: e.id });
       // Spoken too, where the build carries a recorded line for this step (see ui/sound.js).
+      // The line is left to finish when the caption clears; only a pause or the end stops it.
       if (e.caption && e.id) say(`${story.id}-${e.id}`);
-      else hush();
     });
     on('spotlight', (e) => {
       s.spot = e.spotlight || null;
