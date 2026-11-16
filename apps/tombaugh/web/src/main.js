@@ -21,6 +21,7 @@ import { createToasts, copyText } from './ui/toast.js';
 import { createBackdrop } from './ui/backdrop.js';
 import { createSound } from './ui/sound.js';
 import { createExplain } from './ui/explain.js';
+import { createSettings } from './ui/settings.js';
 
 const VERSION = '0.1.0';
 const GAIA_RADIUS_DEG = 0.12; // covers the corners of the widest (10 arcmin) field
@@ -2802,6 +2803,7 @@ async function boot() {
   app.backdrop = () => (backdrop ? backdrop.status() : null);
   app.sound = () => sound.status();
   if (!store.get().embed) createExplain();
+  if (!store.get().embed) createSettings({ sound });
   try {
     window.tombaugh = app;
   } catch {

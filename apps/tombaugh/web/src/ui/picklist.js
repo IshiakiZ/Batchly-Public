@@ -109,7 +109,14 @@ export function attachPickList(input, opts = {}) {
       row.setAttribute('role', 'option');
       row.textContent = item.name;
       if (item.group) row.classList.add('is-featured');
-      row.addEventListener('pointerdown', (ev) => ev.preventDefault()); // keep the caret in the box
+      // Keep the caret in the box. On an iPhone the box still loses focus when a name is
+      // touched, so the press is remembered and the list is not closed under the finger.
+      row.addEventListener('pointerdown', (ev) => {
+        press();
+        ev.preventDefault();
+      });
+      row.addEventListener('touchstart', press, { passive: true });
+      row.addEventListener('mousedown', (ev) => ev.preventDefault());
       row.addEventListener('click', () => choose(item));
       list.append(row);
     });
@@ -134,9 +141,19 @@ export function attachPickList(input, opts = {}) {
     active = -1;
   }
 
+  // A name is being pressed: for a moment, losing focus must not close the list.
+  let pressing = 0;
+  function press() {
+    pressing = Date.now() + 700;
+  }
+
   function choose(item) {
+    pressing = 0;
     input.value = item.name;
     close();
+    // On a touch screen the keyboard would cover what the pick shows, so it is put away.
+    const view = doc.defaultView;
+    if (view && typeof view.matchMedia === 'function' && view.matchMedia('(pointer: coarse)').matches && typeof input.blur === 'function') input.blur();
     if (typeof opts.onPick === 'function') opts.onPick(item);
   }
 
@@ -181,6 +198,7 @@ export function attachPickList(input, opts = {}) {
   };
   const onBlur = (ev) => {
     if (pop.contains(ev.relatedTarget)) return;
+    if (Date.now() < pressing) return;
     close();
   };
   const onOutside = (ev) => {

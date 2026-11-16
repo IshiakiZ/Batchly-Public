@@ -190,6 +190,16 @@ export function cue(name, opts) {
   if (current) current.play(name, opts);
 }
 
+/** say(id): speak the recorded line `say-<id>` if the build has one (the tours). -> true when it will play. */
+export function say(id) {
+  return current ? current.say(id) : false;
+}
+
+/** hush(): stop the line being spoken. */
+export function hush() {
+  if (current) current.hush();
+}
+
 function dataUriBytes(uri, win) {
   const comma = uri.indexOf(',');
   if (comma < 0 || !/;base64/i.test(uri.slice(0, comma))) return null;
@@ -321,7 +331,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
   let lastBed = '';
   let bedPending = false;
 
-  const wantBed = () => !!ctx && !isMuted && !(doc && doc.hidden) && !!doc && doc.documentElement.dataset.screen === 'landing';
+  const wantBed = () => !!ctx && !isMuted && !(doc && doc.hidden) && !!doc && doc.documentElement.dataset.screen === 'landing' && doc.documentElement.dataset.music !== 'off';
 
   /** -> the next bed to play (not the one just heard), or null for the generated notes. */
   function pickBed() {
@@ -439,6 +449,60 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
     }
   }
 
+  // ---- a voice for the tours: recorded clips named say-<story>-<step> ---------------------------
+  const lines = new Map(); // id -> AudioBuffer
+  let voice = null;
+  let speaking = '';
+
+  function hush() {
+    speaking = '';
+    if (!voice) return;
+    try {
+      voice.stop();
+    } catch {
+      // already ended
+    }
+    voice = null;
+  }
+
+  function say(id) {
+    hush();
+    if (doc && doc.documentElement.dataset.voice === 'off') return false;
+    const uri = recorded[`say-${id}`];
+    if (!ctx || isMuted || typeof uri !== 'string' || !uri.startsWith('data:audio/')) return false;
+    speaking = id;
+    const go = (buf) => {
+      if (speaking !== id || isMuted || !ctx || !buf) return;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      gain.gain.value = 1.25;
+      src.connect(gain);
+      gain.connect(master);
+      src.onended = () => {
+        if (voice === src) voice = null;
+        try {
+          gain.disconnect();
+        } catch {
+          // already gone
+        }
+      };
+      src.start();
+      voice = src;
+    };
+    if (lines.has(id)) go(lines.get(id));
+    else {
+      Promise.resolve()
+        .then(() => decode(ctx, dataUriBytes(uri, win)))
+        .then((buf) => {
+          lines.set(id, buf);
+          go(buf);
+        })
+        .catch(() => {});
+    }
+    return true;
+  }
+
   /** play(name, { rate, gain }): play a cue now. Unknown names and muted pages are silent. */
   function play(name, opts = {}) {
     const parts = CUES[name];
@@ -479,6 +543,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       // not remembered, still works for this visit
     }
     for (const b of buttons) paint(b);
+    if (isMuted) hush();
     if (!isMuted) {
       wake();
       play('on');
@@ -582,14 +647,19 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
           if (mode) play('open');
           mode = m;
         }
+        // Settings: music and the spoken tour can each be turned off.
+        syncBed();
+        if (root.dataset.voice === 'off') hush();
       });
-      mo.observe(root, { attributes: true, attributeFilter: ['data-screen', 'data-mode'] });
+      mo.observe(root, { attributes: true, attributeFilter: ['data-screen', 'data-mode', 'data-music', 'data-voice'] });
       offs.push(() => mo.disconnect());
     }
   }
 
   const api = {
     play,
+    say,
+    hush,
     muted: () => isMuted,
     setMuted,
     toggle: () => setMuted(!isMuted),
@@ -604,11 +674,13 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       played,
       last: lastCue,
       music: bed ? bed.kind : 'off',
+      speaking,
       recent: recent.slice(),
     }),
     destroy() {
       for (const off of offs.splice(0)) off();
       buttons.clear();
+      hush();
       if (bed) bed.stop();
       bed = null;
       if (current === api) current = null;

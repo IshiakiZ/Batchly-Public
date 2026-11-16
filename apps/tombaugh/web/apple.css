@@ -423,3 +423,40 @@ html[data-embed="1"] .explain-btn { display: none; }
     z-index: 20; background: rgba(26, 26, 30, 0.92); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
   }
 }
+
+/* Layout polish, last pass */
+@media (max-width: 719px) {
+  /* Sky / Share joined control: a full 44px tap row instead of 36px. */
+  html[data-mode] .top-group .btn, html[data-backdrop="on"][data-mode] .top-group .btn { height: 38px; }
+  html[data-mode] .top-group .btn + .btn::before { top: 11px; bottom: 11px; }
+  /* Simple tools: an even 3 + 2 grid of 44px buttons, so "Save" no longer drops to a row of its own. */
+  html[data-mode="simple"] .simpletools { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group { grid-column: span 4; display: flex; gap: 8px; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group > .simple-tool { flex: 1 1 0; min-width: 0; }
+  html[data-mode="simple"] .simpletools > .simple-tool { grid-column: span 2; min-width: 0; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group + .simple-tool ~ .simple-tool { grid-column: span 3; }
+  html[data-mode="simple"] .simpletools .simple-tool { height: 44px; padding: 0 8px; font-size: 14px; justify-content: center; text-align: center; white-space: nowrap; }
+}
+@media (max-width: 379px) {
+  /* Narrow phones: keep Slow / Normal / Fast on the transport row instead of wrapping under it. */
+  html[data-mode="simple"] .player-row > .simple-tool-seg .seg-btn { padding: 0 7px; }
+}
+
+/* Settings: a small window of switches, and its button beside the Sound button. */
+html[data-help="off"] .explain-btn, html[data-help="off"] .explain-pop { display: none !important; }
+.settings-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.settings-toggle svg { width: 17px; height: 17px; display: block; }
+.skyhome-mode.settings-toggle { width: 36px; padding: 0; }
+.settings-dialog { width: min(360px, calc(100vw - 32px)); }
+.settings-body { gap: 4px; padding: 10px 20px 18px; }
+.settings-body .switch { width: 100%; justify-content: space-between; min-height: 48px; }
+/* The bar keeps one button: Settings holds the Sound switch, so the bar is no wider than before. */
+.top-actions > .sound-toggle { display: none; }
+@media (max-width: 719px) {
+  html[data-mode] .top-actions > .sound-toggle { display: none; }
+  html[data-mode] .top-actions > .settings-toggle { grid-column: 2; grid-row: 1; width: 34px; height: 34px; }
+}
+/* The buttons on the right take the room they need, so they never sit over the search box. */
+@media (min-width: 720px) {
+  html[data-mode] .topbar { grid-template-columns: minmax(0, 1fr) minmax(180px, 520px) auto; }
+}

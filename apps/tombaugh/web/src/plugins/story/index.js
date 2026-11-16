@@ -22,6 +22,7 @@ import { createCaptions, BAND_UNITS } from './captions.js';
 import { createSpotlight } from './spotlight.js';
 import { createAdapter } from './adapter.js';
 import { injectStyles } from './story.css.js';
+import { say, hush } from '../../ui/sound.js';
 
 export const meta = {
   id: 'story',
@@ -133,6 +134,7 @@ export function install(app, opts = {}) {
         // A click during a take: never trap the user. Pause and show the way out.
         if (s.endHeld) finish({ restore: true });
         else if (runner.state() === 'running') runner.pause();
+        else if (runner.state() === 'paused') runner.resume(); // a second press carries on: a phone has no Space key
         else s.captions.showControls(true);
       },
     });
@@ -153,6 +155,16 @@ export function install(app, opts = {}) {
     if (tool) tool.setActive(true);
 
     const tag = () => s.captions.setTag(adapter.isSynthetic() ? 'Synthetic data' : null);
+
+    const coarse = () => !!(win && typeof win.matchMedia === 'function' && win.matchMedia('(pointer: coarse)').matches);
+    const showPicture = () => {
+      const frame = doc && typeof doc.getElementById === 'function' ? doc.getElementById('viewer-frame') : null;
+      if (!frame || typeof frame.getBoundingClientRect !== 'function' || typeof frame.scrollIntoView !== 'function') return;
+      const r = frame.getBoundingClientRect();
+      const height = (win && win.innerHeight) || 0;
+      if (!height || (r.top >= 0 && r.top <= height * 0.3)) return;
+      frame.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    };
 
     const respot = () => {
       const spec = s.spot;
@@ -191,10 +203,15 @@ export function install(app, opts = {}) {
       if (!e.caption) s.captions.clear();
       else if (e.caption.card) s.captions.card({ ...e.caption, id: e.id });
       else s.captions.show({ ...e.caption, id: e.id });
+      // Spoken too, where the build carries a recorded line for this step (see ui/sound.js).
+      if (e.caption && e.id) say(`${story.id}-${e.id}`);
+      else hush();
     });
     on('spotlight', (e) => {
       s.spot = e.spotlight || null;
       respot();
+      // A step that points at nothing is about the picture: bring the picture into view.
+      if (!s.spot && !recording) showPicture();
     });
     on('waiting', (e) => {
       if (e.reason === 'key') s.captions.hint('Press Space to continue');
@@ -204,7 +221,8 @@ export function install(app, opts = {}) {
       const m = typeof app.movie === 'function' ? app.movie() : null;
       s.wasPlaying = !!(m && m.playing);
       if (typeof app.pause === 'function') app.pause();
-      s.captions.hint('Paused. Press Space to go on');
+      hush();
+      s.captions.hint(coarse() ? 'Paused. Tap to go on' : 'Paused. Click or press Space to go on');
       s.captions.setRunning(false);
       s.captions.showControls(true);
     });
@@ -258,6 +276,7 @@ export function install(app, opts = {}) {
     const s = session;
     if (!s) return;
     session = null;
+    hush();
     if (s.raf && win && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(s.raf);
     for (const off of s.offs) {
       try {

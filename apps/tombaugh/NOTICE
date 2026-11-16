@@ -49,6 +49,12 @@ of this project and are not redistributed here: they are built into the
 live page from a private folder (tools/build.mjs --sounds). They are
 recordings by Ocular Sounds, not AI-generated audio.
 
+The spoken tours on the live page (the Guided tour and the five
+target tours) are AI-generated speech (ElevenLabs
+text to speech, voice "Grant Gravitas") reading the tour's captions. It is
+labelled here and in docs/AI-USE.md as AI-generated and is not in this
+repository.
+
 
 THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
 
