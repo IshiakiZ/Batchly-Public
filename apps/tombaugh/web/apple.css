@@ -460,3 +460,7 @@ html[data-help="off"] .explain-btn, html[data-help="off"] .explain-pop { display
 @media (min-width: 720px) {
   html[data-mode] .topbar { grid-template-columns: minmax(0, 1fr) minmax(180px, 520px) auto; }
 }
+/* On stacked layouts the "?" sits inside its part's right edge, where nothing clips it. */
+@media (max-width: 1099px) {
+  .explain-btn:not(.is-inside):not(.explain-btn-sky) { right: 6px; }
+}
