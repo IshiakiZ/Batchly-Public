@@ -1388,8 +1388,9 @@ export async function build(opts = {}) {
       const type = types[path.extname(name).toLowerCase()];
       if (!type) continue;
       const buf = fs.readFileSync(path.join(dir, name));
-      if (buf.length > 262144) throw new BuildError(`--sounds: ${name} is larger than 256 kB; interface sounds should be short clips`);
       const key = path.basename(name, path.extname(name));
+      // `music`, `music2`... are the quiet beds under the sky page: longer clips. Everything else is a short cue.
+      if (buf.length > (/^music\d*$/.test(key) ? 524288 : 262144)) throw new BuildError(`--sounds: ${name} is too large (256 kB a cue, 512 kB for music)`);
       map[key] = `data:${type};base64,${buf.toString('base64')}`;
       soundNames.push(key);
     }

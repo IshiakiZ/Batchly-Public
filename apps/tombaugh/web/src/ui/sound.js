@@ -285,6 +285,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
         loadClips();
       }
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      syncBed();
     } catch {
       ctx = null;
     }
@@ -310,6 +311,132 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       }
     };
     src.start(when + (part.at || 0));
+  }
+
+  // ---- a quiet bed of music under the whole-sky page ------------------------------------------
+  let bed = null; // { kind, stop() } while it plays
+  // Recorded beds are the clips named music, music2, music3...: a different one each visit.
+  const bedNames = Object.keys(recorded).filter((k) => /^music\d*$/.test(k) && typeof recorded[k] === 'string' && recorded[k].startsWith('data:audio/'));
+  const bedBuffers = new Map(); // name -> AudioBuffer, decoded when first wanted
+  let lastBed = '';
+  let bedPending = false;
+
+  const wantBed = () => !!ctx && !isMuted && !(doc && doc.hidden) && !!doc && doc.documentElement.dataset.screen === 'landing';
+
+  /** -> the next bed to play (not the one just heard), or null for the generated notes. */
+  function pickBed() {
+    if (!bedNames.length) return Promise.resolve(null);
+    const pool = bedNames.length > 1 ? bedNames.filter((n) => n !== lastBed) : bedNames;
+    const name = pool[Math.floor(Math.random() * pool.length)];
+    lastBed = name;
+    if (bedBuffers.has(name)) return Promise.resolve(bedBuffers.get(name));
+    return Promise.resolve()
+      .then(() => decode(ctx, dataUriBytes(recorded[name], win)))
+      .then((buf) => {
+        bedBuffers.set(name, buf);
+        return buf;
+      })
+      .catch(() => null);
+  }
+
+  function startBed(bedBuffer) {
+    // Needs real Web Audio (oscillators, ramps); anything less stays silent.
+    if (bed || !ctx || typeof ctx.createOscillator !== 'function') return;
+    const c = ctx;
+    const out = c.createGain();
+    out.gain.setValueAtTime(0, c.currentTime);
+    out.connect(master);
+    const nodes = [];
+    let timer = 0;
+    let stopped = false;
+    let level = 0.2;
+    if (bedBuffer) {
+      // The clip fades in and out over three seconds: each pass starts under the end of the last.
+      const period = Math.max(4, bedBuffer.duration - 3);
+      const pass = (when) => {
+        if (stopped) return;
+        const src = c.createBufferSource();
+        src.buffer = bedBuffer;
+        src.connect(out);
+        src.start(when);
+        nodes.push(src);
+        if (nodes.length > 3) nodes.shift();
+        timer = win.setTimeout(() => pass(when + period), Math.max(0, (when + period - c.currentTime - 1.5) * 1000));
+      };
+      pass(c.currentTime + 0.05);
+    } else {
+      // No recording: five soft notes of an open chord, each swelling at its own slow pace.
+      level = 0.16;
+      const tone = c.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = 900;
+      tone.connect(out);
+      [110, 164.81, 220, 277.18, 329.63].forEach((hz, i) => {
+        const osc = c.createOscillator();
+        osc.type = i % 2 ? 'triangle' : 'sine';
+        osc.frequency.value = hz;
+        osc.detune.value = (i - 2) * 4;
+        const voice = c.createGain();
+        voice.gain.value = 0.05;
+        const swell = c.createOscillator();
+        swell.frequency.value = 0.03 + i * 0.011;
+        const depth = c.createGain();
+        depth.gain.value = 0.04;
+        swell.connect(depth);
+        depth.connect(voice.gain);
+        osc.connect(voice);
+        voice.connect(tone);
+        osc.start();
+        swell.start();
+        nodes.push(osc, swell);
+      });
+    }
+    out.gain.linearRampToValueAtTime(level, c.currentTime + 3);
+    bed = {
+      kind: bedBuffer ? 'recorded' : 'generated',
+      stop() {
+        stopped = true;
+        win.clearTimeout(timer);
+        try {
+          const t = c.currentTime;
+          out.gain.cancelScheduledValues(t);
+          out.gain.setValueAtTime(out.gain.value, t);
+          out.gain.linearRampToValueAtTime(0, t + 1.2);
+        } catch {
+          // the context has closed
+        }
+        win.setTimeout(() => {
+          for (const n of nodes) {
+            try {
+              n.stop();
+            } catch {
+              // never started, or already stopped
+            }
+          }
+          try {
+            out.disconnect();
+          } catch {
+            // already gone
+          }
+        }, 1400);
+      },
+    };
+  }
+
+  /** Starts or fades the bed to match where the visitor is, and whether sound is on. */
+  function syncBed() {
+    if (!ctx) return;
+    if (wantBed()) {
+      if (bed || bedPending) return;
+      bedPending = true;
+      pickBed().then((buf) => {
+        bedPending = false;
+        if (wantBed()) startBed(buf);
+      });
+    } else if (bed) {
+      bed.stop();
+      bed = null;
+    }
   }
 
   /** play(name, { rate, gain }): play a cue now. Unknown names and muted pages are silent. */
@@ -356,6 +483,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       wake();
       play('on');
     }
+    syncBed();
   }
 
   /** button(className) -> a Sound on/off button kept in step with the state. */
@@ -435,6 +563,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       if (matches(ev.target, 'details') && now() - summaryAt < 400) play(ev.target.open ? 'open' : 'close');
     }, true);
 
+    on(doc, 'visibilitychange', syncBed);
     // The page moving between the sky and the photos, and between Simple and Advanced.
     const root = doc.documentElement;
     let screen = root.dataset.screen;
@@ -447,6 +576,7 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
           if (s === 'console' && screen === 'landing') play('go');
           else if (s === 'landing' && screen === 'console') play('fly');
           screen = s;
+          syncBed();
         }
         if (m !== mode) {
           if (mode) play('open');
@@ -473,11 +603,14 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
       recorded: licensed,
       played,
       last: lastCue,
+      music: bed ? bed.kind : 'off',
       recent: recent.slice(),
     }),
     destroy() {
       for (const off of offs.splice(0)) off();
       buttons.clear();
+      if (bed) bed.stop();
+      bed = null;
       if (current === api) current = null;
       if (ctx && ctx.close) ctx.close().catch(() => {});
       ctx = null;

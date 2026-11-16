@@ -839,6 +839,20 @@ export function install(app) {
     }
   }
 
+  /** After "Open in the viewer": bring the picture into sight when it is scrolled away (phones). */
+  function showViewer(doc) {
+    const win = doc.defaultView;
+    if (!win) return;
+    win.setTimeout(() => {
+      const frame = doc.getElementById('viewer-frame') || doc.getElementById('viewer');
+      if (!frame || typeof frame.scrollIntoView !== 'function') return;
+      const r = frame.getBoundingClientRect();
+      if (r.top >= 0 && r.bottom <= win.innerHeight) return;
+      const calm = typeof win.matchMedia === 'function' && win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      frame.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+    }, 80);
+  }
+
   // ---- panel ---------------------------------------------------------------------------------
 
   function renderPanel(container) {
@@ -995,7 +1009,10 @@ export function install(app) {
     const followBtn = el('button', { class: 'tbm-btn tbm-btn-small', type: 'button', 'aria-pressed': 'true', title: 'Each exposure centred on the body before stacking', onclick: setCompare(false) }, 'Follow body');
     const fixedBtn = el('button', { class: 'tbm-btn tbm-btn-small', type: 'button', 'aria-pressed': 'false', title: 'The same exposures stacked on a fixed patch of sky, for comparison', onclick: setCompare(true) }, 'Fixed on stars');
     const stackCap = el('p', { class: 'tbm-caption', 'aria-live': 'polite' });
-    const viewerBtn = el('button', { class: 'tbm-btn tbm-btn-small', type: 'button', hidden: true, title: 'Play these stacks as a movie in the main viewer', onclick: safe(() => openInViewer()) }, 'Open in the viewer');
+    const viewerBtn = el('button', { class: 'tbm-btn tbm-btn-small', type: 'button', hidden: true, title: 'Play these stacks as a movie in the main viewer', onclick: safe(() => {
+      openInViewer();
+      showViewer(doc);
+    }) }, 'Open in the viewer');
     const verdictList = el('ul', { class: 'tbm-verdict' });
     const specSvg = s(doc, 'svg', { class: 'tbm-spectrum', role: 'img' });
     const specCap = el('p', { class: 'tbm-figcap' });

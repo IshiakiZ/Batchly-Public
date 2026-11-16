@@ -119,6 +119,31 @@ export function createSpotlight({ host, app = null, doc = globalThis.document, w
     removeOverlay = null;
   }
 
+  /** Bring what the ring points at into sight: unfold its panel and scroll it to the middle of the screen. */
+  function reveal() {
+    try {
+      let target = null;
+      if (spec.sky) {
+        const viewer = app && app.viewer;
+        target = viewer && (viewer.element || viewer.canvas);
+      } else {
+        target = findElement(doc, spec.element);
+      }
+      if (!target || typeof target.getBoundingClientRect !== 'function') return;
+      const folded = typeof target.closest === 'function' ? target.closest('.panel.is-folded') : null;
+      const title = folded && typeof folded.querySelector === 'function' ? folded.querySelector('.panel-title') : null;
+      if (title && typeof title.click === 'function') title.click();
+      const height = (view && view.innerHeight) || 0;
+      if (!height || typeof target.scrollIntoView !== 'function') return;
+      const r = target.getBoundingClientRect();
+      const tall = r.height > height * 0.9;
+      if (tall ? r.top >= 0 && r.top <= height * 0.25 : r.top >= 0 && r.bottom <= height) return;
+      target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: tall ? 'start' : 'center' });
+    } catch {
+      // pointing still works without the scroll
+    }
+  }
+
   /** Where the current target is on screen: { rect, round } or null when it cannot be found. */
   function locate() {
     if (!spec) return null;
@@ -215,6 +240,7 @@ export function createSpotlight({ host, app = null, doc = globalThis.document, w
     dropOverlay();
     spec = next;
     label.textContent = next.label || '';
+    reveal();
     const hit = locate();
     if (!hit) {
       // No way to place the ring: let the viewer mark a sky position itself.

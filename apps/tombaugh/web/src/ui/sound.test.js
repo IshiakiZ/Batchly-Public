@@ -218,3 +218,13 @@ test('typing, hovering and zooming have their own quiet cues', async () => {
   assert.equal(sound.status().last, 'zoom');
   sound.destroy();
 });
+
+test('the music bed stays off without real Web Audio, and status says so', async () => {
+  const b = fakeBrowser();
+  const sound = createSound({ win: b.win, doc: b.doc, clips: { music: 'data:audio/mpeg;base64,AAAA' } });
+  b.fire('pointerdown');
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(sound.status().music, 'off', 'the stand-in browser has no oscillators or ramps');
+  assert.equal(sound.status().recorded, 0, 'the bed is not counted as a cue');
+  sound.destroy();
+});

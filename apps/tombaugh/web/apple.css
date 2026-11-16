@@ -373,3 +373,53 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
 
 /* Touch screens: the canvas draws the ground only (see main.js), so the cards are filled here. */
 html[data-backdrop="ground"] { --fill-card: rgba(30, 30, 33, 0.6); }
+
+/* ---- "?" notes on the parts of the page ----------------------------------------------------- */
+.explain-host { position: relative; }
+.explain-btn {
+  position: absolute; top: -8px; right: -8px; z-index: 6; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  font: 600 12px/20px var(--font-text); text-align: center; color: rgba(247, 242, 231, 0.82); background: rgba(58, 58, 62, 0.94);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.45); cursor: pointer; opacity: 0.7;
+  transition: opacity 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.explain-btn:hover, .explain-btn:focus-visible, .explain-btn[aria-expanded="true"] { opacity: 1; background: rgba(96, 96, 102, 0.96); }
+.explain-btn:active { transform: scale(0.92); }
+.explain-btn.is-inside { top: 12px; right: 12px; }
+.explain-btn.explain-btn-sky { position: static; width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 15px; line-height: 36px; opacity: 1; background: none; box-shadow: none; }
+html:not([data-backdrop="on"]) .explain-btn.explain-btn-sky, .explain-btn.explain-btn-sky:hover { background: var(--fill); box-shadow: var(--rim-low), var(--drop-low); }
+.explain-pop {
+  position: fixed; z-index: 80; width: max-content; max-width: min(290px, calc(100vw - 16px)); padding: 13px 16px 14px; border-radius: 16px;
+  background: rgba(32, 32, 36, 0.94); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+  box-shadow: var(--rim), 0 12px 32px rgba(0, 0, 0, 0.5); font-size: 13px; line-height: 1.45; color: rgba(247, 242, 231, 0.86);
+  animation: explain-in 160ms ease-out;
+}
+.explain-pop b { display: block; margin-bottom: 3px; font-size: 14px; font-weight: 600; color: #f7f2e7; }
+@keyframes explain-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .explain-pop { animation: none; } }
+html[data-embed="1"] .explain-btn { display: none; }
+
+/* ---- Stacked panels fold (phones and tablets): each title is a drop-down ---------------------- */
+@media (max-width: 1099px) {
+  .panel { padding-top: 6px; padding-bottom: 6px; }
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  }
+  .panel-title::after {
+    content: ""; flex: 0 0 auto; width: 8px; height: 8px; margin: -4px 6px 0 12px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    opacity: 0.55; transform: rotate(45deg); transition: transform 220ms ease;
+  }
+  .panel.is-folded .panel-title::after { transform: rotate(-45deg); margin-top: 0; }
+  .panel-title:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.5); outline-offset: 2px; border-radius: 8px; }
+  .panel.is-folded > :not(.panel-title) { display: none; }
+  .panel:not(.is-folded) { padding-bottom: 20px; }
+  .panel:not(.is-folded) .panel-title { margin-bottom: 6px; }
+}
+
+/* ---- A phone's sky page stays bare: one chip, a solid list, no extra buttons ------------------ */
+@media (max-width: 719px) {
+  .skyhome-starts .skyhome-chip:not(.skyhome-solar), .skyhome-starts-label, .explain-btn.explain-btn-sky { display: none; }
+  .skyhome-menu, html .skyhome.has-glass .skyhome-menu {
+    z-index: 20; background: rgba(26, 26, 30, 0.92); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+  }
+}

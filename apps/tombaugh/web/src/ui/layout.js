@@ -245,6 +245,45 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
 
   const tabStrip = makeScrollStrip(els.tabs, { label: 'panels' });
 
+  // Where the panels are stacked, each title is a drop-down, so a phone does not have to scroll
+  // past all of them. Spectrum starts open: it is where a click on the picture answers.
+  const openPanels = new Set(['spectrum']);
+  function paintFolds() {
+    for (const panel of els.panels.querySelectorAll('.panel')) {
+      const open = openPanels.has(panel.id.replace(/^panel-/, ''));
+      panel.classList.toggle('is-folded', !open);
+      const title = panel.querySelector('.panel-title');
+      if (!title) continue;
+      title.setAttribute('role', 'button');
+      title.setAttribute('aria-expanded', String(open));
+      title.tabIndex = stacked.matches ? 0 : -1;
+    }
+  }
+  function setFold(id, open) {
+    if (open === openPanels.has(id)) return;
+    if (open) openPanels.add(id);
+    else openPanels.delete(id);
+    paintFolds();
+    if (!open) return;
+    const entry = tabs.find((t) => t.id === id);
+    if (entry && entry.onShow) entry.onShow();
+    // Charts drawn while their panel was folded had no width to draw into.
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') window.dispatchEvent(new Event('resize'));
+  }
+  function foldFromTitle(target) {
+    const title = target && target.closest ? target.closest('.panel-title') : null;
+    if (!title || !stacked.matches || !title.parentElement) return false;
+    const id = title.parentElement.id.replace(/^panel-/, '');
+    setFold(id, !openPanels.has(id));
+    return true;
+  }
+  els.panels.addEventListener('click', (e) => foldFromTitle(e.target));
+  els.panels.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('panel-title') && foldFromTitle(e.target)) e.preventDefault();
+  });
+  if (stacked.addEventListener) stacked.addEventListener('change', paintFolds);
+  paintFolds();
+
   function selectTab(id, { focus = false, reveal = false } = {}) {
     if (!tabs.some((t) => t.id === id)) return;
     currentTab = id;
@@ -261,6 +300,7 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       if (on && t.onShow) t.onShow();
       // Where the panels are stacked (narrow screens) "open this panel" means "scroll to it".
       if (on && reveal && stacked.matches) {
+        setFold(t.id, true);
         try {
           panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
         } catch {
@@ -310,6 +350,7 @@ export function createLayout({ onSearch = () => {}, onHome = () => {} } = {}) {
       els.tabs.prepend(tab);
       els.panels.prepend(panel);
     }
+    paintFolds();
     const maybeShowStacked = () => {
       if (stacked.matches && !tab.hidden && entry.onShow) entry.onShow();
     };
