@@ -55,6 +55,12 @@ text to speech, voice "Grant Gravitas") reading the tour's captions. It is
 labelled here and in docs/AI-USE.md as AI-generated and is not in this
 repository.
 
+The narrated demo video on the live site (demo.mp4, made on 2026-11-16)
+carries seven spoken lines in the same AI-generated voice (ElevenLabs).
+Its last card says so on screen. The narrated file and its clips are not
+in this repository; the video kept here (docs/demo/tombaugh-demo.mp4) is
+silent.
+
 
 THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
 

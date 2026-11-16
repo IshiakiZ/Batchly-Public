@@ -12,11 +12,16 @@ on real SPHEREx data (15 November 2026). Nothing in them is simulated.
 | File | What it is |
 |---|---|
 | [demo/tombaugh-demo.mp4](demo/tombaugh-demo.mp4) | The video: 29.6 seconds, 1920 x 1080, no sound. Pluto, Barnard's Star blink and residual, the motion measured against Gaia, the validation result, the link |
+| The narrated cut (on the live site as `demo.mp4`, not in this repository) | 29.5 seconds, 1920 x 1080, narrated by an AI-generated voice (ElevenLabs), which its last card states. The start page, Barnard's Star in Photos and What changed, the motion measured against Gaia, Pluto, the link. Captures of 16 November 2026 in [demo/frames-narrated/](demo/frames-narrated/) |
 | [demo/tombaugh-slides.pdf](demo/tombaugh-slides.pdf) | Seven slides as a PDF |
 | [demo/frames/](demo/frames/) | The captures both are built from |
 
 Rebuild them with `node tools/demo/make-video.mjs` and `node tools/demo/make-slides.mjs`
 (Playwright and ffmpeg). `--live <address>` changes the address on the video's last card.
+
+The narrated cut is `node tools/demo/make-video.mjs --page video-narrated.html --voice <folder of clips> --out <file>`; the clips are kept outside the repository.
+
+The seven spoken lines of the narrated cut: "Clyde Tombaugh found Pluto by blinking two photographs." "This does it with NASA's SPHEREx survey. Pick any star." "Barnard's Star, three visits, six months apart. It steps north." "It subtracts the sky it predicts, so only change is left." "Tombaugh measures the motion, and checks it against Gaia." "It even follows Pluto." "Any spot on the sky, in your browser."
 
 The video is a composite: full-window captures of the tool, with the image area replaced frame by
 frame by captures of the same view as the movie was stepped. The small frame counter under the

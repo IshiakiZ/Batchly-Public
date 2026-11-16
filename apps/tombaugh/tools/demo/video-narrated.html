@@ -1,0 +1,201 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  The narrated 30-second demo, as one page whose picture is a pure function of time:
+  window.renderAt(t). tools/demo/make-video.mjs --page video-narrated.html steps t, photographs
+  each frame and hands the frames to ffmpeg; with --voice <folder> it lays the spoken lines
+  (window.VOICE) under the picture. Every image shown is a capture of the live tool on real
+  SPHEREx data (docs/demo/frames-narrated/). The spoken lines are an AI-generated voice; the
+  clips are not part of this repository.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tombaugh demo, narrated</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --dim: #A8A59A; --line: rgba(247,242,231,0.18); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); }
+  body { width: 1920px; height: 1080px; overflow: hidden; position: relative; color: var(--paper);
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
+  .mono { font-family: 'JetBrains Mono', 'DejaVu Sans Mono', monospace; }
+  #top { position: absolute; left: 80px; right: 80px; top: 0; height: 84px; display: flex; align-items: center; justify-content: space-between; }
+  #top .mark { font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 900; font-size: 34px; letter-spacing: 0.2em; }
+  #top .sub { margin-left: 22px; font-size: 20px; color: var(--dim); }
+  #top .real { font-size: 17px; letter-spacing: 0.14em; color: var(--paper); display: flex; align-items: center; gap: 12px; }
+  #top .dot { width: 11px; height: 11px; background: var(--signal); display: inline-block; }
+  #stage { position: absolute; left: 80px; top: 84px; width: 1760px; height: 784px; overflow: hidden; border: 1px solid var(--line); background: #111110; }
+  #box { position: absolute; left: 0; top: 0; width: 1552px; height: 691px; transform-origin: 0 0; }
+  #box img { position: absolute; display: block; }
+  #base, #base2 { left: 0; top: 0; width: 1552px; height: 691px; }
+  #crop { left: 240px; top: 150px; width: 376px; height: 376px; }
+  #hl { position: absolute; border: 2px solid var(--signal); box-shadow: 0 0 0 2000px rgba(23,23,21,0.0); }
+  #cap { position: absolute; left: 80px; right: 80px; top: 900px; height: 130px; padding-left: 26px; border-left: 5px solid var(--signal); display: flex; flex-direction: column; justify-content: center; }
+  #cap .a { font-size: 43px; line-height: 54px; font-weight: 600; letter-spacing: -0.005em; }
+  #cap .b { font-size: 25px; line-height: 36px; color: var(--dim); margin-top: 4px; }
+  #bar { position: absolute; left: 0; bottom: 0; height: 6px; background: var(--signal); }
+  #card { position: absolute; inset: 0; background: var(--ink); display: flex; flex-direction: column; justify-content: center; padding: 0 150px; }
+  #card .bg { position: absolute; inset: 0; background-size: cover; background-position: center top; opacity: 0.09; }
+  /* Hides the frame counter under the image while captured frames are swapped in above it. */
+  #mask { position: absolute; left: 238px; top: 637px; width: 380px; height: 22px; background: #171715; }
+  #card .eyebrow { font-size: 21px; letter-spacing: 0.2em; color: var(--dim); position: relative; }
+  #card h1 { margin: 26px 0 0; font-family: 'Inter Display', 'Inter', sans-serif; font-weight: 900; font-size: 158px; line-height: 1; letter-spacing: 0.14em; position: relative; }
+  #card .l1 { margin-top: 44px; font-size: 50px; line-height: 64px; font-weight: 600; max-width: 1500px; position: relative; }
+  #card .l2 { margin-top: 18px; font-size: 50px; line-height: 64px; font-weight: 600; max-width: 1560px; position: relative; }
+  #card .l2 b, #card .l1 b { color: var(--signal); font-weight: 600; }
+  #card .url { margin-top: 46px; font-size: 44px; position: relative; }
+  #card .url span { color: var(--dim); font-size: 30px; margin-left: 26px; }
+  #card .foot { position: absolute; left: 150px; right: 150px; bottom: 70px; font-size: 21px; line-height: 32px; color: var(--dim); display: flex; align-items: center; gap: 30px; }
+  #card .foot img { width: 92px; height: 92px; display: block; }
+</style>
+</head>
+<body>
+  <div id="top">
+    <div><span class="mark">TOMBAUGH</span><span class="sub">a blink comparator for the 102-color sky</span></div>
+    <div class="real mono"><span class="dot"></span>REAL SPHEREx DATA &middot; SCREEN CAPTURES OF THE LIVE TOOL</div>
+  </div>
+  <div id="stage"><div id="box"><img id="base" alt=""><img id="base2" alt=""><div id="hl"></div></div></div>
+  <div id="cap"><div class="a"></div><div class="b"></div></div>
+  <div id="card"><div class="bg"></div><div class="eyebrow mono"></div><h1></h1><div class="l1"></div><div class="l2"></div><div class="url mono"></div>
+    <div class="foot"><img alt="" id="logo"><div id="foottext"></div></div></div>
+  <div id="bar"></div>
+<script>
+// Tombaugh - SPHEREx blink comparator. Apache-2.0.
+// AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+const Q = new URLSearchParams(location.search);
+const F = Q.get('frames') || '../../docs/demo/frames-narrated/';
+const SHARED = '../../docs/demo/frames/';
+const LIVE = Q.get('live') || 'batch-ly.com/tombaugh';
+const TOTAL = 29.5;
+const INTRO_END = 4.75;
+const OUTRO_START = 26.05;
+const W = 1552, H = 691, SW = 1760, SH = 784;
+const K = SW / W;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+const ramp = (t, a, b) => ease((t - a) / (b - a));
+
+// The spoken lines: clip name (without .mp3) and the second it starts at. make-video.mjs reads this.
+window.VOICE = [
+  { clip: 'demo-1', at: 0.3 }, //  Clyde Tombaugh found Pluto by blinking two photographs.
+  { clip: 'demo-2', at: 4.9 }, //  This does it with NASA's SPHEREx survey. Pick any star.
+  { clip: 'demo-3', at: 9.75 }, // Barnard's Star, three visits, six months apart. It steps north.
+  { clip: 'demo-5', at: 15.4 }, // It subtracts the sky it predicts, so only change is left.
+  { clip: 'demo-4', at: 20.3 }, // Tombaugh measures the motion, and checks it against Gaia.
+  { clip: 'demo-6', at: 24.1 }, // It even follows Pluto.
+  { clip: 'demo-7', at: 26.2 }, // Any spot on the sky, in your browser.
+];
+window.STILLS = [1.5, 6.0, 8.6, 11.0, 13.4, 16.5, 18.6, 21.5, 23.4, 25.0, 28.5];
+
+// Each scene: start, end, frames shown in turn (seconds each; `once` = no loop, cross-faded),
+// caption, sub-caption, focus(u) -> { rect: [x0,y0,x1,y1] | null, zoom, hl: [x0,y0,x1,y1] | null }.
+const SIMPLE = [315, 50, 1226, 600];
+const SCENES = [
+  { a: INTRO_END, b: 9.6, frames: ['sky-home.jpg', 'sky-pick.jpg'], per: 2.5, once: true,
+    cap: 'This does it with NASA’s SPHEREx survey.', sub: 'The start page is the whole sky. Pick any star.',
+    focus: (u) => ({ rect: null, zoom: 1, hl: u > 0.62 ? [644, 576, 922, 630] : null }) },
+  { a: 9.6, b: 15.25, frames: ['photos-1.jpg', 'photos-2.jpg', 'photos-3.jpg'], per: 0.5,
+    cap: 'Barnard’s Star: three visits, six months apart.', sub: 'Blink them, and it steps north.',
+    focus: (u) => ({ rect: SIMPLE, zoom: 1 + 0.35 * ramp(u, 0.0, 0.35), hl: null }) },
+  { a: 15.25, b: 20.15, frames: ['changed-1.jpg', 'changed-2.jpg', 'changed-3.jpg'], per: 0.6,
+    cap: 'It subtracts the sky it predicts, so only change is left.', sub: 'A mover leaves a bright and dark pair. The answers come in plain words.',
+    focus: (u) => ({ rect: SIMPLE, zoom: 1.35, hl: u > 0.3 ? [799, 344, 1218, 452] : null }) },
+  { a: 20.15, b: 23.95, frames: ['motion.jpg'], per: 99,
+    cap: 'It measures the motion: 12 ± 3 arcsec a year.', sub: 'Gaia says 10.4. Agreement within 0.6 sigma.',
+    focus: (u) => ({ rect: [644, 150, 1400, 440], zoom: 1.2 + 0.4 * ramp(u, 0.0, 0.45), hl: u > 0.4 ? [644, 388, 1012, 414] : null }) },
+  { a: 23.95, b: OUTRO_START, frames: ['pluto-1.jpg', 'pluto-2.jpg', 'pluto-3.jpg'], per: 0.5,
+    cap: 'It even follows Pluto.', sub: 'The frame rides along with Pluto while the stars change behind it.',
+    focus: () => ({ rect: null, zoom: 1, hl: null }) },
+];
+
+function preload() {
+  const names = new Set([`${SHARED}landing-ui.jpg`, `${SHARED}missing-mass.png`]);
+  for (const s of SCENES) for (const f of s.frames) names.add(F + f);
+  return Promise.all([...names].map((n) => new Promise((res) => { const im = new Image(); im.onload = im.onerror = () => res(); im.src = n; })));
+}
+
+function setBox(focus) {
+  const z = K * (focus.zoom || 1);
+  let tx = 0, ty = (SH - H * K) / 2;
+  if (focus.rect && focus.zoom > 1) {
+    const [x0, y0, x1, y1] = focus.rect;
+    tx = clamp(SW / 2 - ((x0 + x1) / 2) * z, SW - W * z, 0);
+    ty = clamp(SH / 2 - ((y0 + y1) / 2) * z, SH - H * z, 0);
+  }
+  $('box').style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${z.toFixed(5)})`;
+  const hl = $('hl');
+  if (focus.hl) {
+    const [x0, y0, x1, y1] = focus.hl;
+    hl.style.display = 'block';
+    hl.style.left = `${x0}px`; hl.style.top = `${y0}px`; hl.style.width = `${x1 - x0}px`; hl.style.height = `${y1 - y0}px`;
+    hl.style.borderWidth = `${(2.4 / (focus.zoom || 1)).toFixed(2)}px`;
+  } else hl.style.display = 'none';
+}
+
+function card(t) {
+  const c = $('card');
+  const intro = t < INTRO_END, outro = t >= OUTRO_START;
+  if (!intro && !outro) { c.style.display = 'none'; return; }
+  c.style.display = 'flex';
+  c.querySelector('.bg').style.backgroundImage = `url(${SHARED}landing-ui.jpg)`;
+  const eyebrow = c.querySelector('.eyebrow'), h1 = c.querySelector('h1'), l1 = c.querySelector('.l1'), l2 = c.querySelector('.l2'), url = c.querySelector('.url');
+  const foot = c.querySelector('.foot');
+  h1.textContent = 'TOMBAUGH';
+  if (intro) {
+    c.style.opacity = String(1 - ramp(t, INTRO_END - 0.25, INTRO_END));
+    eyebrow.textContent = 'NASA SPACE APPS 2026  /  PLANET X AND SPHEREx  /  TEAM MISSING MASS';
+    l1.innerHTML = 'In 1930 Clyde Tombaugh found Pluto by <b>blinking</b> two photographs of the same sky.';
+    l2.innerHTML = '';
+    l1.style.opacity = String(ramp(t, 0.2, 0.7));
+    url.style.display = 'none';
+    foot.style.display = 'none';
+  } else {
+    const u = t - OUTRO_START;
+    c.style.opacity = String(ramp(u, 0, 0.3));
+    eyebrow.textContent = 'NO INSTALL  /  NO ACCOUNT  /  OPEN SOURCE';
+    l1.innerHTML = 'Any spot on the sky, in your browser.';
+    l2.innerHTML = '';
+    l1.style.opacity = String(ramp(u, 0.2, 0.6));
+    url.style.display = 'block';
+    url.innerHTML = `${LIVE}<span>github.com/IshiakiZ/Batchly-Public</span>`;
+    url.style.opacity = String(ramp(u, 0.6, 1.0));
+    foot.style.display = 'flex';
+    foot.style.opacity = String(ramp(u, 0.8, 1.2));
+    $('logo').src = `${SHARED}missing-mass.png`;
+    $('foottext').innerHTML = 'Team Missing Mass, NASA Space Apps Challenge 2026. Data: NASA SPHEREx Level 2 spectral images (NASA/IPAC Infrared Science Archive), Gaia DR3, JPL Horizons.<br>The code was written with Claude, an AI model. The narration is an AI-generated voice (ElevenLabs). Not affiliated with or endorsed by NASA.';
+  }
+}
+
+window.renderAt = function renderAt(t) {
+  t = clamp(t, 0, TOTAL);
+  $('bar').style.width = `${(1920 * t / TOTAL).toFixed(1)}px`;
+  card(t);
+  const s = SCENES.find((x) => t >= x.a && t < x.b) || (t < INTRO_END ? SCENES[0] : SCENES[SCENES.length - 1]);
+  const u = clamp((t - s.a) / (s.b - s.a), 0, 1);
+  const since = Math.max(0, t - s.a);
+  const n = s.frames.length;
+  const i = s.once ? Math.min(n - 1, Math.floor(since / s.per)) : Math.floor(since / s.per) % n;
+  $('base').src = F + s.frames[i];
+  const top = $('base2');
+  // A scene that plays its frames once cross-fades into each new one.
+  const into = since - i * s.per;
+  if (s.once && i > 0 && into < 0.35) {
+    top.style.display = 'block';
+    top.src = F + s.frames[i - 1];
+    top.style.opacity = String(1 - ramp(into, 0, 0.35));
+  } else top.style.display = 'none';
+  setBox(s.focus(u));
+  const cap = $('cap');
+  cap.querySelector('.a').textContent = s.cap;
+  cap.querySelector('.b').textContent = s.sub;
+  cap.style.opacity = String(t < INTRO_END || t >= OUTRO_START ? 0 : Math.min(ramp(t, s.a, s.a + 0.25), 1));
+  return t;
+};
+window.TOTAL = TOTAL;
+window.ready = preload().then(() => { window.renderAt(0); return true; });
+</script>
+</body>
+</html>
