@@ -329,3 +329,13 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
   }
   .sheet-head { background: transparent; }
 }
+
+/* ---- Sound on / off ------------------------------------------------------------------------ */
+.sound-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.sound-toggle svg { width: 17px; height: 17px; display: block; }
+.sound-toggle .sound-cross { display: none; }
+.sound-toggle.is-muted .sound-waves { display: none; }
+.sound-toggle.is-muted .sound-cross { display: inline; }
+.sound-toggle.is-muted { color: rgba(247, 242, 231, 0.62); }
+.skyhome-actions { gap: 8px; align-items: center; }
+.skyhome-mode.sound-toggle { width: 36px; padding: 0; }

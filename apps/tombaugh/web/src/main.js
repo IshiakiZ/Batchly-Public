@@ -19,6 +19,7 @@ import { createFieldSummary, frameWaveSpan, foundLine, summarizePasses } from '.
 import { createTour, FALLBACK_TARGETS, findTarget } from './ui/tour.js';
 import { createToasts, copyText } from './ui/toast.js';
 import { createBackdrop } from './ui/backdrop.js';
+import { createSound } from './ui/sound.js';
 
 const VERSION = '0.1.0';
 const GAIA_RADIUS_DEG = 0.12; // covers the corners of the widest (10 arcmin) field
@@ -156,6 +157,17 @@ async function boot() {
   layout.setEmbed(store.get().embed);
   layout.setMode(store.get().mode);
   const toasts = createToasts(els.toasts);
+  // Interface sounds. Embedded copies start silent; the Sound button turns them on.
+  const sound = createSound({ muted: !!store.get().embed });
+  {
+    const actions = document.querySelector('.top-actions');
+    if (actions) actions.insertBefore(sound.button('btn btn-icon'), document.getElementById('btn-mode'));
+    const show = toasts.show;
+    toasts.show = (message, o) => {
+      sound.play(o && o.kind === 'alert' ? 'alert' : 'notice');
+      return show(message, o);
+    };
+  }
 
   const [{ mods: core, missing: coreMissing }, { mods: opt }] = await Promise.all([importAll(CORE_MODULES), importAll(OPTIONAL_MODULES)]);
   /** Flattened core exports: the `lib` every pipeline function receives. */
@@ -236,6 +248,7 @@ async function boot() {
   const player = createPlayer(els.player, {
     onFrame: (index, frame, info) => {
       renderFrame(frame, index);
+      if (!info || !info.reset) sound.play(info && info.user ? 'step' : 'flip');
       if (hasTarget() && (!player.isPlaying() || (info && info.user))) store.set({ t: index });
       emit('frame', { index, frame });
     },
@@ -1268,7 +1281,10 @@ async function boot() {
       if (first) {
         index = explicitT ? Math.min(store.get().t, movie.frames.length - 1) : 0;
         autoplay = !explicitT && !reducedMotion() && movie.frames.length > 1;
-        if (complete) session.firstMovie = false;
+        if (complete) {
+          session.firstMovie = false;
+          sound.play('arrive');
+        }
       } else if (reset && !partial) {
         index = 0;
       }
@@ -2229,6 +2245,7 @@ async function boot() {
             targets: targets.map(plainTarget),
             starts: tourTargets,
             modeLabel: plain ? 'Advanced' : 'Simple',
+            soundButton: () => sound.button('skyhome-mode'),
             modeTitle: plain ? 'Show every view, plot and tool' : 'Back to the short version',
             stars: skyStars(),
             bodies: skyBodies(),
@@ -2779,6 +2796,7 @@ async function boot() {
     console.warn('[tombaugh] backdrop', err);
   }
   app.backdrop = () => (backdrop ? backdrop.status() : null);
+  app.sound = () => sound.status();
   try {
     window.tombaugh = app;
   } catch {

@@ -34,6 +34,19 @@ web/apple.css; an independent drawing, not affiliated with Apple or with
 any glass library). There are no npm dependencies and no CDN imports.
 
 
+SOUND EFFECTS
+
+The repository contains no audio files. The interface sounds are generated
+by code in the browser (web/src/ui/sound.js). The team's live page
+replaces them with short excerpts of sound effects by Ocular Sounds
+(https://ocularsounds.com; packs Sci-Fi Glitches, Short Whooshes and Tonal
+Risers), bought and used under Ocular Sounds' commercial licence. Those
+recordings are not open source, are not covered by the Apache-2.0 licence
+of this project and are not redistributed here: they are built into the
+live page from a private folder (tools/build.mjs --sounds). They are
+recordings by Ocular Sounds, not AI-generated audio.
+
+
 THIRD-PARTY DATA INCLUDED IN THE REPOSITORY
 
 web/src/sky/stardata.js holds data from two sources.

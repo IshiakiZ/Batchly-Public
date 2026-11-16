@@ -313,7 +313,7 @@ live services on 15 November 2026.
 - [ ] `LICENSE` (Apache 2.0) and `NOTICE` are present at the top level.
 - [ ] `NOTICE` lists the same DOIs as `docs/SOURCES.md` (Data Release 1 10.26131/IRSA678, Quick
       Release 3 10.26131/IRSA662).
-- [ ] `node --test` passes on the submitted commit (1050 tests at the time of writing).
+- [ ] `node --test` passes on the submitted commit (1058 tests at the time of writing).
 - [ ] `node tools/build.mjs` produces `dist/tombaugh.html`, and the hosted page is that build.
 - [ ] No secrets in the repository (service keys, tokens).
 - [ ] The first commit is dated after the event start (14 November 2026, 9 a.m. local time).

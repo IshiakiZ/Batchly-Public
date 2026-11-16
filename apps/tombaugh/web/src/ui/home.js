@@ -19,6 +19,7 @@ import { h } from './layout.js';
 import { createSkyGlobe, SKY_SURVEYS } from '../sky/globe.js';
 import { attachPickList } from './picklist.js';
 import { createBackdrop } from './backdrop.js';
+import { cue } from './sound.js';
 
 /** A kind of solar system body in everyday words. Pure. */
 export function plainKind(kind) {
@@ -131,7 +132,7 @@ export function createHome(container, opts = {}) {
       { class: 'skyhome-top' },
       h('div', { class: 'skyhome-brand' }, h('span', { class: 'wordmark' }, 'TOMBAUGH'), h('span', { class: 'skyhome-tag' }, 'Pick a star. See what changed.')),
       form,
-      h('div', { class: 'skyhome-actions' }, modeBtn),
+      h('div', { class: 'skyhome-actions' }, typeof opts.soundButton === 'function' ? opts.soundButton() : null, modeBtn),
     ),
     hint,
     card,
@@ -161,7 +162,10 @@ export function createHome(container, opts = {}) {
     reducedMotion: opts.reducedMotion,
     photos: opts.photos,
     ...(opts.view || {}),
-    onSelect: (sel) => showSelection(sel),
+    onSelect: (sel) => {
+      if (sel) cue('pick');
+      showSelection(sel);
+    },
     onView: (v) => {
       if (typeof opts.onView === 'function') opts.onView(v);
       if (globe) setCredit();
@@ -201,6 +205,7 @@ export function createHome(container, opts = {}) {
     const sel = { kind: item.target ? 'target' : 'star', name: item.name, ra: item.ra, dec: item.dec, mag: item.mag, target: item.target || null };
     globe.select(sel);
     globe.flyTo(item.ra, item.dec, Math.min(globe.getView().fov, fov));
+    cue('fly', { gain: 0.7 });
     showSelection(sel);
     setError('');
   }

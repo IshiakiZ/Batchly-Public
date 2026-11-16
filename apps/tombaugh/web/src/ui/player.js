@@ -59,11 +59,14 @@ export function createPlayer(container, { onFrame = () => {}, onPlayState = () =
   // ---- DOM ------------------------------------------------------------------------------------
   const btnPrev = iconButton('Previous frame (left arrow)', ICON.prev, () => step(-1));
   btnPrev.dataset.testid = 'prev';
+  btnPrev.dataset.sound = 'none'; // the step itself ticks
   const btnPlay = iconButton('Play (space)', ICON.play, () => toggle(), 'btn-play');
   btnPlay.setAttribute('aria-pressed', 'false');
   btnPlay.dataset.testid = 'play';
+  btnPlay.dataset.sound = 'playpause';
   const btnNext = iconButton('Next frame (right arrow)', ICON.next, () => step(1));
   btnNext.dataset.testid = 'next';
+  btnNext.dataset.sound = 'none';
 
   const speedSel = h('select', { class: 'select', 'aria-label': 'Playback speed', onchange: () => setSpeed(speedSel.value) });
   for (const s of SPEEDS) speedSel.append(h('option', { value: s.value }, s.label));

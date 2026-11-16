@@ -844,6 +844,8 @@ const htmlAttrDecode = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").r
  * @param {string} [opts.meta]   meta JSON path (default: out with .meta.json)
  * @param {boolean} [opts.minify]
  * @param {string} [opts.api]    value for window.TOMBAUGH_API
+ * @param {string} [opts.sounds] directory of recorded interface sounds (.wav, .mp3, .m4a, .ogg);
+ *   each file becomes window.TOMBAUGH_SOUNDS[<file name without extension>] as a data URI
  * @param {boolean|string} [opts.banner]  true for the default banner comment, or custom text
  * @param {number} [opts.assetLimit]  largest asset to inline, bytes (default 512 kB)
  * @param {boolean} [opts.keepDynamic] leave dynamic import() of URLs / bare specifiers untouched
@@ -1376,6 +1378,24 @@ export async function build(opts = {}) {
     if (!/^(https?:\/\/|\/)/.test(opts.api)) throw new BuildError(`--api expects an http(s) URL or an absolute path, got "${opts.api}"`);
     inject = `<script>window.TOMBAUGH_API = ${JSON.stringify(opts.api).replace(/</g, '\\x3C')};</script>\n`;
   }
+  const soundNames = [];
+  if (opts.sounds) {
+    const dir = path.resolve(opts.sounds);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new BuildError(`--sounds expects a directory, got "${opts.sounds}"`);
+    const types = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg' };
+    const map = {};
+    for (const name of fs.readdirSync(dir).sort()) {
+      const type = types[path.extname(name).toLowerCase()];
+      if (!type) continue;
+      const buf = fs.readFileSync(path.join(dir, name));
+      if (buf.length > 262144) throw new BuildError(`--sounds: ${name} is larger than 256 kB; interface sounds should be short clips`);
+      const key = path.basename(name, path.extname(name));
+      map[key] = `data:${type};base64,${buf.toString('base64')}`;
+      soundNames.push(key);
+    }
+    if (!soundNames.length) throw new BuildError(`--sounds: no .wav, .mp3, .m4a or .ogg files in "${opts.sounds}"`);
+    inject += `<script>window.TOMBAUGH_SOUNDS = ${JSON.stringify(map)};</script>\n`;
+  }
   pieces[bundleSlot] = `${inject}<script type="module">\n${js}\n</script>`;
   let outHtml = pieces.join('');
 
@@ -1421,6 +1441,7 @@ export async function build(opts = {}) {
     sourcesSha256: sourceHash,
     minify: !!opts.minify,
     api: opts.api || null,
+    sounds: soundNames,
     moduleCount: modules.size,
     modules: order.map((id) => {
       const r = modules.get(id);
@@ -1487,6 +1508,9 @@ const USAGE = `Usage: node tools/build.mjs [options]
   --out <path>          output file (default dist/tombaugh.html; meta goes next to it)
   --minify              strip comments and collapse whitespace (safe, no renaming)
   --api <url>           inject window.TOMBAUGH_API = "<url>" before the bundle
+  --sounds <dir>        build recorded interface sounds into the page: every .wav, .mp3, .m4a
+                        or .ogg file in <dir> becomes window.TOMBAUGH_SOUNDS[<name>]. Without
+                        it the page generates its own sounds. Only use files you may ship.
   --banner [text]       add an HTML comment after the doctype (default text: name, licence,
                         AI-generated notice, build time and source hash)
   --root <dir>          page directory (default web)
@@ -1513,6 +1537,7 @@ export function parseArgs(argv) {
       case '--minify': o.minify = true; break;
       case '--out': o.out = need(i, a); i++; break;
       case '--api': o.api = need(i, a); i++; break;
+      case '--sounds': o.sounds = need(i, a); i++; break;
       case '--root': o.root = need(i, a); i++; break;
       case '--html': o.html = need(i, a); i++; break;
       case '--meta': o.meta = need(i, a); i++; break;
