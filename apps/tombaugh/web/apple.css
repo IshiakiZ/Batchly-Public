@@ -43,11 +43,11 @@ body {
     var(--ground);
   background-attachment: fixed;
 }
-html[data-backdrop="on"] body, html[data-mode="simple"][data-backdrop="on"] body { background: none; }
+html[data-backdrop] body, html[data-mode="simple"][data-backdrop] body { background: none; }
 html[data-embed="1"] body { background: var(--ink); }
 
 .backdrop { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; pointer-events: none; }
-html[data-screen="boot"] .backdrop, html[data-screen="landing"] .backdrop, html[data-embed="1"] .backdrop, html:not([data-backdrop="on"]) .backdrop { display: none; }
+html[data-screen="boot"] .backdrop, html[data-screen="landing"] .backdrop, html[data-embed="1"] .backdrop, html:not([data-backdrop]) .backdrop { display: none; }
 
 .wordmark { font-family: var(--font-mark); font-weight: 700; }
 .status-title, .empty-title, .about h3, .fs-name, .dialog-title, .panel-title, .simple-name, .simple-title {
@@ -339,3 +339,6 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
 .sound-toggle.is-muted { color: rgba(247, 242, 231, 0.62); }
 .skyhome-actions { gap: 8px; align-items: center; }
 .skyhome-mode.sound-toggle { width: 36px; padding: 0; }
+
+/* Touch screens: the canvas draws the ground only (see main.js), so the cards are filled here. */
+html[data-backdrop="ground"] { --fill-card: rgba(26, 24, 44, 0.55); }

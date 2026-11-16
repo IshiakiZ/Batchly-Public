@@ -2790,8 +2790,11 @@ async function boot() {
   // The moving ground and the glass drawn over it. Without WebGL the page keeps its plain ground.
   let backdrop = null;
   try {
-    backdrop = store.get().embed ? null : createBackdrop({ canvas: document.getElementById('backdrop'), reducedMotion: reducedMotion() });
-    if (backdrop) document.documentElement.dataset.backdrop = 'on';
+    // Touch screens scroll the page ahead of any redraw, so the glass drawn on the canvas would
+    // trail the controls. There the canvas draws only the ground and the controls are filled by CSS.
+    const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    backdrop = store.get().embed ? null : createBackdrop({ canvas: document.getElementById('backdrop'), reducedMotion: reducedMotion(), lenses: !touch });
+    if (backdrop) document.documentElement.dataset.backdrop = touch ? 'ground' : 'on';
   } catch (err) {
     console.warn('[tombaugh] backdrop', err);
   }

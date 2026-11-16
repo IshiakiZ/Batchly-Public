@@ -10,7 +10,7 @@
 // only the pixels it covers and nothing has to be read back from the page. That is what lets every
 // card and every button refract while the photos keep playing.
 //
-//   createBackdrop({ canvas, kinds, root, source, fps, maxScale, reducedMotion })
+//   createBackdrop({ canvas, kinds, lenses, root, source, fps, maxScale, reducedMotion })
 //       -> { refresh, sourceDrawn, status, destroy } | null
 //     kinds   [{ selector, bevel, bend, frost, tint, gain }] in paint order (cards before their buttons)
 //     root    where to look for the glass elements (default: the whole document)
@@ -265,7 +265,9 @@ export function createBackdrop(opts = {}) {
   const doc = canvas.ownerDocument;
   const source = opts.source && typeof opts.source.canvases === 'function' ? opts.source : null;
   const scope = opts.root || doc;
-  const kinds = opts.kinds || (source ? SKY_GLASS_KINDS : GLASS_KINDS);
+  // lenses: false draws the ground only. A page that scrolls under a finger moves before this
+  // canvas can redraw, so its glass would trail the controls; there the controls are filled by CSS.
+  const kinds = opts.lenses === false ? [] : opts.kinds || (source ? SKY_GLASS_KINDS : GLASS_KINDS);
   const frameMs = 1000 / (opts.fps || 30);
   const still = !!opts.reducedMotion;
   let gl = null;
