@@ -39,10 +39,16 @@ export const CUES = {
   slide: [{ clip: 'tick', gain: 0.16 }],
   notice: [{ clip: 'beep', gain: 0.14, rate: 0.5 }],
   alert: [{ clip: 'beep', gain: 0.16, rate: 0.4 }, { clip: 'beep', gain: 0.16, rate: 0.333, at: 0.16 }],
+  type: [{ clip: 'tick', gain: 0.12, rate: 1.3 }],
+  hover: [{ clip: 'tick', gain: 0.05, rate: 1.7 }],
+  zoom: [{ clip: 'tick', gain: 0.14 }],
+  focus: [{ clip: 'pip', gain: 0.07, rate: 0.75 }],
+  copy: [{ clip: 'tock', gain: 0.4 }, { clip: 'pip', gain: 0.13, rate: 0.667, at: 0.05 }, { clip: 'pip', gain: 0.13, rate: 1, at: 0.13 }],
+  key: [{ clip: 'tock', gain: 0.3, rate: 1.3 }],
 };
 
 /** Cues that repeat quickly, and the shortest gap between two of them in milliseconds. */
-const GAPS = { flip: 70, step: 40, slide: 45, tap: 25, notice: 400, alert: 400, arrive: 1500, go: 300, fly: 300 };
+const GAPS = { flip: 70, step: 40, slide: 45, tap: 25, notice: 400, alert: 400, arrive: 1500, go: 300, fly: 300, type: 35, hover: 70, zoom: 80, focus: 300, copy: 300, close: 250, key: 60 };
 
 const STORE_KEY = 'tombaugh.sound';
 
@@ -172,6 +178,7 @@ export function cueForChange(el) {
   return null;
 }
 
+const TYPING = 'input[type="text"], input[type="search"], input:not([type]), textarea';
 const PRESSABLE = 'button, a.btn, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [role="radio"], .picklist-row, [data-sound]';
 
 // ---- the player ----------------------------------------------------------------------------------
@@ -391,11 +398,37 @@ export function createSound({ win = globalThis.window, doc = globalThis.document
     on(doc, 'change', (ev) => play(cueForChange(ev.target)));
     on(doc, 'input', (ev) => {
       const el = ev.target;
+      if (el && matches(el, TYPING)) play('type', { rate: 1.15 + 0.3 * Math.random() });
       if (!el || String(el.type).toLowerCase() !== 'range') return;
       const min = Number(el.min || 0);
       const max = Number(el.max || 100);
       const u = max > min ? (Number(el.value) - min) / (max - min) : 0.5;
       play('slide', { rate: 0.85 + 0.5 * Math.min(1, Math.max(0, u)) });
+    });
+    on(doc, 'focusin', (ev) => {
+      if (matches(ev.target, TYPING)) play('focus');
+    });
+    // A mouse coming to rest on a control: one very quiet tick each.
+    let hovered = null;
+    on(doc, 'pointerover', (ev) => {
+      if (ev.pointerType !== 'mouse' || !ev.target || !ev.target.closest) return;
+      const el = ev.target.closest(PRESSABLE);
+      if (el === hovered) return;
+      hovered = el;
+      if (el && !el.disabled && el.getAttribute('data-sound') !== 'none') play('hover');
+    }, { passive: true });
+    // Zooming the sky or a photo with the wheel: higher going in, lower coming out.
+    on(doc, 'wheel', (ev) => {
+      if (ev.target && ev.target.closest && ev.target.closest('canvas, .viewer, .skyhome')) play('zoom', { rate: ev.deltaY < 0 ? 1.25 : 0.85 });
+    }, { passive: true, capture: true });
+    // A window closed with Escape or a press outside it (its own Close button has already answered).
+    on(doc, 'close', (ev) => {
+      if (matches(ev.target, 'dialog')) play('close');
+    }, true);
+    // Keyboard shortcuts that press nothing on screen.
+    on(doc, 'keydown', (ev) => {
+      if (ev.repeat || ev.ctrlKey || ev.metaKey || ev.altKey || !ev.target || matches(ev.target, 'input, textarea, select, [contenteditable]')) return;
+      if (ev.key === ' ' && doc.documentElement.dataset.screen === 'console' && !matches(ev.target, 'button, a, summary')) play('key');
     });
     // Only a drop-down the visitor opened: the page also opens and closes them as it redraws.
     on(doc, 'toggle', (ev) => {

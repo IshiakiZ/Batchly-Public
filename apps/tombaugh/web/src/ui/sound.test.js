@@ -196,3 +196,25 @@ test('without Web Audio the player is silent and harmless', () => {
   assert.equal(sound.status().supported, false);
   sound.destroy();
 });
+
+test('typing, hovering and zooming have their own quiet cues', async () => {
+  for (const name of ['type', 'hover', 'zoom', 'focus', 'copy', 'key']) assert.ok(CUES[name], name);
+  assert.equal(cueForClick(el(['button'], { 'data-sound': 'copy' })), 'copy');
+  const b = fakeBrowser();
+  const sound = createSound({ win: b.win, doc: b.doc });
+  b.fire('pointerdown');
+  await new Promise((r) => setTimeout(r, 0));
+  const field = el(['input[type="text"]'], {}, { type: 'text' });
+  b.fire('input', { target: field });
+  assert.equal(sound.status().last, 'type');
+  const button = { ...el(['button']), closest: () => button };
+  b.fire('pointerover', { pointerType: 'mouse', target: button });
+  assert.equal(sound.status().last, 'hover');
+  const before = sound.status().played;
+  b.fire('pointerover', { pointerType: 'mouse', target: button });
+  b.fire('pointerover', { pointerType: 'touch', target: { closest: () => ({ ...button }) } });
+  assert.equal(sound.status().played, before, 'once per control, and never for a finger');
+  b.fire('wheel', { deltaY: -1, target: { closest: () => ({}) } });
+  assert.equal(sound.status().last, 'zoom');
+  sound.destroy();
+});

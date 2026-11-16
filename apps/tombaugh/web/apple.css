@@ -225,6 +225,15 @@ html[data-mode="advanced"] .console { column-gap: 0; }
 /* Pressed, the thumb lifts into clear glass, as it does there. */
 .switch:active .switch-track::after { transform: scale(1.14); background: rgba(255, 255, 255, 0.5); -webkit-backdrop-filter: blur(3px) saturate(1.6); backdrop-filter: blur(3px) saturate(1.6); }
 .switch[aria-checked="true"]:active .switch-track::after { transform: translateX(17px) scale(1.14); background: rgba(255, 255, 255, 0.5); }
+/* Dragged, the thumb follows the finger (controls.js sets --thumb-x and --thumb-on) and the green comes in with it. */
+.switch { touch-action: pan-y; }
+.switch.is-dragging .switch-track { transition: none; background: color-mix(in srgb, #30d158 calc(var(--thumb-on, 0) * 100%), rgba(120, 120, 128, 0.32)); }
+.switch.is-dragging .switch-track::after, .switch[aria-checked="true"].is-dragging .switch-track::after {
+  transition: background-color 160ms ease; transform: translateX(var(--thumb-x, 0px)) scale(1.14); background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(3px) saturate(1.6); backdrop-filter: blur(3px) saturate(1.6);
+}
+/* The buttons about this view are one group: loose on a wide screen, one joined control on a phone. */
+.top-group { display: contents; }
 select.select {
   height: 32px; padding: 0 30px 0 14px; border: 0; border-radius: 999px; font-size: 12.5px; background-color: rgba(255, 255, 255, 0.07);
   box-shadow: var(--rim-low), var(--drop-low); background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
@@ -316,11 +325,33 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
   /* Two rows (name and buttons, then the search box): a rounded card, not a capsule. */
   .topbar, html[data-mode="simple"] .topbar { height: auto; margin: 8px 8px 0; padding: 10px 12px 10px 16px; border-radius: 24px; column-gap: 10px; row-gap: 8px; }
   .topbar > .sim-badge { margin-bottom: 0; }
-  /* Advanced has five buttons: they take a row of their own and slide sideways if they must. */
-  html[data-mode="advanced"] .topbar > .top-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
-  html[data-mode="advanced"] .topbar > .top-actions::-webkit-scrollbar { display: none; }
-  html[data-mode="advanced"] .topbar > .search { grid-row: 3; }
-  html[data-mode="advanced"] .topbar > .sim-badge { grid-row: 4; }
+  /* On a phone: name with sound and mode beside it, the search, then one joined control. */
+  html[data-mode] .topbar { grid-template-columns: minmax(0, 1fr) auto auto; padding: 14px 14px 12px; row-gap: 10px; column-gap: 8px; }
+  html[data-mode] .topbar > .top-actions { display: contents; }
+  html[data-mode] .topbar > .brand { grid-column: 1; grid-row: 1; align-self: center; padding-left: 6px; }
+  html[data-mode] .top-actions > .sound-toggle { grid-column: 2; grid-row: 1; width: 34px; height: 34px; }
+  html[data-mode] .top-actions > .btn-mode { grid-column: 3; grid-row: 1; height: 34px; padding: 0 14px; font-size: 13px; }
+  html[data-mode] .topbar > .search { grid-column: 1 / -1; grid-row: 2; }
+  html[data-mode] .top-group {
+    grid-column: 1 / -1; grid-row: 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    padding: 3px; border-radius: 13px; background: rgba(118, 118, 128, 0.2);
+  }
+  html[data-mode] .top-group .btn, html[data-backdrop="on"][data-mode] .top-group .btn {
+    height: 30px; min-width: 0; padding: 0 4px; border-radius: 10px; background: none !important; box-shadow: none !important; font-size: 13px; font-weight: 500;
+    color: rgba(247, 242, 231, 0.88); position: relative;
+  }
+  html[data-mode] .top-group .btn + .btn::before { content: ""; position: absolute; left: -0.5px; top: 8px; bottom: 8px; width: 1px; background: rgba(255, 255, 255, 0.14); }
+  html[data-mode] .top-group .btn:active { background: rgba(255, 255, 255, 0.16) !important; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important; }
+  html[data-mode] .top-group .btn:active::before, html[data-mode] .top-group .btn:active + .btn::before { opacity: 0; }
+  html[data-mode] .topbar > .sim-badge { grid-row: 4; }
+  /* The search box holds its own Go button; 16px type so a phone does not zoom in on it. */
+  .search-field { display: block; }
+  .search-input, html[data-mode="simple"] .search-input { width: 100%; height: 44px; padding: 0 64px 0 18px; font-size: 16px; }
+  .search-field .btn-solid, html[data-mode="simple"] .search-field .btn-solid { position: absolute; top: 5px; right: 5px; height: 34px; padding: 0 16px; font-size: 14px; }
+  /* The coordinates under it: there to read, not to shout. */
+  .search-status { height: 13px; padding-left: 18px; font-size: 10.5px; line-height: 13px; letter-spacing: 0.02em; color: rgba(247, 242, 231, 0.42); }
+  .search-status .num { color: rgba(247, 242, 231, 0.6); }
+  .search-status:empty { display: none; }
   .console { height: auto; }
   /* The controls slide up over the picture here, where the canvas cannot draw them: frosted. */
   .controls, html[data-backdrop="on"] .controls {

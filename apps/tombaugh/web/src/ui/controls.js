@@ -8,6 +8,7 @@
 import { h, clear, makeScrollStrip } from './layout.js';
 import { VIEW_INFO, DETECTOR_RANGES, fmtDistance } from '../pipeline.js';
 import { FOVS, STRETCHES } from '../state.js';
+import { cue } from './sound.js';
 
 const MICRON = 'µm';
 const DIST_MIN = 5;
@@ -135,9 +136,71 @@ export function makeSeg({ label, options, value, onChange, className = 'seg', gr
   };
 }
 
+/** How far the thumb of a switch travels, in CSS px (see .switch-track in apple.css). */
+export const SWITCH_TRAVEL = 17;
+
+/** Where a dragged thumb sits: its start (0 or SWITCH_TRAVEL) plus the drag, kept on the track. Pure. */
+export function thumbAt(startOn, dx, travel = SWITCH_TRAVEL) {
+  const x = (startOn ? travel : 0) + (Number.isFinite(dx) ? dx : 0);
+  return Math.min(travel, Math.max(0, x));
+}
+
+/**
+ * Lets the thumb of a switch be dragged: it follows the finger, ticks as it crosses the middle,
+ * and settles on the side it was let go on. A plain tap is left to the click handler.
+ */
+function dragSwitch(el, track, settle) {
+  let drag = null;
+  const reset = () => {
+    el.classList.remove('is-dragging');
+    track.style.removeProperty('--thumb-x');
+    track.style.removeProperty('--thumb-on');
+  };
+  el.addEventListener('pointerdown', (ev) => {
+    if (el.disabled || ev.button > 0) return;
+    drag = { id: ev.pointerId, x: ev.clientX, on: el.getAttribute('aria-checked') === 'true', moved: false, pos: 0, side: null };
+  });
+  el.addEventListener('pointermove', (ev) => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    const dx = ev.clientX - drag.x;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 4) return;
+      drag.moved = true;
+      try {
+        el.setPointerCapture(ev.pointerId);
+      } catch {
+        /* the pointer is already gone */
+      }
+      el.classList.add('is-dragging');
+    }
+    drag.pos = thumbAt(drag.on, dx);
+    const side = drag.pos > SWITCH_TRAVEL / 2;
+    if (drag.side !== null && side !== drag.side) cue('slide', { rate: side ? 1.3 : 0.95 });
+    drag.side = side;
+    track.style.setProperty('--thumb-x', `${drag.pos.toFixed(1)}px`);
+    track.style.setProperty('--thumb-on', (drag.pos / SWITCH_TRAVEL).toFixed(3));
+  });
+  const end = (ev, keep) => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    if (!d.moved) return;
+    reset();
+    settle(keep ? d.pos > SWITCH_TRAVEL / 2 : d.on);
+  };
+  el.addEventListener('pointerup', (ev) => end(ev, true));
+  el.addEventListener('pointercancel', (ev) => end(ev, false));
+}
+
 /** An on/off switch. -> { el, set(on), setDisabled(reason), setSub(text) } */
 export function makeSwitch({ label, sub = '', checked = false, onChange, title = '' }) {
   const subEl = h('span', { class: 'switch-sub' }, sub);
+  const track = h('span', { class: 'switch-track', 'aria-hidden': 'true' });
+  let quietUntil = 0;
+  const flip = (on) => {
+    cue(on ? 'on' : 'off');
+    onChange(on);
+  };
   const el = h(
     'button',
     {
@@ -147,14 +210,19 @@ export function makeSwitch({ label, sub = '', checked = false, onChange, title =
       'aria-checked': String(!!checked),
       title: title || null,
       onclick: () => {
-        if (el.disabled) return;
-        onChange(el.getAttribute('aria-checked') !== 'true');
+        if (el.disabled || Date.now() < quietUntil) return;
+        flip(el.getAttribute('aria-checked') !== 'true');
       },
     },
     h('span', { class: 'switch-text' }, h('span', null, label), subEl),
-    h('span', { class: 'switch-track', 'aria-hidden': 'true' }),
+    track,
   );
   el.dataset.baseTitle = title;
+  el.dataset.sound = 'none'; // it answers with its own on and off sounds, a drag included
+  dragSwitch(el, track, (on) => {
+    quietUntil = Date.now() + 350; // the click that ends a drag is not a second press
+    if (on !== (el.getAttribute('aria-checked') === 'true')) flip(on);
+  });
   return {
     el,
     set(on) {
