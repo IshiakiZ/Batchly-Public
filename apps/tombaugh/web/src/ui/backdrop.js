@@ -113,8 +113,8 @@ vec3 starLayer(vec2 p, float cell, float chance, float bright, float soft, float
   float lum = step(1.0 - chance, h) * bright * (0.2 + 0.8 * h2 * h2) * twinkle * (core + glow) / (1.0 + soft * 5.0);
   return mix(vec3(0.76, 0.84, 1.0), vec3(1.0, 0.9, 0.8), h3) * lum;
 }
-// The ground at p (CSS px, y down): deep space. A dark field, two faint clouds of colour (violet
-// and blue) that shift over minutes, and three depths of small stars that barely creep.
+// The ground at p (CSS px, y down): deep space. A black field, two faint glows (warm red and
+// blue, the page's own colours) that shift over minutes, and three depths of small stars that barely creep.
 // soft 0..1 is how frosted the view is.
 vec3 ground(vec2 p, float soft) {
   vec2 q = p / uRes.y;
@@ -123,10 +123,10 @@ vec3 ground(vec2 p, float soft) {
   float f = fieldAt(q, t);
   vec2 a = vec2(ar * (0.84 + 0.05 * sin(t * 0.06)), 0.0 + 0.06 * cos(t * 0.05));
   vec2 b = vec2(ar * (0.04 + 0.05 * cos(t * 0.055)), 1.0 + 0.05 * sin(t * 0.06));
-  vec3 col = vec3(0.016, 0.015, 0.024);
-  col += vec3(0.56, 0.30, 0.98) * 0.105 * exp(-dot(q - a, q - a) * 1.3);
-  col += vec3(0.22, 0.30, 0.85) * 0.085 * exp(-dot(q - b, q - b) * 1.2);
-  col += vec3(0.60, 0.42, 0.95) * 0.016 * smoothstep(-0.6, 2.4, f);
+  vec3 col = vec3(0.030, 0.030, 0.034);
+  col += vec3(0.90, 0.26, 0.17) * 0.028 * exp(-dot(q - a, q - a) * 1.3);
+  col += vec3(0.25, 0.40, 0.80) * 0.05 * exp(-dot(q - b, q - b) * 1.2);
+  col += vec3(0.97, 0.95, 0.91) * 0.02 * smoothstep(-0.6, 2.4, f);
   vec2 drift = vec2(0.1, 0.035) * uTime;     // the nearest stars cross about six CSS px a minute
   col += starLayer(p + drift, 150.0, 0.55, 0.8, soft, uTime);
   col += starLayer(p + drift * 0.55 + 31.0, 84.0, 0.5, 0.46, soft, uTime);

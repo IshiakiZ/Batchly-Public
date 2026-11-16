@@ -12,7 +12,7 @@
   --font-head: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-num: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, Menlo, monospace;
   --font-mark: var(--font-head);
-  --ground: #050509;
+  --ground: #0b0b0d;
   --muted: #b4b1a8;
   --rule: rgba(255, 255, 255, 0.1);
   --rule-strong: rgba(255, 255, 255, 0.2);
@@ -341,4 +341,4 @@ html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
 .skyhome-mode.sound-toggle { width: 36px; padding: 0; }
 
 /* Touch screens: the canvas draws the ground only (see main.js), so the cards are filled here. */
-html[data-backdrop="ground"] { --fill-card: rgba(26, 24, 44, 0.55); }
+html[data-backdrop="ground"] { --fill-card: rgba(30, 30, 33, 0.6); }
