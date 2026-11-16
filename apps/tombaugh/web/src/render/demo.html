@@ -1,0 +1,309 @@
+<!-- Tombaugh - SPHEREx blink comparator. Apache-2.0. -->
+<!-- AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh viewer demo</title>
+<style>
+  :root { --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --stone: #77766E; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); font: 14px/1.45 Arial, Helvetica, sans-serif; }
+  body { padding: 20px; }
+  header { display: flex; align-items: baseline; gap: 14px; margin: 0 0 16px; }
+  h1 { font: 900 20px/1 "Arial Black", Arial, sans-serif; letter-spacing: 0.02em; margin: 0; }
+  header span { color: var(--stone); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 640px) minmax(240px, 300px); gap: 20px; align-items: start; }
+  @media (max-width: 760px) { main { grid-template-columns: minmax(0, 1fr); } body { padding: 12px; } }
+  .panel { display: grid; gap: 14px; }
+  fieldset { border: 1px solid rgba(247, 242, 231, 0.16); border-radius: 3px; margin: 0; padding: 10px 12px 12px; display: grid; gap: 8px; }
+  legend { padding: 0 6px; color: var(--stone); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+  label.check { justify-content: flex-start; }
+  select, button, input[type="range"] { font: inherit; color: var(--paper); }
+  select, button {
+    background: transparent; border: 1px solid rgba(247, 242, 231, 0.3); border-radius: 2px; padding: 4px 8px; cursor: pointer;
+  }
+  select option { background: var(--ink); }
+  button:hover, select:hover { border-color: var(--paper); }
+  button.primary { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: bold; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  input[type="checkbox"] { accent-color: var(--paper); margin: 0 6px 0 0; }
+  .readout { font: 12px/1.6 Consolas, "DejaVu Sans Mono", monospace; color: var(--paper); min-height: 5.2em; white-space: pre; margin: 0; }
+  .readout b { color: var(--stone); font-weight: normal; }
+  .hint { color: var(--stone); font-size: 12px; margin: 10px 0 0; }
+  #side { width: 100%; }
+  #export { display: block; width: 100%; height: auto; border: 1px solid rgba(247, 242, 231, 0.16); }
+  #export[hidden] { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TOMBAUGH</h1>
+  <span>viewer demo: a synthetic star field with one moving source</span>
+</header>
+<main>
+  <div>
+    <div id="stage"></div>
+    <p class="hint">Scroll or pinch to zoom about the cursor, drag to pan, double-click to reset. With the image focused: + and - zoom, 0 resets, arrows pan. Click to drop a marker.</p>
+  </div>
+  <div class="panel">
+    <fieldset>
+      <legend>Movie</legend>
+      <div class="row">
+        <button id="play" class="primary" type="button">Play</button>
+        <button id="prev" type="button" aria-label="Previous frame">&lt;</button>
+        <button id="next" type="button" aria-label="Next frame">&gt;</button>
+        <button id="blink" type="button">Blink A/B</button>
+      </div>
+      <label>Speed <select id="fps"><option value="2">2 fps</option><option value="5">5 fps</option><option value="10" selected>10 fps</option><option value="20">20 fps</option></select></label>
+      <label>Show <select id="mode"><option value="frames">Exposures</option><option value="residual">Residual</option><option value="rgb">Three-colour</option></select></label>
+    </fieldset>
+    <fieldset>
+      <legend>Display</legend>
+      <label>Stretch <select id="stretch"><option>linear</option><option selected>asinh</option><option>log</option><option>sqrt</option></select></label>
+      <label>Colour map <select id="cmap"><option>gray</option><option>grayinv</option><option>heat</option><option>viridis</option></select></label>
+    </fieldset>
+    <fieldset>
+      <legend>Overlays</legend>
+      <label class="check"><input type="checkbox" id="gaia" checked>Gaia ghost rings</label>
+      <label class="check"><input type="checkbox" id="flags">Flagged pixels</label>
+      <label class="check"><input type="checkbox" id="trail" checked>Trail of the mover</label>
+      <label class="check"><input type="checkbox" id="markers" checked>Markers</label>
+      <label class="check"><input type="checkbox" id="readoutToggle">Readout line</label>
+    </fieldset>
+    <fieldset>
+      <legend>Cursor</legend>
+      <pre class="readout" id="readout"><b>move over the image</b></pre>
+    </fieldset>
+    <fieldset>
+      <legend>Residual (linked view)</legend>
+      <div id="side"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Export</legend>
+      <div class="row"><button id="exportBtn" type="button">Render PNG at 2x</button><button id="flashBtn" type="button">Flash</button></div>
+      <img id="export" alt="Exported viewer image" hidden>
+    </fieldset>
+  </div>
+</main>
+
+<script type="module">
+import { createViewer } from './viewer.js';
+import { gridPixToSky } from './viewmath.js';
+
+// ---- a deterministic synthetic sky -----------------------------------------------------------
+const grid = { ra0: 269.452, dec0: 4.693, n: 96, scale: 3.075 };
+const N = grid.n;
+const NF = 12;
+const MJD0 = 61210.79;
+
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20261115);
+const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+
+const stars = [];
+for (let i = 0; i < 38; i++) {
+  stars.push({
+    x: 4 + rnd() * (N - 9), y: 4 + rnd() * (N - 9),
+    flux: 0.5 * Math.pow(10, rnd() * rnd() * 2.3),
+    slope: (rnd() - 0.5) * 0.9, // spectral slope: each exposure is at a different wavelength
+    id: String(4472832130942575872n + BigInt(Math.floor(rnd() * 1e9))),
+  });
+}
+stars.push({ x: 30.4, y: 66.2, flux: 60, slope: -0.3, id: '4472832130942575872' }); // one bright star
+const pmStar = { x: 67.3, y: 31.6, flux: 9, slope: 0.2, id: '4472836292758713216' }; // moved since Gaia epoch
+stars.push(pmStar);
+
+const SIGMA = 1.05; // PSF sigma in grid pixels (FWHM about 7.6 arcsec)
+function addSource(img, x0, y0, flux) {
+  const r = 5;
+  const xa = Math.max(0, Math.floor(x0 - r)), xb = Math.min(N - 1, Math.ceil(x0 + r));
+  const ya = Math.max(0, Math.floor(y0 - r)), yb = Math.min(N - 1, Math.ceil(y0 + r));
+  for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) {
+    const d2 = (x - x0) * (x - x0) + (y - y0) * (y - y0);
+    img[y * N + x] += flux * Math.exp(-d2 / (2 * SIGMA * SIGMA));
+  }
+}
+
+const moverAt = (i) => ({ x: 58 - i * 1.55, y: 40 + i * 1.05 + 0.6 * Math.sin(i * 0.9) });
+const waveAt = (i) => 2.42 + (1.4 * ((i * 5) % NF)) / (NF - 1); // shuffled, like real exposures
+
+const frames = [];
+for (let i = 0; i < NF; i++) {
+  const wave = waveAt(i);
+  const stat = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) stat[y * N + x] = 0.42 + 0.0016 * x + 0.0009 * y;
+  for (const s of stars) addSource(stat, s.x, s.y, s.flux * (1 + s.slope * (wave - 3.1)));
+  const image = Float32Array.from(stat);
+  const m = moverAt(i);
+  addSource(image, m.x, m.y, 2.6);
+  const residual = new Float32Array(N * N);
+  const mask = new Uint8Array(N * N);
+  const flags = new Uint8Array(N * N);
+  for (let k = 0; k < N * N; k++) {
+    const noise = gauss() * 0.035;
+    image[k] += noise;
+    residual[k] = image[k] - stat[k] * (1 + gauss() * 0.004);
+  }
+  // off-frame wedge that rotates with the exposure's roll angle
+  const a = 0.5 + i * 0.5;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if ((x - N / 2) * ca + (y - N / 2) * sa > N * 0.56) mask[y * N + x] = 1;
+  }
+  // a handful of flagged pixels and a short streak
+  for (let b = 0; b < 7; b++) {
+    const k = Math.floor(rnd() * N * N);
+    flags[k] = 1; mask[k] = 1; image[k] = NaN;
+  }
+  const sx = 10 + Math.floor(rnd() * 60), sy = 12 + Math.floor(rnd() * 60);
+  for (let b = 0; b < 9; b++) { const k = (sy + (b >> 1)) * N + sx + b; flags[k] = 1; mask[k] = 1; }
+  frames.push({ image, residual, mask, flags, wave, mjd: MJD0 + i * 0.0612, mover: m });
+}
+
+// three-colour composite from three exposures
+const rgb = new Uint8ClampedArray(N * N * 4);
+{
+  const ch = [frames[2], frames[5], frames[9]];
+  for (let k = 0; k < N * N; k++) {
+    for (let c = 0; c < 3; c++) {
+      const v = ch[c].image[k];
+      const t = Math.asinh(Math.max(0, (v - 0.4) / 3) * 10) / Math.asinh(10);
+      rgb[k * 4 + c] = Number.isFinite(v) ? 255 * Math.min(1, t) : 0;
+    }
+    rgb[k * 4 + 3] = ch[0].mask[k] ? 0 : 255;
+  }
+}
+
+const sky = (x, y) => { const [ra, dec] = gridPixToSky(grid, x, y); return { ra, dec }; };
+const gaia = stars.filter((s) => s.flux > 1.1).map((s) => {
+  const g = 16.5 - 2.5 * Math.log10(s.flux);
+  if (s === pmStar) {
+    // the catalogue position is where the star was; the image shows where it is now
+    return { ...sky(s.x + 2.9, s.y - 1.7), label: `Gaia DR3 ${s.id}  G ${g.toFixed(1)}  moved 10.3"`, moved: true, to: sky(s.x, s.y) };
+  }
+  return { ...sky(s.x, s.y), label: `Gaia DR3 ${s.id}  G ${g.toFixed(1)}` };
+});
+const trail = frames.map((f) => ({ ...sky(f.mover.x, f.mover.y), mjd: f.mjd }));
+
+// ---- viewers ----------------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const viewer = createViewer($('stage'), { unit: 'MJy/sr' });
+const side = createViewer($('side'), { toolbar: false, compass: false, caption: false, wheelZoom: false });
+viewer.setGrid(grid);
+side.setGrid(grid);
+
+const state = { i: 0, playing: false, timer: 0, blink: false, clicks: [] };
+
+function overlays() {
+  const f = frames[state.i];
+  const markers = [];
+  if ($('markers').checked) {
+    markers.push({ ...sky((N - 1) / 2, (N - 1) / 2), kind: 'target', label: 'target' });
+    markers.push({ ...sky(f.mover.x, f.mover.y), kind: 'candidate', label: 'candidate 1' });
+    for (const c of state.clicks) markers.push({ ra: c.ra, dec: c.dec, kind: 'click' });
+  }
+  return {
+    gaia: $('gaia').checked ? gaia : [],
+    flags: $('flags').checked ? f.flags : null,
+    markers,
+    trail: $('trail').checked ? trail : [],
+  };
+}
+
+function show(i, transition) {
+  state.i = ((i % NF) + NF) % NF;
+  const f = frames[state.i];
+  const mode = $('mode').value;
+  if (mode === 'rgb') {
+    viewer.setRgb(rgb, { transition });
+    viewer.setCaption({ title: 'Synthetic field, three-colour', date: f.mjd, wave: '2.9 / 3.4 / 3.8 µm', note: 'red, green and blue are three exposures' });
+  } else if (mode === 'residual') {
+    viewer.setImage({ image: f.residual, mask: f.mask, range: [-1, 1], diverging: true, transition });
+    viewer.setCaption({ title: 'Synthetic field, residual', date: f.mjd, wave: f.wave, note: `exposure ${state.i + 1} of ${NF}, predicted sky subtracted` });
+  } else {
+    viewer.setImage({ image: f.image, mask: f.mask, range: [0.38, 9], stretch: $('stretch').value, colormap: $('cmap').value, transition });
+    viewer.setCaption({ title: 'Synthetic field, detector 4', date: f.mjd, wave: f.wave, note: `exposure ${state.i + 1} of ${NF}` });
+  }
+  viewer.setOverlays(overlays());
+  side.setImage({ image: f.residual, mask: f.mask, range: [-1, 1], diverging: true, transition });
+  side.setOverlays({ markers: [{ ...sky(f.mover.x, f.mover.y), kind: 'candidate' }] });
+}
+
+function stop() {
+  state.playing = false;
+  state.blink = false;
+  clearInterval(state.timer);
+  $('play').textContent = 'Play';
+}
+function play() {
+  stop();
+  state.playing = true;
+  $('play').textContent = 'Pause';
+  state.timer = setInterval(() => {
+    const next = state.i + 1;
+    if (next >= NF) viewer.flash();
+    show(next, 'cut');
+  }, 1000 / Number($('fps').value));
+}
+function blink() {
+  stop();
+  state.blink = true;
+  let flip = false;
+  state.timer = setInterval(() => {
+    flip = !flip;
+    show(flip ? NF - 1 : 0, 'cut');
+  }, 450);
+}
+
+$('play').addEventListener('click', () => (state.playing ? stop() : play()));
+$('blink').addEventListener('click', () => (state.blink ? stop() : blink()));
+$('prev').addEventListener('click', () => { stop(); show(state.i - 1); });
+$('next').addEventListener('click', () => { stop(); show(state.i + 1); });
+$('fps').addEventListener('change', () => { if (state.playing) play(); });
+for (const id of ['mode', 'stretch', 'cmap', 'gaia', 'flags', 'trail', 'markers']) {
+  $(id).addEventListener('change', () => show(state.i, 'cut'));
+}
+$('readoutToggle').addEventListener('change', (e) => viewer.setOptions({ readout: e.target.checked }));
+$('flashBtn').addEventListener('click', () => viewer.flash());
+$('exportBtn').addEventListener('click', () => {
+  const img = $('export');
+  img.src = viewer.toDataURL();
+  img.hidden = false;
+});
+
+viewer.on('hover', (h) => {
+  $('readout').textContent =
+    `RA   ${h.ra.toFixed(5)}\nDec  ${h.dec >= 0 ? '+' : ''}${h.dec.toFixed(5)}\n` +
+    `x, y ${h.x.toFixed(2)}, ${h.y.toFixed(2)}\nvalue ${h.value === null ? 'no data' : h.value.toFixed(4)}`;
+});
+viewer.on('leave', () => { $('readout').innerHTML = '<b>move over the image</b>'; });
+viewer.on('click', (c) => {
+  state.clicks = [{ ra: c.ra, dec: c.dec }];
+  viewer.setOverlays(overlays());
+});
+// linked pan / zoom between the two viewers
+let linking = false;
+const link = (from, to) => from.on('view', (v) => {
+  if (linking) return;
+  linking = true;
+  to.setView({ zoom: v.zoom, cx: v.cx, cy: v.cy });
+  linking = false;
+});
+link(viewer, side);
+link(side, viewer);
+
+show(0, 'cut');
+window.demo = { viewer, side, frames, grid, gaia, trail, state, show, play, stop, blink, sky };
+</script>
+</body>
+</html>

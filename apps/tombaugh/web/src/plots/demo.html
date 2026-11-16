@@ -1,0 +1,269 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  Demo and visual test page for web/src/plots/. All data on this page is synthetic.
+  Serve web/ over HTTP and open src/plots/demo.html?w=900 (w = container width in px,
+  default 900; try 420 and 360).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh plots demo</title>
+<style>
+  html, body { margin: 0; background: #171715; color: #F7F2E7; font: 13px/1.4 Arial, Helvetica, sans-serif; }
+  main { padding: 20px 16px 48px; }
+  .wrap { margin: 0 auto; }
+  h1 { font: 900 20px/1.2 "Arial Black", Arial, sans-serif; margin: 0 0 4px; }
+  .lede { color: rgba(247, 242, 231, 0.66); margin: 0 0 20px; max-width: 60ch; }
+  h2 { font: bold 11px/1.2 Arial, sans-serif; letter-spacing: 0.1em; text-transform: uppercase;
+       color: rgba(247, 242, 231, 0.66); margin: 28px 0 8px; }
+  .panel { border-top: 1px solid rgba(119, 118, 110, 0.45); padding: 14px 0 0; }
+  .bar { display: flex; gap: 8px; margin: 0 0 16px; flex-wrap: wrap; }
+  .bar button { background: transparent; color: #F7F2E7; border: 1px solid #77766E; border-radius: 3px;
+       font: 12px Arial, sans-serif; padding: 5px 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <div class="wrap" id="wrap">
+    <h1>Plots demo</h1>
+    <p class="lede">Synthetic data: a cool brown dwarf with a methane dip, a long-period variable seen in three survey passes, and a fast mover like Barnard's Star.</p>
+    <div class="bar">
+      <button id="btn-clear" type="button">Clear all</button>
+      <button id="btn-load" type="button">Load data</button>
+    </div>
+
+    <h2>Spectrum, methane lens</h2>
+    <div class="panel"><div id="spec"></div></div>
+
+    <h2>Spectrum coloured by survey pass</h2>
+    <div class="panel"><div id="spec-pass"></div></div>
+
+    <h2>Light curve</h2>
+    <div class="panel"><div id="lc"></div></div>
+
+    <h2>Light curve, steady source</h2>
+    <div class="panel"><div id="lc-steady"></div></div>
+
+    <h2>Motion meter</h2>
+    <div class="panel"><div id="motion"></div></div>
+
+    <h2>Motion, no Gaia star</h2>
+    <div class="panel"><div id="motion-nogaia"></div></div>
+
+    <h2>Motion, static star</h2>
+    <div class="panel"><div id="motion-static"></div></div>
+
+    <h2>Motion, one pass only</h2>
+    <div class="panel"><div id="motion-few"></div></div>
+
+    <h2>Empty states</h2>
+    <div class="panel"><div id="empty-spec"></div></div>
+    <div class="panel" style="margin-top:20px"><div id="empty-lc"></div></div>
+    <div class="panel" style="margin-top:20px"><div id="empty-motion"></div></div>
+  </div>
+</main>
+
+<script type="module">
+import { createSpectrumPlot } from './spectrum.js';
+import { createLightCurvePlot } from './lightcurve.js';
+import { createMotionMeter } from './motion.js';
+import { DETECTORS } from './svg.js';
+
+const params = new URLSearchParams(location.search);
+const width = Math.max(280, Number(params.get('w')) || 900);
+document.getElementById('wrap').style.width = `${width}px`;
+document.getElementById('wrap').style.maxWidth = '100%';
+
+// --- deterministic random numbers -----------------------------------------------------------
+let seed = 20261115;
+const rand = () => {
+  seed = (seed * 1664525 + 1013904223) >>> 0;
+  return seed / 4294967296;
+};
+const gauss = () => Math.sqrt(-2 * Math.log(rand() + 1e-12)) * Math.cos(2 * Math.PI * rand());
+const bump = (w, c, s) => Math.exp(-0.5 * ((w - c) / s) ** 2);
+
+const PASS_MJD = [60841, 61024, 61210.8]; // 2025-06-15, 2025-12-15, 2026-06-19
+
+// --- a cool brown dwarf: J, H, K peaks, water and methane bands, bright near 4 to 5 um ------
+function dwarf(w) {
+  let f = 30
+    + 420 * bump(w, 1.05, 0.05) + 900 * bump(w, 1.27, 0.07) + 640 * bump(w, 1.6, 0.08)
+    + 400 * bump(w, 2.1, 0.11) + 420 * bump(w, 3.85, 0.22) + 1250 * bump(w, 4.25, 0.36);
+  f *= 1 - 0.75 * bump(w, 1.4, 0.06);
+  f *= 1 - 0.7 * bump(w, 1.9, 0.07);
+  f *= 1 - 0.9 * bump(w, 3.3, 0.2);
+  f *= 1 - 0.3 * bump(w, 4.67, 0.09);
+  return f;
+}
+
+// --- a long-period variable: red continuum with water bands that deepen when it is faint ----
+const VAR_LEVEL = [0.7, 1.33, 0.97];
+function variableMean(w) {
+  const x = 1.9 / w;
+  return 5200 * x ** 3 / (Math.exp(2.4 * x) - 1) * 9;
+}
+function variable(w, pass) {
+  const level = VAR_LEVEL[pass];
+  const colour = 1 + (level - 1) * 0.45 * (2.2 / w - 0.7); // larger swing at short wavelengths
+  const depth = 0.34 - 0.2 * (level - 1);
+  let f = variableMean(w) * level * Math.max(0.2, colour);
+  f *= 1 - depth * bump(w, 1.4, 0.07);
+  f *= 1 - depth * bump(w, 1.9, 0.09);
+  f *= 1 - 0.8 * depth * bump(w, 2.7, 0.16);
+  f *= 1 - 0.18 * bump(w, 4.6, 0.12);
+  return f;
+}
+
+function exposures(model, { perDet = 28, noise = 25, rel = 0.03 } = {}) {
+  const pts = [];
+  PASS_MJD.forEach((t0, pass) => {
+    for (const d of DETECTORS) {
+      for (let i = 0; i < perDet; i++) {
+        const wave = d.min + rand() * (d.max - d.min);
+        const truth = model(wave, pass);
+        const err = noise + rel * truth;
+        const flagged = rand() < 0.04;
+        const failed = rand() < 0.01;
+        pts.push({
+          flux_uJy: failed ? NaN : truth + gauss() * err * (flagged ? 4 : 1),
+          err_uJy: err,
+          wave,
+          bw: wave / 41,
+          mjd: t0 + rand() * 11,
+          flagged,
+          ok: !failed,
+          det: d.det,
+        });
+      }
+    }
+  });
+  return pts.sort((a, b) => a.wave - b.wave);
+}
+
+function binChannels(points) {
+  const out = [];
+  for (const d of DETECTORS) {
+    const step = (d.max - d.min) / 17;
+    for (let ch = 0; ch < 17; ch++) {
+      const lo = d.min + ch * step;
+      const inCh = points.filter((p) => p.ok && !p.flagged && p.wave >= lo && p.wave < lo + step);
+      if (!inCh.length) continue;
+      let sw = 0;
+      let swf = 0;
+      let swm = 0;
+      for (const p of inCh) {
+        const w = 1 / (p.err_uJy * p.err_uJy);
+        sw += w;
+        swf += w * p.flux_uJy;
+        swm += w * p.mjd;
+      }
+      out.push({ flux_uJy: swf / sw, err_uJy: Math.sqrt(1 / sw), wave: lo + step / 2, bw: step, mjd: swm / sw, flagged: false, ok: true, det: d.det, n: inCh.length });
+    }
+  }
+  return out;
+}
+
+const dwarfPoints = exposures(dwarf);
+const dwarfBinned = binChannels(dwarfPoints);
+const varPoints = exposures(variable, { noise: 60, rel: 0.025 });
+const varBinned = binChannels(varPoints);
+
+const METHANE = { id: 'methane', label: 'Methane', description: '3.3 um band against the 4.5 um continuum', band: [3.15, 3.45], continuum: [[4.4, 4.6]], dets: [4, 6] };
+
+// --- light curves ---------------------------------------------------------------------------
+function lightCurve(levels, scatter) {
+  const pts = [];
+  PASS_MJD.forEach((t0, pass) => {
+    for (let i = 0; i < 84; i++) {
+      const wave = 0.75 + rand() * 4.25;
+      const colour = 1 + (levels[pass] - 1) * 0.45 * (2.2 / wave - 0.7);
+      const ratio = levels[pass] * Math.max(0.2, colour);
+      const err = scatter * (0.7 + 0.6 * rand());
+      pts.push({ mjd: t0 + rand() * 11, ratio: ratio + gauss() * err, err, wave });
+    }
+  });
+  return pts.sort((a, b) => a.mjd - b.mjd);
+}
+const lcVariable = lightCurve(VAR_LEVEL, 0.04);
+const lcSteady = lightCurve([1, 1, 1], 0.03);
+
+// --- motion ---------------------------------------------------------------------------------
+function track(pmra, pmdec, { perPass = 6, scatter = 0.35, passes = PASS_MJD } = {}) {
+  const out = [];
+  for (const t0 of passes) {
+    for (let i = 0; i < perPass; i++) {
+      const mjd = t0 + rand() * 11;
+      const yr = (mjd - passes[0]) / 365.25;
+      out.push({
+        mjd,
+        dEast_arcsec: (pmra / 1000) * yr + gauss() * scatter,
+        dNorth_arcsec: (pmdec / 1000) * yr + gauss() * scatter,
+        err_arcsec: scatter,
+      });
+    }
+  }
+  return out;
+}
+const BARNARD_GAIA = { pmra: -801.551, pmdec: 10362.394, total: 10393.349 };
+const barnard = {
+  measured: { pmra: -779, pmdec: 10070, total: 10100, errTotal: 600 },
+  gaia: BARNARD_GAIA,
+  track: track(-779, 10070),
+  title: 'the fast mover',
+};
+const stranger = {
+  measured: { pmra: 3120, pmdec: -2210, total: 3823, errTotal: 520 },
+  gaia: null,
+  track: track(3120, -2210),
+  title: 'an uncatalogued source',
+};
+const still = {
+  measured: { pmra: 60, pmdec: -110, total: 125, errTotal: 310 },
+  gaia: { pmra: 8.4, pmdec: -9.1, total: 12.4 },
+  track: track(8.4, -9.1, { scatter: 0.3 }),
+  title: 'a field star',
+};
+const onePass = { measured: null, gaia: BARNARD_GAIA, track: track(0, 0, { passes: [PASS_MJD[0]] }), title: 'a new source' };
+
+// --- mount ----------------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const plots = {
+  spec: createSpectrumPlot($('spec')),
+  specPass: createSpectrumPlot($('spec-pass'), { colorBy: 'pass' }),
+  lc: createLightCurvePlot($('lc')),
+  lcSteady: createLightCurvePlot($('lc-steady')),
+  motion: createMotionMeter($('motion')),
+  motionNoGaia: createMotionMeter($('motion-nogaia')),
+  motionStatic: createMotionMeter($('motion-static')),
+  motionFew: createMotionMeter($('motion-few')),
+  emptySpec: createSpectrumPlot($('empty-spec')),
+  emptyLc: createLightCurvePlot($('empty-lc')),
+  emptyMotion: createMotionMeter($('empty-motion')),
+};
+
+function load() {
+  plots.spec.setData({ points: dwarfPoints, binned: dwarfBinned, model: dwarf, lens: METHANE, title: 'Cool brown dwarf (synthetic)' });
+  plots.specPass.setData({ points: varPoints, binned: varBinned, title: 'Long-period variable (synthetic)' });
+  plots.lc.setData({ points: lcVariable, title: 'Long-period variable (synthetic)' });
+  plots.lcSteady.setData({ points: lcSteady, title: 'Field star (synthetic)' });
+  plots.motion.setData(barnard);
+  plots.motionNoGaia.setData(stranger);
+  plots.motionStatic.setData(still);
+  plots.motionFew.setData(onePass);
+}
+function clearAll() {
+  for (const key of ['spec', 'specPass', 'lc', 'lcSteady', 'motion', 'motionNoGaia', 'motionStatic', 'motionFew']) plots[key].clear();
+}
+$('btn-load').addEventListener('click', load);
+$('btn-clear').addEventListener('click', clearAll);
+if (params.get('empty') !== '1') load();
+
+window.demo = { plots, load, clearAll, data: { dwarfPoints, dwarfBinned, varPoints, lcVariable, barnard } };
+</script>
+</body>
+</html>

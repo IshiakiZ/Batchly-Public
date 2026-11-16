@@ -1,0 +1,14 @@
+{
+  "name": "tombaugh",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Tombaugh: a blink comparator for the 102-color SPHEREx sky",
+  "scripts": {
+    "dev": "node proxy/dev-server.mjs",
+    "test": "node --test",
+    "build": "node tools/build.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

@@ -1,0 +1,155 @@
+<!doctype html>
+<!-- Tombaugh - SPHEREx blink comparator. Apache-2.0. -->
+<!-- AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validation plugin demo · Tombaugh</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: #171715; color: #F7F2E7; font: 14px/1.5 Arial, Helvetica, sans-serif; }
+  .demo { display: grid; grid-template-columns: minmax(0, 1fr) 348px; min-height: 100vh; }
+  .demo-main { padding: 28px 32px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+  .demo-main h1 { margin: 0; font: bold 20px/1.25 Arial, Helvetica, sans-serif; letter-spacing: 0.01em; }
+  .demo-main p { margin: 0; max-width: 62ch; color: rgba(247, 242, 231, 0.68); }
+  .demo-main p b { color: #F7F2E7; font-weight: normal; }
+  .demo-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .demo-row button {
+    appearance: none; min-height: 32px; padding: 5px 12px; background: transparent; color: #F7F2E7;
+    border: 1px solid rgba(247, 242, 231, 0.3); border-radius: 2px; font: 13px/1.2 Arial, Helvetica, sans-serif; cursor: pointer;
+  }
+  .demo-row button:hover { border-color: #F7F2E7; }
+  .demo-row button:focus-visible { outline: 2px solid #F7F2E7; outline-offset: 2px; }
+  .demo-label { font: 11px/1.3 Arial, Helvetica, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(247, 242, 231, 0.68); }
+  .demo-log {
+    margin: 0; padding: 12px 14px; min-height: 120px; max-height: 340px; overflow: auto; border: 1px solid rgba(247, 242, 231, 0.14);
+    font: 12px/1.55 Consolas, "Cascadia Mono", Menlo, monospace; color: rgba(247, 242, 231, 0.8); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .demo-side { border-left: 1px solid rgba(247, 242, 231, 0.14); padding: 20px; min-width: 0; container-type: inline-size; }
+  .panel-title { margin: 0 0 12px; font: bold 16px/1.3 Arial, Helvetica, sans-serif; }
+  @media (max-width: 760px) {
+    .demo { grid-template-columns: minmax(0, 1fr); }
+    .demo-side { border-left: 0; border-top: 1px solid rgba(247, 242, 231, 0.14); }
+  }
+</style>
+</head>
+<body>
+<div class="demo">
+  <main class="demo-main">
+    <h1>Validation plugin, on its own</h1>
+    <p>This page runs the panel against a <b>fake app</b> and <b>made-up frames with a known answer</b>.
+      Nothing here is SPHEREx data. The frames are 6.15 arcsec pixels with their own roll, pointing and wavelength,
+      pushed through the real reprojection, so the numbers on the right come from the same code the app runs.</p>
+    <p>The fake archive answers for four of the five challenge targets. For WISE 0855-0714 it lists no exposures,
+      so the report has to say so. Add <b>?slow=1</b> to the address to make one load hang and see the timeout.</p>
+    <div class="demo-row">
+      <button type="button" id="go-fake">Go to a made-up field</button>
+      <button type="button" id="go-barnard">Go to Barnard's Star</button>
+      <button type="button" id="go-wrong">Go to a field with a wrong catalogue</button>
+      <button type="button" id="select-variable">Select the variable star</button>
+    </div>
+    <div class="demo-label">What the fake app did</div>
+    <pre class="demo-log" id="log" aria-live="off"></pre>
+  </main>
+  <aside class="demo-side" id="side" aria-label="Side column of the fake app"></aside>
+</div>
+<script type="module">
+  import { TARGETS, findTarget, positionNow } from '../../core/targets.js';
+  import { createFakeApp } from './fakeapp.js';
+  import { fakeLayers, makeFakeField } from './fakefield.js';
+  import { install } from './index.js';
+
+  const params = new URLSearchParams(location.search);
+  const slow = params.get('slow') === '1';
+  const PASSES = [60836, 61018, 61200];
+  const MID = PASSES[1] + 1;
+  const logEl = document.getElementById('log');
+  const say = (line) => {
+    logEl.textContent += `${line}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+  let lastField = null;
+
+  // What the fake archive holds, per challenge target. The central star of each made-up field
+  // moves and varies the way the target table says the real one does.
+  const RECIPES = {
+    barnard: { seed: 5 },
+    'eps-indi-b': { seed: 9, hideFromGaia: true, moverBand: { center: 3.3, sigma: 0.12, depth: 0.6 }, exposuresPerPass: 12 },
+    wise0855: null,
+    'rw-aur': { seed: 13, moverFactor: 1.6 },
+    'r-dra': { seed: 21, moverFactor: 0.45 },
+  };
+
+  function provide(request) {
+    const known = findTarget(request.name);
+    if (known && known.id in RECIPES) {
+      const recipe = RECIPES[known.id];
+      if (!recipe) {
+        say(`archive: no D${request.det} exposures of ${known.name}`);
+        return null;
+      }
+      if (slow && known.id === 'rw-aur') {
+        say(`archive: ${known.name} does not answer`);
+        return 'never';
+      }
+      const mid = positionNow(known, MID, { parallax: false });
+      const field = makeFakeField({
+        ra0: mid.ra, dec0: mid.dec, fov: request.fov, dets: [request.det], passMjds: PASSES, seed: recipe.seed,
+        moverPm: [known.pmra, known.pmdec], moverParallax: known.parallax, moverFactor: recipe.moverFactor || 1,
+        moverBand: recipe.moverBand || null, exposuresPerPass: recipe.exposuresPerPass || 8,
+        variable: false, nStars: request.fov > 4 ? 26 : 14,
+      });
+      if (recipe.hideFromGaia) field.gaia.stars = field.gaia.stars.filter((s) => s.id !== 'fake-mover');
+      say(`archive: ${field.frames.length} D${request.det} frames of ${known.name}, ${field.gaia.stars.length} Gaia stars`);
+      lastField = field;
+      return { ...field, layersByDet: fakeLayers(field) };
+    }
+    const field = makeFakeField({ ra0: request.ra, dec0: request.dec, fov: request.fov, dets: [request.det], passMjds: PASSES, seed: 11 });
+    if (/wrong/i.test(request.name)) {
+      // The star moves 10.36 arcsec a year north; this catalogue claims 8.8. The panel must flag it.
+      // Its 2016 position is shifted so that the wrong motion still lands on the star today.
+      const years = 2000 + (MID - 51544.5) / 365.25 - 2016;
+      field.gaia.stars = field.gaia.stars.map((s) => (s.id === 'fake-mover' ? { ...s, pmdec: 8800, dec: s.dec + ((10360 - 8800) * years) / 3.6e6 } : s));
+      say('archive: the catalogue entry of the central star is wrong on purpose (8800 instead of 10360 mas/yr north)');
+    }
+    say(`archive: ${field.frames.length} D${request.det} frames of a made-up field, ${field.gaia.stars.length} Gaia stars`);
+    lastField = field;
+    return { ...field, layersByDet: fakeLayers(field) };
+  }
+
+  const app = createFakeApp({ provide, delayMs: 500, steps: 3, version: 'demo', panelHost: document.getElementById('side') });
+  app.on('target', (t) => say(`target: ${t.name || 'unnamed'} at ${t.ra.toFixed(5)}, ${t.dec.toFixed(5)}`));
+  app.on('frames', (p) => say(`frames: D${p.det} ${p.count} of ${p.total}${p.complete ? ', complete' : ''}`));
+  app.on('movie', (p) => say(`movie: ${p.frames.length} frames`));
+
+  const handle = install(app, { idleMs: 4000, maxMs: 8000, settleMs: 300, gaiaWaitMs: 600 });
+  window.demo = { app, handle, TARGETS };
+
+  document.getElementById('go-fake').addEventListener('click', () => app.goTo({ ra: 150, dec: 20, name: 'Made-up field' }));
+  document.getElementById('go-wrong').addEventListener('click', () => app.goTo({ ra: 210, dec: -35, name: 'Wrong catalogue, on purpose' }));
+  document.getElementById('go-barnard').addEventListener('click', () => {
+    const t = findTarget('barnard');
+    const pos = positionNow(t, MID);
+    app.store.set({ det: t.det, fov: t.fov });
+    app.goTo({ ra: pos.ra, dec: pos.dec, name: t.name });
+  });
+  document.getElementById('select-variable').addEventListener('click', () => {
+    const v = lastField && lastField.truth && lastField.truth.variable;
+    if (!v) {
+      say('select: this field has no variable star; go to the made-up field first');
+      return;
+    }
+    const star = v.star;
+    const years = 2000 + (MID - 51544.5) / 365.25 - 2016;
+    const ra = star.ra + (star.pmra * years) / 3.6e6 / Math.cos((star.dec * Math.PI) / 180);
+    const dec = star.dec + (star.pmdec * years) / 3.6e6;
+    app.select({ ra, dec, label: 'Selected source (the variable)' });
+    say(`select: ${ra.toFixed(5)}, ${dec.toFixed(5)}`);
+  });
+
+  if (params.get('auto') !== '0') app.goTo({ ra: 150, dec: 20, name: 'Made-up field' });
+</script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  demo.html: a standalone page for the ui-experience module. It mounts the landing with made-up
+  targets, and has buttons to open every explainer topic and the shortcut help.
+  Serve web/ over HTTP and open /src/ui/demo.html. Query parameters:
+    ?reduced=1   force the reduced-motion presentation
+    ?real=1      use the real targets from core/targets.js instead of the made-up ones
+    ?topic=<id>  open an explainer topic on load
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tombaugh: ui-experience demo</title>
+    <style>
+      html, body { margin: 0; background: #171715; color: #F7F2E7; font-family: Arial, Helvetica, sans-serif; }
+      #panel { max-width: 1440px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 60px) 80px; border-top: 1px solid rgba(247, 242, 231, 0.13); }
+      #panel h2 { margin: 0 0 6px; font: 400 11px/1.2 Consolas, Menlo, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #A8A59A; }
+      #panel .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 22px; }
+      #panel button { padding: 8px 12px; border: 1px solid rgba(247, 242, 231, 0.3); background: none; color: #F7F2E7; font: 13px Arial, sans-serif; cursor: pointer; }
+      #panel button:hover { border-color: #F7F2E7; }
+      #panel button:focus-visible { outline: 2px solid #F7F2E7; outline-offset: 3px; }
+      #log { margin: 0; min-height: 20px; font: 13px/1.5 Consolas, Menlo, monospace; color: #A8A59A; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="landing"></div>
+    <div id="overlays"></div>
+    <div id="panel">
+      <h2>Demo controls: explainer topics</h2>
+      <div class="row" id="topics"></div>
+      <h2>Demo controls: other</h2>
+      <div class="row">
+        <button type="button" id="help">Shortcut help (?)</button>
+        <button type="button" id="toggle">Hide landing</button>
+      </div>
+      <h2>Callbacks</h2>
+      <p id="log">Nothing yet. Pick a card, search, or press a shortcut key.</p>
+    </div>
+
+    <script type="module">
+      import { createLanding } from './landing.js';
+      import { createExplainer, TOPICS } from './explain.js';
+      import { bindShortcuts, createShortcutHelp } from './shortcuts.js';
+
+      const params = new URLSearchParams(location.search);
+      const log = (text) => {
+        document.getElementById('log').textContent = text;
+      };
+
+      // Made-up stand-ins with the shape of core/targets.js TARGETS.
+      const targets = [
+        { id: 'barnard', name: 'Barnard’s Star', ra: 269.4521, dec: 4.6934, epoch: 2000, pmra: -802.8, pmdec: 10362.5, parallax: 547, det: 3, fov: 4,
+          blurb: 'The fastest star in the sky, six light-years away.',
+          why: 'A hop of about 0.85 pixel between visits, and a red and blue pair in the residual.' },
+        { id: 'luhman16', name: 'Luhman 16 AB', ra: 162.3288, dec: -53.3194, epoch: 2000, pmra: -2760, pmdec: 358, parallax: 501, det: 3, fov: 4,
+          blurb: 'Two brown dwarfs in orbit, the third closest system to the Sun.',
+          why: 'Two faint red dots that drift together past the background stars.' },
+        { id: 'wise0855', name: 'WISE 0855−0714', ra: 133.7871, dec: -7.2451, epoch: 2014, pmra: -8118, pmdec: 680, parallax: 439, det: 5, fov: 4,
+          blurb: 'The coldest known brown dwarf, about as warm as the North Pole.',
+          why: 'Nothing in one frame. A dot near 4.6 µm once the frames are stacked.' },
+        { id: 'rcrb', name: 'R Coronae Borealis', ra: 237.1421, dec: 28.1568, epoch: 2000, pmra: -2.3, pmdec: -12.1, parallax: 0.76, det: 2, fov: 4,
+          blurb: 'A star that fades without warning when it puffs out soot.',
+          why: 'Brightness that changes between visits with no period to it.' },
+        { id: 'mira', name: 'Mira', ra: 34.8366, dec: -2.9776, epoch: 2000, pmra: 9.3, pmdec: -237.4, parallax: 10.9, det: 3, fov: 4,
+          blurb: 'A red giant that swells and shrinks every 332 days.',
+          why: 'A slow rise and fall, with water bands that deepen as it dims.' },
+        { id: 'm101', name: 'M101', ra: 210.8023, dec: 54.349, epoch: 2000, pmra: 0, pmdec: 0, parallax: 0, det: 2, fov: 10,
+          blurb: 'A face-on spiral galaxy 21 million light-years away.',
+          why: 'Nothing. A galaxy should subtract away cleanly; use it as a control.' },
+      ];
+
+      // ?real=1 swaps in the real challenge targets from core/targets.js, when that file exists.
+      if (params.has('real')) {
+        try {
+          const core = await import('../core/targets.js');
+          targets.splice(0, targets.length, ...core.TARGETS.slice(0, 5));
+        } catch (err) {
+          console.warn('core/targets.js is not available; using the made-up targets', err);
+        }
+      }
+
+      const explainer = createExplainer(document.getElementById('overlays'));
+      const help = createShortcutHelp(document.getElementById('overlays'));
+      const landing = createLanding(document.getElementById('landing'), {
+        targets,
+        onPick: (t) => log(`onPick: ${t.id} (${t.name})`),
+        onSearch: (text) => {
+          log(`onSearch: ${JSON.stringify(text)}`);
+          // Pretend to resolve a name so the busy state can be seen.
+          if (/[a-z]/i.test(text) && !/\d+h/i.test(text)) {
+            return new Promise((resolve, reject) =>
+              setTimeout(() => (/nothing/i.test(text) ? reject(new Error('No object by that name. Check the spelling or use coordinates.')) : resolve()), 900),
+            );
+          }
+        },
+        onSurprise: () => log('onSurprise'),
+        onExplain: (id) => explainer.show(id),
+        reducedMotion: params.has('reduced') ? true : undefined,
+      });
+      landing.show();
+      window.demo = { landing, explainer, help };
+
+      const row = document.getElementById('topics');
+      for (const topic of TOPICS) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = topic.id;
+        b.dataset.topic = topic.id;
+        b.addEventListener('click', () => explainer.show(topic.id));
+        row.appendChild(b);
+      }
+      document.getElementById('help').addEventListener('click', () => help.show());
+      let shown = true;
+      document.getElementById('toggle').addEventListener('click', (ev) => {
+        shown = !shown;
+        if (shown) landing.show();
+        else landing.hide();
+        ev.currentTarget.textContent = shown ? 'Hide landing' : 'Show landing';
+      });
+
+      const say = (what) => () => log(`shortcut: ${what}`);
+      bindShortcuts({
+        '?': () => help.toggle(),
+        Space: say('play or pause'),
+        ArrowLeft: say('step back'),
+        ArrowRight: say('step forward'),
+        b: say('blink'),
+        r: say('residual'),
+        g: say('Gaia rings'),
+        f: say('flags'),
+        1: say('detector 1'), 2: say('detector 2'), 3: say('detector 3'),
+        4: say('detector 4'), 5: say('detector 5'), 6: say('detector 6'),
+      });
+
+      if (params.has('topic')) explainer.show(params.get('topic'));
+    </script>
+  </body>
+</html>

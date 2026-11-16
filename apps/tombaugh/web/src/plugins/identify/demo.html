@@ -1,0 +1,281 @@
+<!doctype html>
+<!--
+  Tombaugh - SPHEREx blink comparator. Apache-2.0.
+  AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026.
+
+  Standalone demo and visual test page for the "What is this?" plugin (web/src/plugins/identify/).
+  A fake app stands in for the shell and a stubbed fetch stands in for the proxy's /identify
+  route, so the page needs no network. Every measurement on this page is synthetic.
+  Serve web/ over HTTP and open src/plugins/identify/demo.html
+    ?w=380      width of the side column in px (try 320 and 440)
+    ?delay=700  pretend latency of the catalogue lookup in ms
+    ?api=/api   use a real proxy at that base URL instead of the stub
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh plugin demo: What is this?</title>
+<style>
+  html, body { margin: 0; background: #171715; color: #F7F2E7; font: 13px/1.5 Arial, Helvetica, sans-serif; }
+  main { display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 20px 48px; align-items: flex-start; max-width: 1080px; margin: 0 auto; }
+  .stage { flex: 1 1 380px; min-width: 0; max-width: 560px; }
+  h1 { font: 900 20px/1.2 "Arial Black", Arial, sans-serif; margin: 0 0 4px; }
+  .lede { color: rgba(247, 242, 231, 0.68); margin: 0 0 16px; max-width: 58ch; }
+  .sky { position: relative; aspect-ratio: 1; background: #0d0d0c; border: 1px solid rgba(247, 242, 231, 0.14); border-radius: 3px; overflow: hidden; }
+  .sky canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .src { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border: 0; background: transparent; cursor: crosshair; border-radius: 50%; }
+  .src::before { content: ""; position: absolute; inset: 9px; border: 1px solid rgba(247, 242, 231, 0.35); border-radius: 50%; }
+  .src:hover::before { border-color: #F7F2E7; }
+  .src[aria-pressed="true"]::before { border-color: #E53C27; inset: 6px; border-width: 1.5px; }
+  .src:focus-visible { outline: 2px solid #F7F2E7; outline-offset: 2px; }
+  .src span { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); font: 11px/1.2 Arial, sans-serif; color: rgba(247, 242, 231, 0.8); white-space: nowrap; pointer-events: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+  .bar button { background: transparent; color: #F7F2E7; border: 1px solid #77766E; border-radius: 3px; font: 12px Arial, sans-serif; padding: 6px 10px; cursor: pointer; }
+  .bar button:hover { border-color: #F7F2E7; }
+  .bar button:focus-visible { outline: 2px solid #F7F2E7; outline-offset: 2px; }
+  .side { flex: 0 0 auto; width: var(--side-w, 380px); max-width: 100%; background: #1E1E1B; border: 1px solid rgba(247, 242, 231, 0.14); border-radius: 3px; }
+  .tabs { display: flex; border-bottom: 1px solid rgba(247, 242, 231, 0.14); }
+  .tab { padding: 11px 20px 9px; font: 12px Arial, sans-serif; letter-spacing: 0.04em; color: #F7F2E7; border-bottom: 2px solid #F7F2E7; }
+  .panel { padding: 16px 20px 20px; }
+  .panel-body { display: grid; gap: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="stage">
+    <h1>What is this?</h1>
+    <p class="lede">Plugin demo with a fake app and a stubbed catalogue service. Click a source in the image; the panel on the right answers. All data here is synthetic.</p>
+    <div class="sky" id="sky"><canvas id="stars" width="560" height="560" aria-hidden="true"></canvas></div>
+    <div class="bar">
+      <button type="button" id="btn-down">Catalogue service down</button>
+      <button type="button" id="btn-clear">Clear selection</button>
+    </div>
+  </div>
+  <aside class="side" id="side" aria-label="Side column">
+    <div class="tabs" id="tabs"></div>
+    <div id="panels"></div>
+  </aside>
+</main>
+
+<script type="module">
+import { install, meta } from './index.js';
+
+const params = new URLSearchParams(location.search);
+document.getElementById('side').style.setProperty('--side-w', `${Math.max(280, Number(params.get('w')) || 380)}px`);
+const DELAY = params.has('delay') ? Math.max(0, Number(params.get('delay')) || 0) : 700;
+
+// ---- synthetic measurements --------------------------------------------------------------------
+const WAVES = Array.from({ length: 102 }, (_, i) => 0.75 * (5 / 0.75) ** (i / 101));
+const planck = (w, t) => 1 / (w ** 3 * Math.expm1(14387.77 / (w * t)));
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const gauss = (r) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+function spectrum(shape, { peak = 5000, noise = 25, bands = [], seed = 1 } = {}) {
+  const rand = mulberry32(seed);
+  const raw = WAVES.map((w) => bands.reduce((f, b) => f * (1 - b.depth * Math.exp(-0.5 * ((w - b.center) / b.sigma) ** 2)), shape(w)));
+  const top = Math.max(...raw);
+  return WAVES.map((wave, i) => ({ wave, flux_uJy: (raw[i] / top) * peak + noise * gauss(rand), err_uJy: noise }));
+}
+const PASSES = [60840, 61025, 61205];
+function lightCurve(levels, { n = 20, err = 0.03, seed = 7 } = {}) {
+  const rand = mulberry32(seed);
+  return levels.flatMap((level, k) => Array.from({ length: n }, (_, i) => ({ mjd: PASSES[k] + (i * 6) / n, ratio: level + err * gauss(rand), err, wave: 1 + i * 0.1 })));
+}
+const FRAMES = PASSES.flatMap((start) => Array.from({ length: 14 }, (_, i) => ({ mjd: start + i * 0.45 })));
+const MID_YEARS = (61025 - 57388.5) / 365.25;
+const offset = (ra, dec, eastArcsec, northArcsec) => ({ ra: ra + eastArcsec / 3600 / Math.cos((dec * Math.PI) / 180), dec: dec + northArcsec / 3600 });
+
+const FIELD = { ra: 269.4486, dec: 4.7379 };
+// Barnard's star as Gaia lists it at 2016.0, placed so that it sits on the click by late 2025.
+const barnard2016 = offset(FIELD.ra, FIELD.dec, 0.801551 * MID_YEARS + 0.3, -10.362394 * MID_YEARS - 0.2);
+const dwarfPos = offset(FIELD.ra, FIELD.dec, -62, 48);
+const miraPos = offset(FIELD.ra, FIELD.dec, 70, 40);
+const galaxyPos = offset(FIELD.ra, FIELD.dec, 55, -66);
+const faintPos = offset(FIELD.ra, FIELD.dec, -58, -52);
+const GAIA = [
+  { id: '4472832130942575872', ...barnard2016, pmra: -801.551, pmdec: 10362.394, parallax: 546.98, gmag: 8.2 },
+  { id: '4472836292758713216', ...offset(miraPos.ra, miraPos.dec, 0.9, -0.7), pmra: 2.1, pmdec: -3.4, parallax: 1.9, gmag: 11.4 },
+  { id: '4472831718625757696', ...offset(dwarfPos.ra, dwarfPos.dec, 31, 27), pmra: -4.2, pmdec: 1.1, parallax: 0.6, gmag: 17.9 },
+];
+
+const SOURCES = {
+  barnard: {
+    label: 'Fast mover', x: 50, y: 50, ...FIELD,
+    binned: spectrum((w) => planck(w, 3200), { peak: 180000, noise: 300, seed: 11 }),
+    lightCurve: lightCurve([1, 1.01, 0.99], { err: 0.02 }),
+    motion: { measured: { pmra: -760, pmdec: 10410, total: 10437.7, errTotal: 180, n: 3 }, track: [] },
+    catalogue: {
+      source: 'simbad',
+      objects: [
+        { name: "Barnard's star", type: 'PM*', typeLabel: 'high proper-motion star', ra: 269.4521, dec: 4.6934, sepArcsec: 0.42, pmra: -801.551, pmdec: 10362.394, parallax: 546.9759, spType: 'M4V', vmag: 9.511, kmag: 4.524, ids: ['GJ 699', 'HIP 87937', 'V* V2500 Oph', 'LHS 57'], url: "https://simbad.cds.unistra.fr/simbad/sim-id?Ident=NAME%20Barnard's%20star" },
+        { name: '2MASS J17574849+0441405', type: 'IR', typeLabel: 'infrared source', ra: 269.452, dec: 4.6946, sepArcsec: 9.3, pmra: null, pmdec: null, parallax: null, spType: null, vmag: null, kmag: null, ids: [], url: 'https://simbad.cds.unistra.fr/simbad/sim-id?Ident=2MASS%20J17574849%2B0441405' },
+      ],
+    },
+  },
+  dwarf: {
+    label: 'Faint red dot', x: 28, y: 33, ...dwarfPos,
+    binned: spectrum((w) => planck(w, 900), { peak: 2600, noise: 20, seed: 3, bands: [{ center: 3.3, sigma: 0.2, depth: 0.93 }, { center: 2.25, sigma: 0.12, depth: 0.5 }, { center: 1.67, sigma: 0.07, depth: 0.4 }] }),
+    lightCurve: lightCurve([1, 1.02, 0.98], { err: 0.05, seed: 5 }),
+    motion: { measured: { pmra: 120, pmdec: -210, total: 241.9, errTotal: 30, n: 3 }, track: [] },
+    catalogue: { source: 'simbad', objects: [] },
+  },
+  mira: {
+    label: 'Changes brightness', x: 75, y: 36, ...miraPos,
+    binned: spectrum((w) => planck(w, 2900), { peak: 60000, noise: 150, seed: 21, bands: [{ center: 4.67, sigma: 0.05, depth: 0.35 }] }),
+    lightCurve: lightCurve([1, 2, 1.1], { err: 0.03, seed: 9 }),
+    motion: { measured: { pmra: 12, pmdec: -8, total: 14.4, errTotal: 35, n: 3 }, track: [] },
+    catalogue: {
+      source: 'simbad',
+      objects: [
+        { name: 'V* DEMO 1757 Oph', type: 'Mi*', typeLabel: 'Mira variable', ra: miraPos.ra, dec: miraPos.dec, sepArcsec: 1.1, pmra: 2.1, pmdec: -3.4, parallax: 1.9, spType: 'M7IIIe', vmag: 9.8, kmag: 1.2, ids: ['IRAS 17553+0441 (demo)', 'AAVSO 1755+04 (demo)'], url: null },
+      ],
+    },
+  },
+  galaxy: {
+    label: 'Fuzzy patch', x: 70, y: 73, ...galaxyPos,
+    binned: spectrum((w) => w ** 0.9 * (1 + 0.5 * Math.exp(-0.5 * ((w - 1.6) / 0.5) ** 2)), { peak: 3200, noise: 30, seed: 31 }),
+    lightCurve: lightCurve([1, 0.99, 1.01], { err: 0.04, seed: 2 }),
+    motion: { measured: { pmra: 20, pmdec: 14, total: 24.4, errTotal: 45, n: 3 }, track: [] },
+    size: { fwhmArcsec: 16.2, psfArcsec: 7.5 },
+    catalogue: {
+      source: 'simbad',
+      objects: [
+        { name: 'LEDA 0000000 (demo)', type: 'G', typeLabel: 'galaxy', ra: galaxyPos.ra, dec: galaxyPos.dec, sepArcsec: 2.4, pmra: null, pmdec: null, parallax: null, spType: null, vmag: 15.3, kmag: 11.9, ids: ['2MASX J17575+0436 (demo)'], url: null },
+        { name: 'NVSS J175751+043648 (demo)', type: 'Rad', typeLabel: 'radio source', ra: galaxyPos.ra, dec: galaxyPos.dec, sepArcsec: 5.8, pmra: null, pmdec: null, parallax: null, spType: null, vmag: null, kmag: null, ids: [], url: null },
+      ],
+    },
+  },
+  faint: {
+    label: 'Barely there', x: 30, y: 71, ...faintPos,
+    binned: spectrum(() => 1, { peak: 28, noise: 30, seed: 41 }),
+    lightCurve: lightCurve([1, 1.3, 0.8], { n: 5, err: 0.6, seed: 4 }),
+    motion: null,
+    catalogue: { source: 'simbad', objects: [] },
+  },
+};
+
+// ---- stubbed /identify -------------------------------------------------------------------------
+const log = { fetches: [], failNext: 0 };
+let currentId = null;
+if (!params.get('api')) {
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = String(typeof input === 'string' ? input : input.url);
+    if (!/\/identify\?/.test(url)) return realFetch(input, init);
+    log.fetches.push(url);
+    const id = currentId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (log.failNext > 0) {
+          log.failNext--;
+          resolve(new Response(JSON.stringify({ error: 'SIMBAD did not answer within 8 s', retryable: true }), { status: 504, headers: { 'content-type': 'application/json' } }));
+          return;
+        }
+        resolve(new Response(JSON.stringify(SOURCES[id] ? SOURCES[id].catalogue : { objects: [], source: 'simbad' }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }, DELAY);
+      if (init.signal) {
+        init.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      }
+    });
+  };
+}
+
+// ---- fake app ----------------------------------------------------------------------------------
+const listeners = new Map();
+let selected = null;
+const app = {
+  version: 'demo',
+  api: { baseUrl: params.get('api') || '/api' },
+  viewer: null,
+  on(event, fn) {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event).add(fn);
+    return () => listeners.get(event).delete(fn);
+  },
+  emit(event, payload) {
+    for (const fn of listeners.get(event) || []) fn(payload);
+  },
+  selection: () => selected,
+  gaia: () => GAIA,
+  frames: () => FRAMES,
+  movie: () => ({ frames: [{ mjd: 61025 }], index: 0, playing: false, view: 'passes' }),
+  target: () => ({ ...FIELD, name: 'Demo field' }),
+  addPanel({ id, title, render }) {
+    const tab = Object.assign(document.createElement('div'), { className: 'tab', textContent: title });
+    const body = Object.assign(document.createElement('div'), { className: 'panel-body' });
+    const panel = Object.assign(document.createElement('section'), { className: 'panel', id: `panel-${id}` });
+    panel.append(body);
+    document.getElementById('tabs').append(tab);
+    document.getElementById('panels').append(panel);
+    const handle = render(body);
+    return { show() {}, hide() {}, remove() { if (handle && handle.dispose) handle.dispose(); tab.remove(); panel.remove(); } };
+  },
+  addTool: () => ({ setActive() {}, setDisabled() {}, remove() {} }),
+  toast: (message) => console.info('[toast]', message),
+};
+
+// ---- the "image" -------------------------------------------------------------------------------
+const sky = document.getElementById('sky');
+const ctx = document.getElementById('stars').getContext('2d');
+const rand = mulberry32(2026);
+ctx.fillStyle = '#0d0d0c';
+ctx.fillRect(0, 0, 560, 560);
+function blob(x, y, r, a, colour = '247,242,231') {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${colour},${a})`);
+  g.addColorStop(1, `rgba(${colour},0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+}
+for (let i = 0; i < 70; i++) blob(rand() * 560, rand() * 560, 3 + rand() * 6, 0.15 + rand() * 0.5);
+const LOOKS = { barnard: [13, 1], dwarf: [6, 0.55, '229,120,90'], mira: [11, 0.95, '247,214,170'], galaxy: [22, 0.5], faint: [5, 0.28] };
+const buttons = {};
+for (const [id, s] of Object.entries(SOURCES)) {
+  blob((s.x / 100) * 560, (s.y / 100) * 560, ...LOOKS[id]);
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'src';
+  b.dataset.source = id;
+  b.style.left = `${s.x}%`;
+  b.style.top = `${s.y}%`;
+  b.setAttribute('aria-pressed', 'false');
+  b.setAttribute('aria-label', `Select the source: ${s.label}`);
+  b.append(Object.assign(document.createElement('span'), { textContent: s.label }));
+  b.addEventListener('click', () => select(id));
+  sky.append(b);
+  buttons[id] = b;
+}
+
+function select(id) {
+  currentId = id && SOURCES[id] ? id : null;
+  const s = currentId ? SOURCES[currentId] : null;
+  selected = s ? { ra: s.ra, dec: s.dec, x: s.x, y: s.y, spectrum: s.binned, binned: s.binned, lightCurve: s.lightCurve, motion: s.motion, size: s.size } : null;
+  for (const [key, b] of Object.entries(buttons)) b.setAttribute('aria-pressed', String(key === currentId));
+  app.emit('select', selected);
+}
+document.getElementById('btn-clear').addEventListener('click', () => select(null));
+document.getElementById('btn-down').addEventListener('click', () => {
+  log.failNext = 1;
+  // A new position, so the plugin's own cache cannot answer.
+  SOURCES.barnard.ra += 1e-4;
+  select('barnard');
+});
+
+const plugin = install(app);
+window.demo = { app, plugin, meta, select, log, SOURCES };
+if (params.get('select')) select(params.get('select'));
+</script>
+</body>
+</html>

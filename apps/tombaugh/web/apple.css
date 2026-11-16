@@ -1,0 +1,466 @@
+/* Tombaugh - SPHEREx blink comparator. Apache-2.0.
+   AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. */
+
+/* The skin: system type, capsule controls and glass. It sits on top of styles.css, which keeps
+   the layout. The glass itself (the bend at the edge of every card and button) is drawn by
+   src/ui/backdrop.js on the canvas behind the page; the rules here add the crisp rim and the
+   shadow, and a plain fill for browsers without WebGL. */
+
+/* ------------------------------------------------------------------ tokens */
+:root {
+  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-head: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, Menlo, monospace;
+  --font-mark: var(--font-head);
+  --ground: #0b0b0d;
+  --muted: #b4b1a8;
+  --rule: rgba(255, 255, 255, 0.1);
+  --rule-strong: rgba(255, 255, 255, 0.2);
+  --hover: rgba(255, 255, 255, 0.08);
+  --ease: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --topbar-h: 68px;
+  --r-card: 26px;
+  --r-tile: 16px;
+  /* The edge of a piece of glass: one sharp line of light along the top and the left, no outline. */
+  --rim: inset 1px 1px 0 rgba(255, 255, 255, 0.3);
+  --rim-low: inset 1px 1px 0 rgba(255, 255, 255, 0.28);
+  /* A slight shadow underneath. */
+  --drop: 0 3px 6px rgba(0, 0, 0, 0.32);
+  --drop-low: 0 2px 3px rgba(0, 0, 0, 0.36);
+  /* What a piece of glass is filled with when the canvas cannot draw it. */
+  --fill: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  --fill-card: rgba(30, 30, 33, 0.72);
+}
+
+html {
+  background: var(--ground); font-size: 14px; line-height: 1.4;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+}
+body {
+  background:
+    radial-gradient(1100px 760px at 88% -12%, rgba(229, 60, 39, 0.2), transparent 62%),
+    radial-gradient(980px 760px at -8% 108%, rgba(70, 104, 196, 0.24), transparent 62%),
+    var(--ground);
+  background-attachment: fixed;
+}
+html[data-backdrop] body, html[data-mode="simple"][data-backdrop] body { background: none; }
+html[data-embed="1"] body { background: var(--ink); }
+
+.backdrop { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; display: block; pointer-events: none; }
+html[data-screen="boot"] .backdrop, html[data-screen="landing"] .backdrop, html[data-embed="1"] .backdrop, html:not([data-backdrop]) .backdrop { display: none; }
+
+.wordmark { font-family: var(--font-mark); font-weight: 700; }
+.status-title, .empty-title, .about h3, .fs-name, .dialog-title, .panel-title, .simple-name, .simple-title {
+  font-family: var(--font-head); font-weight: 700; letter-spacing: -0.015em;
+}
+.panel-title { letter-spacing: 0.02em; }
+
+/* ------------------------------------------------------------------- glass */
+/* Every piece named in backdrop.js GLASS_KINDS. With the canvas on they are clear; without it filled. */
+.topbar, .simple-card, .controls, .glass-panel { background: var(--fill-card); border: 0; box-shadow: var(--rim), var(--drop); }
+.btn:not(.btn-solid), .seg, .simple-change, .tab, .chip, .search-input { background: var(--fill); border: 0; box-shadow: var(--rim-low), var(--drop-low); }
+html[data-backdrop="on"] .topbar, html[data-backdrop="on"] .simple-card, html[data-backdrop="on"] .controls, html[data-backdrop="on"] .glass-panel,
+html[data-backdrop="on"] .btn:not(.btn-solid), html[data-backdrop="on"] .seg, html[data-backdrop="on"] .simple-change,
+html[data-backdrop="on"] .tab, html[data-backdrop="on"] .chip, html[data-backdrop="on"] .search-input { background: transparent; }
+/* Glass over a photo or over other glass cannot be drawn by the canvas: it is frosted instead. */
+.frost {
+  background: rgba(34, 34, 38, 0.52); border: 0; box-shadow: var(--rim), var(--drop);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+}
+
+/* ----------------------------------------------------------------- buttons */
+.btn {
+  height: 34px; padding: 0 15px; border-radius: 999px; font-size: 13px; font-weight: 500; letter-spacing: -0.005em;
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.btn:not(.btn-solid):hover, html[data-backdrop="on"] .btn:not(.btn-solid):hover { background: rgba(255, 255, 255, 0.1); }
+.btn:not(.btn-solid):active, html[data-backdrop="on"] .btn:not(.btn-solid):active { background: rgba(255, 255, 255, 0.18); transform: scale(0.97); }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.42; color: var(--paper); }
+.btn[aria-pressed="true"]:not(.btn-play):not(.btn-solid), html[data-backdrop="on"] .btn[aria-pressed="true"]:not(.btn-play):not(.btn-solid) {
+  background: rgba(255, 255, 255, 0.2); color: #fff;
+}
+.btn-solid {
+  border: 0; font-weight: 600; color: #111;
+  background: linear-gradient(180deg, #fffdf8, #ece6d8);
+  box-shadow: inset 1px 1px 0 #fff, 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+.btn-solid:hover { background: linear-gradient(180deg, #fff, #f4efe3); }
+.btn-solid:active { transform: scale(0.97); }
+.btn-quiet, html[data-backdrop="on"] .btn-quiet { color: var(--muted); }
+.btn-small { height: 28px; padding: 0 12px; font-size: 12px; }
+.btn-icon { width: 34px; padding: 0; }
+
+/* segmented controls: a capsule with a lighter thumb on the chosen part */
+.seg { border-radius: 999px; padding: 3px; gap: 2px; align-items: center; }
+.seg-btn { height: 28px; border: 0; border-radius: 999px; padding: 0 13px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.seg-btn:hover { background: rgba(255, 255, 255, 0.07); }
+.seg-btn[aria-checked="true"], .seg-btn[aria-pressed="true"] {
+  color: #fff; font-weight: 600; background: rgba(255, 255, 255, 0.17);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.seg-btn[aria-checked="true"]::after, .seg-btn[aria-pressed="true"]::after { display: none; }
+
+/* ----------------------------------------------------------------- top bar */
+.topbar, html[data-mode="simple"] .topbar {
+  height: calc(var(--topbar-h) - 14px); margin: 10px 14px 0; padding: 0 12px 0 24px; border-radius: 999px; column-gap: 24px;
+}
+.wordmark { font-size: 16px; letter-spacing: 0.24em; }
+/* The search box sits in the true middle of the bar: name on the left, buttons on the right. */
+@media (min-width: 1100px) {
+  .topbar, html[data-mode="simple"] .topbar { grid-template-columns: minmax(0, 1fr) minmax(260px, 520px) minmax(0, 1fr); }
+  .topbar > .brand { grid-column: 1; grid-row: 1; justify-self: start; }
+  .topbar > .search { grid-column: 2; grid-row: 1; }
+  .topbar > .sim-badge { grid-column: 1; grid-row: 1; justify-self: end; }
+  .topbar > .top-actions { grid-column: 3; grid-row: 1; justify-self: end; }
+}
+.tagline { font-size: 11px; letter-spacing: 0; }
+.search-input {
+  height: 36px; padding: 0 16px; border-radius: 999px; font-family: var(--font-text); font-size: 14px;
+  box-shadow: var(--rim-low), var(--drop-low);
+}
+html[data-mode="simple"] .search-input { border-radius: 999px; }
+.search-input:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55), var(--drop-low); }
+.search-field .btn, html[data-mode="simple"] .search-field .btn { height: 36px; border-radius: 999px; padding: 0 18px; }
+.search-pop { top: 44px; border: 0; border-radius: 20px; padding: 16px 18px; background: rgba(34, 34, 38, 0.6); box-shadow: var(--rim), var(--drop); -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6); }
+.sim-badge { border-radius: 999px; }
+.console { height: calc(100vh - var(--topbar-h)); }
+
+/* ------------------------------------------------------------ simple mode */
+html[data-mode="simple"] .console { grid-template-columns: auto minmax(340px, 560px); justify-content: center; }
+html[data-mode="simple"] .stage { padding-top: 16px; }
+html[data-mode="simple"] .simplebar { margin-bottom: 14px; }
+.simple-seg { height: 44px; }
+.simple-seg .seg-btn { height: 38px; font-size: 14px; }
+html[data-mode="simple"] .viewer-frame, html[data-mode="simple"] .viewer, html[data-mode="simple"] #viewer { border-radius: 22px; }
+html[data-mode="simple"] .viewer-frame { border: 0; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.22), 0 18px 50px rgba(0, 0, 0, 0.5); }
+html[data-mode="simple"] .simple { padding: 16px 18px 10px 6px; }
+html[data-mode="simple"] .simple-card, html[data-mode="simple"] .simple-card:first-child {
+  max-width: none; padding: 20px 24px; border-top: 0; border-radius: var(--r-card); margin-bottom: 14px; gap: 12px;
+}
+.simple-name { font-size: 32px; line-height: 1.1; letter-spacing: -0.025em; }
+.simple-title { font-size: 17px; }
+.simple-line { font-size: 15px; color: var(--muted); }
+.simple-row { padding: 12px 0; border-top-color: rgba(255, 255, 255, 0.09); }
+.simple-row-q { font-size: 15px; }
+.simple-answer { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.simple-answer.is-fact { font-weight: 500; color: var(--paper); }
+.simple-more > summary { text-decoration: none; font-size: 13.5px; color: var(--muted); gap: 8px; }
+.simple-more > summary::before {
+  content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform var(--t-fast) var(--ease); margin-left: 2px;
+}
+.simple-more[open] > summary::before { content: ""; transform: rotate(45deg); }
+.simple-more-body { padding: 12px 0 2px; }
+html[data-mode="simple"] .simple-change, .simple-change { border-radius: var(--r-tile); padding: 12px 16px; transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+.simple-change:hover, html[data-backdrop="on"] .simple-change:hover, html[data-mode="simple"] .simple-change:hover { background: rgba(255, 255, 255, 0.08); }
+.simple-change:active { transform: scale(0.985); }
+.simple-change[aria-current="true"], html[data-backdrop="on"] .simple-change[aria-current="true"] { background: rgba(255, 255, 255, 0.13); box-shadow: inset 0 0 0 1.5px var(--signal), var(--drop-low); }
+.simple-change-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.simple-change .cand-n { border: 0; background: rgba(255, 255, 255, 0.14); font-family: var(--font-text); font-weight: 600; font-size: 12px; }
+.simple-change[aria-current="true"] .cand-n { background: var(--signal); color: #fff; }
+html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go), html[data-mode="simple"] .seg, html[data-mode="simple"] .simple-change { border-color: transparent; }
+html[data-backdrop="on"][data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go):not(:hover):not(:active):not([aria-pressed="true"]),
+html[data-backdrop="on"][data-mode="simple"] .seg,
+html[data-backdrop="on"][data-mode="simple"] .simple-change:not(:hover):not([aria-current="true"]) { background: transparent; }
+html[data-mode="simple"] .btn:not(.btn-solid):not(.skyhome-go), html[data-mode="simple"] .seg, html[data-mode="simple"] .simple-change { box-shadow: var(--rim-low), var(--drop-low); }
+html[data-mode="simple"] .seg { overflow: visible; }
+html[data-mode="simple"] .seg-btn { border-radius: 999px; }
+.simple-tool, .simple-tool-seg { height: 34px; }
+.simple-tool-seg .seg-btn { height: 28px; }
+.simple-tool[aria-pressed="true"] { border-color: transparent; }
+html[data-mode="simple"] .player .btn { height: 36px; }
+html[data-mode="simple"] .player .btn-icon { width: 36px; }
+.blinded { border: 0; border-radius: 24px; }
+.blinded-patch { border-radius: 999px; }
+
+/* ------------------------------------------------------------ dialogs, toasts */
+.dialog { border: 0; border-radius: 26px; background: rgba(32, 32, 35, 0.78); box-shadow: var(--rim), 0 30px 80px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(30px) saturate(1.6); backdrop-filter: blur(30px) saturate(1.6); }
+.dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.toast { border-radius: 999px; }
+
+/* ------------------------------------------------------------------ player */
+html[data-mode="simple"] .player .btn-play { width: auto; padding: 0 16px 0 13px; gap: 8px; }
+html[data-mode="simple"] .player .btn-play::after { font-size: 13px; font-weight: 500; }
+.player .btn-play[aria-pressed="true"] { border-color: transparent; }
+.player-transport { gap: 6px; }
+.timeline { height: 38px; border-radius: 10px; }
+.tl-label { border-left: 0; padding-left: 2px; font-size: 11.5px; font-weight: 500; }
+.tl-ticks { height: 18px; border-bottom: 0; background: rgba(255, 255, 255, 0.07); border-radius: 999px; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4); padding: 0 6px; align-items: center; height: 8px; }
+.tl-tick::before { bottom: 50%; height: 4px; width: 4px; margin-left: -2px; margin-bottom: -2px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); }
+.tl-tick.is-wide::before { width: 4px; margin-left: -2px; }
+.tl-tick::before { transition: none; }
+.tl-tick.is-live::before { height: 14px; width: 14px; margin-left: -7px; margin-bottom: -7px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.3); }
+.tl-group { gap: 7px; }
+
+/* ------------------------------------------------------------ advanced mode */
+html[data-mode="advanced"] { --rail-w: 226px; --chrome-v: 352px; }
+html[data-mode="advanced"] .console { column-gap: 0; }
+.modeopts { font-size: 12.5px; }
+.seg-modes { height: 40px; }
+.seg-modes .seg-btn { height: 32px; padding: 0 12px; }
+.strip-prev { background: linear-gradient(to right, rgba(16, 16, 19, 0.92) 45%, rgba(16, 16, 19, 0)); border-radius: 999px 0 0 999px; }
+.strip-next { background: linear-gradient(to left, rgba(16, 16, 19, 0.92) 45%, rgba(16, 16, 19, 0)); border-radius: 0 999px 999px 0; }
+
+/* the control rail: one glass card */
+.controls { border-radius: 24px; padding: 16px 14px; scrollbar-width: none; }
+.controls::-webkit-scrollbar { display: none; }
+.controls-body { padding: 0; gap: 14px; }
+.ctl { padding-top: 14px; border-top-color: rgba(255, 255, 255, 0.08); gap: 8px; }
+.ctl-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.ctl .seg-btn { padding: 0 4px; }
+.det-grid { border: 0; gap: 4px; border-radius: 0; }
+.det-grid .seg-btn, .det-grid .seg-btn:nth-child(n) { border: 0; border-radius: 10px; height: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: none; }
+.det-grid .seg-btn[aria-checked="true"], .det-grid .seg-btn[aria-pressed="true"] { background: rgba(255, 255, 255, 0.2); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35); }
+.switch { min-height: 34px; font-size: 13px; }
+/* The wide-thumb glass switch of the Batchly site: a pill that slides, green when on. */
+.switch-track { flex: 0 0 52px; width: 52px; height: 24px; border: 0; border-radius: 999px; background: rgba(120, 120, 128, 0.32); box-shadow: none; transition: background-color 220ms ease; }
+.switch-track::after {
+  top: 2px; left: 2px; width: 31px; height: 20px; border-radius: 999px; background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: transform 300ms cubic-bezier(0.3, 1.35, 0.5, 1), background-color 160ms ease;
+}
+.switch:hover .switch-track, .switch[aria-checked="true"] .switch-track { border: 0; }
+.switch[aria-checked="true"] .switch-track { background: #30d158; }
+.switch[aria-checked="true"] .switch-track::after { transform: translateX(17px); background: #fff; }
+/* Pressed, the thumb lifts into clear glass, as it does there. */
+.switch:active .switch-track::after { transform: scale(1.14); background: rgba(255, 255, 255, 0.5); -webkit-backdrop-filter: blur(3px) saturate(1.6); backdrop-filter: blur(3px) saturate(1.6); }
+.switch[aria-checked="true"]:active .switch-track::after { transform: translateX(17px) scale(1.14); background: rgba(255, 255, 255, 0.5); }
+/* Dragged, the thumb follows the finger (controls.js sets --thumb-x and --thumb-on) and the green comes in with it. */
+.switch { touch-action: pan-y; }
+.switch.is-dragging .switch-track { transition: none; background: color-mix(in srgb, #30d158 calc(var(--thumb-on, 0) * 100%), rgba(120, 120, 128, 0.32)); }
+.switch.is-dragging .switch-track::after, .switch[aria-checked="true"].is-dragging .switch-track::after {
+  transition: background-color 160ms ease; transform: translateX(var(--thumb-x, 0px)) scale(1.14); background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(3px) saturate(1.6); backdrop-filter: blur(3px) saturate(1.6);
+}
+/* The buttons about this view are one group: loose on a wide screen, one joined control on a phone. */
+.top-group { display: contents; }
+select.select {
+  height: 32px; padding: 0 30px 0 14px; border: 0; border-radius: 999px; font-size: 12.5px; background-color: rgba(255, 255, 255, 0.07);
+  box-shadow: var(--rim-low), var(--drop-low); background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
+}
+html[data-backdrop="on"] select.select { background-color: transparent; }
+select.select option { background: #1c1c1f; color: var(--paper); }
+input[type="range"].range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); }
+input[type="range"].range::-moz-range-track { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); }
+input[type="range"].range::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -7px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+input[type="range"].range::-moz-range-thumb { width: 18px; height: 18px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+
+/* the viewer and its tools */
+html[data-mode="advanced"] .viewer-frame, html[data-mode="advanced"] .viewer, html[data-mode="advanced"] #viewer { border-radius: 18px; overflow: hidden; }
+html[data-mode="advanced"] .viewer-frame { border: 0; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.22), 0 14px 40px rgba(0, 0, 0, 0.45); }
+.toolrow { height: 34px; }
+.tool-group { border: 0; border-radius: 999px; padding: 2px; gap: 1px; background: var(--fill); box-shadow: var(--rim-low), var(--drop-low); }
+html[data-backdrop="on"] .tool-group { background: transparent; }
+.tool, .tool:first-child { border: 0; border-radius: 999px; height: 26px; padding: 0 11px; font-size: 12px; }
+.tool[aria-pressed="true"] { box-shadow: none; background: rgba(255, 255, 255, 0.18); color: #fff; }
+html .tbv-toolbar { border-radius: 999px; padding: 3px; background: rgba(28, 28, 31, 0.5); box-shadow: var(--rim-low); -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5); }
+html .tbv-btn { border-radius: 999px; border-color: transparent; }
+.status-card { border-radius: 22px; }
+.player .btn-play { width: 46px; }
+.caption-meta, .player-count { font-size: 11.5px; }
+
+/* the measurements column: one glass card, its tabs a row of pills */
+html[data-mode="advanced"] .side { margin: 12px 14px 12px 0; border-left: 0; border-radius: var(--r-card); overflow: hidden; background: var(--fill-card); box-shadow: var(--rim), var(--drop); }
+html[data-backdrop="on"][data-mode="advanced"] .side { background: transparent; }
+.side > .strip { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.tabs { padding: 10px 14px; gap: 2px; }
+.tab, .tab:first-child, html[data-backdrop="on"] .tab { height: 30px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500; background: transparent; box-shadow: none; }
+.tab:hover, html[data-backdrop="on"] .tab:hover { background: rgba(255, 255, 255, 0.07); }
+.tab[aria-selected="true"], html[data-backdrop="on"] .tab[aria-selected="true"] {
+  font-weight: 600; color: #fff; background: rgba(255, 255, 255, 0.17);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.tab[aria-selected="true"]::after { display: none; }
+.side .strip-arrow { top: 8px; bottom: 8px; }
+.panel { padding: 16px 20px 20px; }
+.fieldsum, .cite { border-top-color: rgba(255, 255, 255, 0.08); }
+html .tbp-btn { border-radius: 999px; padding-left: 12px; padding-right: 12px; }
+html .tbp-seg .tbp-btn { border-radius: 0; }
+html .tbp-seg .tbp-btn:first-child { border-radius: 999px 0 0 999px; }
+html .tbp-seg .tbp-btn:last-child { border-radius: 0 999px 999px 0; }
+.cand, .chip { border-radius: var(--r-tile); }
+
+/* ------------------------------------------------------------ the sky page */
+.skyhome-brand .wordmark { font-size: 19px; letter-spacing: 0.26em; }
+.skyhome-tag { font-size: 14px; font-weight: 500; letter-spacing: -0.005em; opacity: 0.8; }
+.skyhome-top { padding-top: 18px; }
+.skyhome-input { font-size: 16px; letter-spacing: -0.01em; }
+.skyhome-field .btn { font-size: 15px; font-weight: 600; }
+.skyhome-mode, .skyhome-chip { font-weight: 500; letter-spacing: -0.005em; }
+.skyhome-chip { height: 38px; padding: 0 17px; border-radius: 999px; }
+.skyhome-zoom-btn { width: 42px; height: 42px; border-radius: 50%; font-weight: 300; font-size: 22px; }
+.skyhome-starts-label { font-weight: 500; }
+.skyhome-hint { font-weight: 500; border-radius: 999px; }
+.skyhome-card { border-radius: 999px; padding: 10px 10px 10px 24px; }
+.skyhome-card-name { font-weight: 600; letter-spacing: -0.015em; }
+.skyhome-go { height: 44px; border-radius: 999px; font-weight: 600; border: 0; box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.4); }
+.skyhome-menu, .picklist { border-radius: 24px; }
+/* The sky page's glass: backdrop.js draws each piece on the canvas under the controls, bending the
+   sky behind it. Here: the rim, the shadow and how a press feels. Without the canvas they are frosted. */
+.skyhome-glass { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; display: block; pointer-events: none; }
+.skyhome:not(.has-glass) .skyhome-glass { display: none; }
+.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist { border: 0; box-shadow: var(--rim), var(--drop); }
+.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint { border: 0; box-shadow: var(--rim-low), var(--drop-low); }
+.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist, .skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint {
+  background: rgba(34, 34, 38, 0.5); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+}
+.skyhome.has-glass :is(.skyhome-inputwrap, .skyhome-card, .skyhome-menu, .picklist, .skyhome-chip, .skyhome-mode, .skyhome-zoom-btn, .skyhome-hint) {
+  background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn { transition: background-color 140ms ease, transform 140ms ease; }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):hover { background-color: rgba(255, 255, 255, 0.1); }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):active { background-color: rgba(255, 255, 255, 0.05); transform: scale(0.97); }
+.skyhome :is(.skyhome-chip, .skyhome-mode, .skyhome-zoom-btn):focus-visible { outline: 2px solid rgba(247, 242, 231, 0.85); outline-offset: 2px; }
+.skyhome-inputwrap:focus-within { box-shadow: var(--rim), 0 0 0 2px rgba(247, 242, 231, 0.7), var(--drop); }
+.skyhome .skyhome-x { background: rgba(255, 255, 255, 0.1); border: 0; box-shadow: var(--rim-low); }
+.skyhome .skyhome-x:hover { background: rgba(255, 255, 255, 0.18); }
+.picklist-row.is-active { outline: 0; background: rgba(255, 255, 255, 0.14); }
+.picklist-row:hover, .skyhome-menu-row:hover, .skyhome-menu-row:focus-visible { background: rgba(255, 255, 255, 0.1); }
+.skyhome-menu-row, .picklist-row { border-radius: 12px; }
+.skyhome-credit[open] { border: 0; border-radius: 18px; background: rgba(28, 28, 31, 0.72); box-shadow: var(--rim), var(--drop); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); }
+
+/* ------------------------------------------------------------------ narrow */
+@media (max-width: 719px) {
+  :root { --topbar-h: auto; }
+  /* Two rows (name and buttons, then the search box): a rounded card, not a capsule. */
+  .topbar, html[data-mode="simple"] .topbar { height: auto; margin: 8px 8px 0; padding: 10px 12px 10px 16px; border-radius: 24px; column-gap: 10px; row-gap: 8px; }
+  .topbar > .sim-badge { margin-bottom: 0; }
+  /* On a phone: name with sound and mode beside it, the search, then one joined control. */
+  html[data-mode] .topbar { grid-template-columns: minmax(0, 1fr) auto auto; padding: 14px 14px 12px; row-gap: 10px; column-gap: 8px; }
+  html[data-mode] .topbar > .top-actions { display: contents; }
+  html[data-mode] .topbar > .brand { grid-column: 1; grid-row: 1; align-self: center; padding-left: 6px; }
+  html[data-mode] .top-actions > .sound-toggle { grid-column: 2; grid-row: 1; width: 34px; height: 34px; }
+  html[data-mode] .top-actions > .btn-mode { grid-column: 3; grid-row: 1; height: 34px; padding: 0 14px; font-size: 13px; }
+  html[data-mode] .topbar > .search { grid-column: 1 / -1; grid-row: 2; }
+  html[data-mode] .top-group {
+    grid-column: 1 / -1; grid-row: 3; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    padding: 3px; border-radius: 13px; background: rgba(118, 118, 128, 0.2);
+  }
+  html[data-mode] .top-group .btn, html[data-backdrop="on"][data-mode] .top-group .btn {
+    height: 30px; min-width: 0; padding: 0 4px; border-radius: 10px; background: none !important; box-shadow: none !important; font-size: 13px; font-weight: 500;
+    color: rgba(247, 242, 231, 0.88); position: relative;
+  }
+  html[data-mode] .top-group .btn + .btn::before { content: ""; position: absolute; left: -0.5px; top: 8px; bottom: 8px; width: 1px; background: rgba(255, 255, 255, 0.14); }
+  html[data-mode] .top-group .btn:active { background: rgba(255, 255, 255, 0.16) !important; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important; }
+  html[data-mode] .top-group .btn:active::before, html[data-mode] .top-group .btn:active + .btn::before { opacity: 0; }
+  html[data-mode] .topbar > .sim-badge { grid-row: 4; }
+  /* The search box holds its own Go button; 16px type so a phone does not zoom in on it. */
+  .search-field { display: block; }
+  .search-input, html[data-mode="simple"] .search-input { width: 100%; height: 44px; padding: 0 64px 0 18px; font-size: 16px; }
+  .search-field .btn-solid, html[data-mode="simple"] .search-field .btn-solid { position: absolute; top: 5px; right: 5px; height: 34px; padding: 0 16px; font-size: 14px; }
+  /* The coordinates under it: there to read, not to shout. */
+  .search-status { height: 13px; padding-left: 18px; font-size: 10.5px; line-height: 13px; letter-spacing: 0.02em; color: rgba(247, 242, 231, 0.42); }
+  .search-status .num { color: rgba(247, 242, 231, 0.6); }
+  .search-status:empty { display: none; }
+  .console { height: auto; }
+  /* The controls slide up over the picture here, where the canvas cannot draw them: frosted. */
+  .controls, html[data-backdrop="on"] .controls {
+    background: rgba(30, 30, 34, 0.8); border-radius: 26px 26px 0 0;
+    -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+  }
+  .sheet-head { background: transparent; }
+}
+
+/* ---- Sound on / off ------------------------------------------------------------------------ */
+.sound-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.sound-toggle svg { width: 17px; height: 17px; display: block; }
+.sound-toggle .sound-cross { display: none; }
+.sound-toggle.is-muted .sound-waves { display: none; }
+.sound-toggle.is-muted .sound-cross { display: inline; }
+.sound-toggle.is-muted { color: rgba(247, 242, 231, 0.62); }
+.skyhome-actions { gap: 8px; align-items: center; }
+.skyhome-mode.sound-toggle { width: 36px; padding: 0; }
+
+/* Touch screens: the canvas draws the ground only (see main.js), so the cards are filled here. */
+html[data-backdrop="ground"] { --fill-card: rgba(30, 30, 33, 0.6); }
+
+/* ---- "?" notes on the parts of the page ----------------------------------------------------- */
+.explain-host { position: relative; }
+.explain-btn {
+  position: absolute; top: -8px; right: -8px; z-index: 6; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  font: 600 12px/20px var(--font-text); text-align: center; color: rgba(247, 242, 231, 0.82); background: rgba(58, 58, 62, 0.94);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.45); cursor: pointer; opacity: 0.7;
+  transition: opacity 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.explain-btn:hover, .explain-btn:focus-visible, .explain-btn[aria-expanded="true"] { opacity: 1; background: rgba(96, 96, 102, 0.96); }
+.explain-btn:active { transform: scale(0.92); }
+.explain-btn.is-inside { top: 12px; right: 12px; }
+.explain-btn.explain-btn-sky { position: static; width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 15px; line-height: 36px; opacity: 1; background: none; box-shadow: none; }
+html:not([data-backdrop="on"]) .explain-btn.explain-btn-sky, .explain-btn.explain-btn-sky:hover { background: var(--fill); box-shadow: var(--rim-low), var(--drop-low); }
+.explain-pop {
+  position: fixed; z-index: 80; width: max-content; max-width: min(290px, calc(100vw - 16px)); padding: 13px 16px 14px; border-radius: 16px;
+  background: rgba(32, 32, 36, 0.94); -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+  box-shadow: var(--rim), 0 12px 32px rgba(0, 0, 0, 0.5); font-size: 13px; line-height: 1.45; color: rgba(247, 242, 231, 0.86);
+  animation: explain-in 160ms ease-out;
+}
+.explain-pop b { display: block; margin-bottom: 3px; font-size: 14px; font-weight: 600; color: #f7f2e7; }
+@keyframes explain-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .explain-pop { animation: none; } }
+html[data-embed="1"] .explain-btn { display: none; }
+
+/* ---- Stacked panels fold (phones and tablets): each title is a drop-down ---------------------- */
+@media (max-width: 1099px) {
+  .panel { padding-top: 6px; padding-bottom: 6px; }
+  .panel-title {
+    display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  }
+  .panel-title::after {
+    content: ""; flex: 0 0 auto; width: 8px; height: 8px; margin: -4px 6px 0 12px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    opacity: 0.55; transform: rotate(45deg); transition: transform 220ms ease;
+  }
+  .panel.is-folded .panel-title::after { transform: rotate(-45deg); margin-top: 0; }
+  .panel-title:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.5); outline-offset: 2px; border-radius: 8px; }
+  .panel.is-folded > :not(.panel-title) { display: none; }
+  .panel:not(.is-folded) { padding-bottom: 20px; }
+  .panel:not(.is-folded) .panel-title { margin-bottom: 6px; }
+}
+
+/* ---- A phone's sky page stays bare: one chip, a solid list, no extra buttons ------------------ */
+@media (max-width: 719px) {
+  .skyhome-starts .skyhome-chip:not(.skyhome-solar), .skyhome-starts-label, .explain-btn.explain-btn-sky { display: none; }
+  .skyhome-menu, html .skyhome.has-glass .skyhome-menu {
+    z-index: 20; background: rgba(26, 26, 30, 0.92); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+  }
+}
+
+/* Layout polish, last pass */
+@media (max-width: 719px) {
+  /* Sky / Share joined control: a full 44px tap row instead of 36px. */
+  html[data-mode] .top-group .btn, html[data-backdrop="on"][data-mode] .top-group .btn { height: 38px; }
+  html[data-mode] .top-group .btn + .btn::before { top: 11px; bottom: 11px; }
+  /* Simple tools: an even 3 + 2 grid of 44px buttons, so "Save" no longer drops to a row of its own. */
+  html[data-mode="simple"] .simpletools { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group { grid-column: span 4; display: flex; gap: 8px; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group > .simple-tool { flex: 1 1 0; min-width: 0; }
+  html[data-mode="simple"] .simpletools > .simple-tool { grid-column: span 2; min-width: 0; }
+  html[data-mode="simple"] .simpletools > .simple-tool-group + .simple-tool ~ .simple-tool { grid-column: span 3; }
+  html[data-mode="simple"] .simpletools .simple-tool { height: 44px; padding: 0 8px; font-size: 14px; justify-content: center; text-align: center; white-space: nowrap; }
+}
+@media (max-width: 379px) {
+  /* Narrow phones: keep Slow / Normal / Fast on the transport row instead of wrapping under it. */
+  html[data-mode="simple"] .player-row > .simple-tool-seg .seg-btn { padding: 0 7px; }
+}
+
+/* Settings: a small window of switches, and its button beside the Sound button. */
+html[data-help="off"] .explain-btn, html[data-help="off"] .explain-pop { display: none !important; }
+.settings-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.settings-toggle svg { width: 17px; height: 17px; display: block; }
+.skyhome-mode.settings-toggle { width: 36px; padding: 0; }
+.settings-dialog { width: min(360px, calc(100vw - 32px)); }
+.settings-body { gap: 4px; padding: 10px 20px 18px; }
+.settings-body .switch { width: 100%; justify-content: space-between; min-height: 48px; }
+/* The bar keeps one button: Settings holds the Sound switch, so the bar is no wider than before. */
+.top-actions > .sound-toggle { display: none; }
+@media (max-width: 719px) {
+  html[data-mode] .top-actions > .sound-toggle { display: none; }
+  html[data-mode] .top-actions > .settings-toggle { grid-column: 2; grid-row: 1; width: 34px; height: 34px; }
+}
+/* The buttons on the right take the room they need, so they never sit over the search box. */
+@media (min-width: 720px) {
+  html[data-mode] .topbar { grid-template-columns: minmax(0, 1fr) minmax(180px, 520px) auto; }
+}
+/* On stacked layouts the "?" sits inside its part's right edge, where nothing clips it. */
+@media (max-width: 1099px) {
+  .explain-btn:not(.is-inside):not(.explain-btn-sky) { right: 6px; }
+}

@@ -1,0 +1,458 @@
+<!-- Tombaugh - SPHEREx blink comparator. Apache-2.0. -->
+<!-- AI-generated code: written by Claude (Anthropic) for team Missing Mass, NASA Space Apps 2026. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tombaugh plugin demo: Solar system</title>
+<style>
+  :root {
+    --ink: #171715; --paper: #F7F2E7; --signal: #E53C27; --stone: #77766E; --muted: #ADA99E;
+    --rule: rgba(247, 242, 231, 0.14); --rule-strong: rgba(247, 242, 231, 0.3);
+    --ink-raised: #1E1E1B; --ink-sunken: #11110F;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); font: 14px/1.45 Arial, Helvetica, sans-serif; }
+  body { padding: 20px; }
+  header { display: flex; align-items: baseline; gap: 14px; margin: 0 0 6px; flex-wrap: wrap; }
+  h1 { font: 900 20px/1 "Arial Black", Arial, sans-serif; letter-spacing: 0.02em; margin: 0; }
+  h2 { font: 900 13px/1.2 "Arial Black", Arial, sans-serif; letter-spacing: 0.04em; margin: 0 0 10px; }
+  header span, .hint { color: var(--muted); font-size: 13px; }
+  .banner { border-left: 2px solid var(--signal); padding-left: 10px; margin: 0 0 16px; color: var(--muted); max-width: 90ch; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 470px); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } body { padding: 12px; } }
+  .box { border: 1px solid var(--rule); border-radius: 4px; padding: 14px; min-width: 0; }
+  .toolstrip { display: flex; gap: 6px; margin: 0 0 10px; align-items: center; flex-wrap: wrap; }
+  .toolstrip button, .player button {
+    font: inherit; color: var(--paper); background: transparent; border: 1px solid var(--rule-strong); border-radius: 3px;
+    height: 30px; padding: 0 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .toolstrip button:hover, .player button:hover { background: rgba(247, 242, 231, 0.07); }
+  .toolstrip button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+  #viewer { position: relative; width: 100%; max-width: 560px; aspect-ratio: 1 / 1; background: #000; border: 1px solid var(--rule-strong); }
+  #viewer canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  #viewer .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); padding: 24px; text-align: center; }
+  .caption { font: 12px/1.5 Consolas, "DejaVu Sans Mono", monospace; margin: 8px 0 0; min-height: 3em; }
+  .caption b { font-weight: normal; color: var(--muted); }
+  .player { display: flex; gap: 6px; align-items: center; margin: 8px 0 0; flex-wrap: wrap; }
+  .player output { font: 12px Consolas, "DejaVu Sans Mono", monospace; color: var(--muted); }
+  #log { font: 11px/1.5 Consolas, "DejaVu Sans Mono", monospace; color: var(--stone); margin: 12px 0 0; white-space: pre-wrap; max-height: 9em; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TOMBAUGH</h1>
+  <span>plugin demo: Solar system (follow a moving body)</span>
+</header>
+<p class="banner">Everything on this page is synthetic: a fake ephemeris service, a fake exposure index and fake cutouts with a moving body over a fixed star field. Names are borrowed from real bodies so the catalogue can be tried; the numbers are not theirs. Try Pluto (bright, methane bands), Eris (needs the stack), Sedna (not detected), Ceres (saturates), 3I/ATLAS (a coma and CO<sub>2</sub>), Gonggong (never observed), or type "ATLAS" or "Nibiru" for the error states.</p>
+<main>
+  <section class="box" aria-label="Fake shell viewer">
+    <h2>VIEWER (what the shell would show for the view "Follow body")</h2>
+    <div class="toolstrip" id="toolstrip"><span class="hint">Tools added by the plugin:</span></div>
+    <div id="viewer"><canvas id="viewer-canvas" width="79" height="79" role="img" aria-label="Movie frame"></canvas><div class="empty" id="viewer-empty">The view "Follow body" has nothing to show yet. Choose a body and load its exposures.</div></div>
+    <p class="caption" id="viewer-caption"></p>
+    <div class="player">
+      <button id="prev" type="button" aria-label="Previous frame">‹</button>
+      <button id="play" type="button">Play</button>
+      <button id="next" type="button" aria-label="Next frame">›</button>
+      <output id="counter">0 / 0</output>
+    </div>
+    <pre id="log" aria-label="Demo log"></pre>
+  </section>
+  <section class="box" aria-label="Side panel">
+    <h2 id="panel-title">PANEL</h2>
+    <div id="panel"></div>
+  </section>
+</main>
+
+<script type="module">
+import { install, meta } from './index.js';
+import { makeEphemeris, positionAt } from './track.js';
+import { makeWcs, makeGrid } from '../../core/wcs.js';
+import { DETECTORS } from '../../core/frames.js';
+
+const DEG = Math.PI / 180;
+const PIX = 6.15;
+const UJY = 889;
+const params = new URLSearchParams(location.search);
+const useHooks = params.get('hooks') !== '0';
+const latency = params.has('latency') ? Number(params.get('latency')) : 12;
+
+const logEl = document.getElementById('log');
+const log = (text) => { logEl.textContent += `${text}\n`; logEl.scrollTop = logEl.scrollHeight; };
+
+// ---- a deterministic fake sky ------------------------------------------------------------------
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function gauss(rand) {
+  let u = 0;
+  while (u < 1e-12) u = rand();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
+}
+function erf(x) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x < 0 ? -y : y;
+}
+const dip = (w, c, width, depth) => 1 - depth * Math.exp(-0.5 * ((w - c) / width) ** 2);
+const SPECTRA = {
+  ch4: (w) => dip(w, 1.72, 0.06, 0.3) * dip(w, 2.3, 0.09, 0.5) * dip(w, 3.3, 0.12, 0.72) * (w / 1.2) ** -0.6,
+  h2o: (w) => dip(w, 1.5, 0.06, 0.25) * dip(w, 2.0, 0.08, 0.4) * dip(w, 3.05, 0.18, 0.6) * (w / 1.2) ** -0.8,
+  hyd: (w) => dip(w, 2.72, 0.07, 0.3) * dip(w, 3.06, 0.06, 0.15) * ((w / 1.2) ** -1.6 + 0.02 * Math.exp(2.2 * (w - 3.2))),
+  pyx: (w) => dip(w, 0.92, 0.07, 0.4) * dip(w, 1.95, 0.2, 0.35) * (w / 1.2) ** -1.4,
+  coma: (w) => (w / 1.2) ** -0.9 * dip(w, 3.05, 0.2, 0.25) * (1 + 3.2 * Math.exp(-0.5 * ((w - 4.27) / 0.06) ** 2)),
+  flat: () => 1,
+};
+// command -> fake body (positions, rates and fluxes are made up)
+const WORLD = {
+  '999': { name: 'Pluto (999)', ra: 305.25, dec: -23.36, rate: 3.1, pa: 255, delta: 34.3, mag: 14.4, flux: 5200, spec: 'ch4' },
+  '136199;': { name: '136199 Eris (2003 UB313)', ra: 27.1, dec: -0.9, rate: 1.4, pa: 80, delta: 95.1, mag: 18.7, flux: 115, spec: 'ch4' },
+  '136472;': { name: '136472 Makemake (2005 FY9)', ra: 199.3, dec: 21.4, rate: 2.0, pa: 290, delta: 52.6, mag: 17.2, flux: 420, spec: 'ch4' },
+  '136108;': { name: '136108 Haumea (2003 EL61)', ra: 219.8, dec: 14.6, rate: 2.2, pa: 285, delta: 49.9, mag: 17.4, flux: 360, spec: 'h2o' },
+  '50000;': { name: '50000 Quaoar (2002 LM60)', ra: 280.2, dec: -15.1, rate: 2.5, pa: 265, delta: 42.3, mag: 18.8, flux: 105, spec: 'h2o' },
+  '90482;': { name: '90482 Orcus (2004 DW)', ra: 156.4, dec: -11.2, rate: 2.3, pa: 300, delta: 47.8, mag: 19.1, flux: 80, spec: 'h2o' },
+  '225088;': { name: '225088 Gonggong (2007 OR10)', ra: 338.9, dec: -11.9, rate: 1.3, pa: 75, delta: 88.9, mag: 21.4, flux: 8, spec: 'ch4', never: true },
+  'Sedna;': { name: '90377 Sedna (2003 VB12)', ra: 59.6, dec: 8.6, rate: 0.9, pa: 70, delta: 83.3, mag: 20.8, flux: 12, spec: 'ch4' },
+  '2060;': { name: '2060 Chiron (1977 UB)', ra: 32.4, dec: 12.1, rate: 4.2, pa: 75, delta: 18.4, mag: 18.5, flux: 150, spec: 'h2o' },
+  'Ceres;': { name: '1 Ceres (A801 AA)', ra: 12.8, dec: -6.2, rate: 28, pa: 100, delta: 2.6, mag: 8.4, flux: 1.3e6, spec: 'hyd' },
+  '4;': { name: '4 Vesta (A807 FA)', ra: 215.1, dec: -8.3, rate: 32, pa: 250, delta: 2.1, mag: 7.1, flux: 2.4e6, spec: 'pyx' },
+  '2;': { name: '2 Pallas (A802 FA)', ra: 310.5, dec: 12.9, rate: 25, pa: 240, delta: 2.9, mag: 9.6, flux: 4.5e5, spec: 'hyd' },
+  '10;': { name: '10 Hygiea (A849 GA)', ra: 100.7, dec: 20.2, rate: 22, pa: 95, delta: 2.9, mag: 10.9, flux: 1.2e5, spec: 'hyd' },
+  'DES=C/2025 N1;': { name: 'ATLAS (C/2025 N1)', ra: 246.71, dec: -16.79, rate: 62, pa: 262, delta: 2.7, mag: 17.8, flux: 9000, spec: 'coma', fwhm: 26 },
+};
+const VISITS = [60895, 61075, 61255];
+const fakeEphs = new Map(); // key -> { eph, body }
+
+function fakeEphemeris(body, start, end, step) {
+  const b = WORLD[body];
+  if (!b) {
+    if (/atlas/i.test(body)) {
+      throw Object.assign(new Error('Horizons knows several bodies by that name. Use a number or a designation (for example "136199" or "DES=C/2025 N1").'), {
+        code: 'AMBIGUOUS', status: 409, retryable: false,
+        matches: '    Record #  Epoch-yr  >MATCH DESIG<  Primary Desig  Name\n    --------  --------  -------------  -------------  -------------------------\n    90004481    2020    C/2019 Y4      C/2019 Y4       ATLAS\n    90004523    2021    C/2020 R4      C/2020 R4       ATLAS\n    90004812    2025    C/2024 G3      C/2024 G3       ATLAS\n    90004901    2025    C/2025 N1      C/2025 N1       ATLAS\n (4 matches. To SELECT, enter record # (integer), followed by semi-colon.)',
+      });
+    }
+    throw Object.assign(new Error('Horizons does not know a body by that name.'), { code: 'NOT_FOUND', status: 404, retryable: false });
+  }
+  const samples = [];
+  for (let mjd = start; mjd <= end + 1e-9; mjd += step / 24) {
+    const hours = (mjd - 60888) * 24;
+    const along = (b.rate * hours) / 3600;
+    const dec = b.dec + along * Math.cos(b.pa * DEG);
+    const ra = b.ra + (along * Math.sin(b.pa * DEG)) / Math.cos(b.dec * DEG);
+    samples.push([mjd, ((ra % 360) + 360) % 360, dec, b.delta + 0.0004 * (mjd - 60888), b.mag]);
+  }
+  return { body, name: b.name, source: 'JPL Horizons (fake, for this demo)', center: 'geocentric', samples };
+}
+
+function fakeTrack(samples) {
+  const eph = makeEphemeris(samples);
+  // Which fake body is this? The one whose fake ephemeris passes through the first sample.
+  let key = 'hypothetical';
+  let body = { flux: 0, spec: 'flat' };
+  for (const [command, b] of Object.entries(WORLD)) {
+    const s = fakeEphemeris(command, samples[0][0], samples[0][0], 12).samples[0];
+    if (Math.abs(s[1] - samples[0][1]) < 1e-4 && Math.abs(s[2] - samples[0][2]) < 1e-4) { key = command; body = b; break; }
+  }
+  const id = `${key}#${fakeEphs.size}`;
+  fakeEphs.set(id, { eph, body });
+  const frames = [];
+  if (!body.never) {
+    VISITS.forEach((start, v) => {
+      if (start < eph.mjdMin || start + 3 > eph.mjdMax) return;
+      for (let k = 0; k < 9; k++) {
+        for (let det = 1; det <= 6; det++) {
+          const mjd = start + (k * 6 + det) * 0.035 + 0.003 * ((k * 7 + det * 3) % 5);
+          const p = positionAt(eph, mjd);
+          frames.push({ id: `demo/${encodeURIComponent(id)}/${v}/${det}/${k}`, det, mjd, release: 'demo', obsid: `demo_${v}_${k}`, x: 1020, y: 1020, ra: p.ra, dec: p.dec });
+        }
+      }
+    });
+  }
+  frames.sort((a, b) => a.mjd - b.mjd);
+  return { frames, complete: true };
+}
+
+/** Stars of the fake sky near a position: fixed in the sky, a few per 72 arcsec cell. */
+function starsNear(ra, dec, radiusDeg) {
+  const cell = 0.02;
+  const cosd = Math.cos(dec * DEG);
+  const out = [];
+  const j0 = Math.floor((dec - radiusDeg) / cell);
+  const j1 = Math.floor((dec + radiusDeg) / cell);
+  const i0 = Math.floor(((ra - radiusDeg / cosd) * cosd) / cell);
+  const i1 = Math.floor(((ra + radiusDeg / cosd) * cosd) / cell);
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const rand = mulberry32(hash(`${i}:${j}`));
+      const count = rand() < 0.55 ? 1 : rand() < 0.3 ? 2 : 0;
+      for (let s = 0; s < count; s++) {
+        out.push({ ra: ((i + rand()) * cell) / cosd, dec: (j + rand()) * cell, flux: 250 * 10 ** (1.9 * rand() ** 2), slope: -1.5 + 1.2 * rand() });
+      }
+    }
+  }
+  return out;
+}
+
+const failedOnce = new Set();
+async function fakeCutout(id, ra, dec, size, opts) {
+  await new Promise((resolve) => setTimeout(resolve, latency * (0.5 + Math.random())));
+  if (opts && opts.signal && opts.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+  const [, keyEnc, vText, detText, kText] = id.split('/');
+  const entry = fakeEphs.get(decodeURIComponent(keyEnc));
+  const v = Number(vText);
+  const det = Number(detText);
+  const k = Number(kText);
+  if (!entry) throw Object.assign(new Error('unknown frame'), { status: 404, retryable: false });
+  // A few exposures the archive does not have, and one that fails once and then works.
+  if (v === 1 && det === 6 && k >= 7) throw Object.assign(new Error('No such file in the archive'), { status: 404, retryable: false });
+  if (v === 0 && det === 2 && k === 3 && !failedOnce.has(id)) {
+    failedOnce.add(id);
+    throw Object.assign(new Error('The archive timed out'), { status: 504, retryable: true });
+  }
+  const rand = mulberry32(hash(id));
+  const mjd = VISITS[v] + (k * 6 + det) * 0.035 + 0.003 * ((k * 7 + det * 3) % 5) + 57.6 / 86400;
+  const d = DETECTORS[det - 1];
+  const wave = d.min * (d.max / d.min) ** ((k + 0.15 + 0.7 * rand()) / 9);
+  const nx = Math.max(13, Math.round((size * 3600) / PIX));
+  const ny = nx;
+  const theta = rand() * 2 * Math.PI;
+  const sc = PIX / 3600;
+  const c = Math.cos(theta);
+  const sn = Math.sin(theta);
+  const wcs = { crpix: [(nx + 1) / 2 + rand() - 0.5, (ny + 1) / 2 + rand() - 0.5], crval: [ra, dec], pc: [[-sc * c, -sc * sn], [-sc * sn, sc * c]], cdelt: [1, 1], sip: null };
+  const w = makeWcs(wcs);
+  const noise = 0.02 * (wave > 4 ? 1.6 : 1);
+  const zodiLevel = 0.25 + 0.1 * wave;
+  const image = new Float32Array(nx * ny);
+  const variance = new Float32Array(nx * ny).fill(noise * noise);
+  const zodi = new Float32Array(nx * ny).fill(zodiLevel);
+  const flags = new Int32Array(nx * ny);
+  const waveArr = new Float32Array(nx * ny).fill(wave);
+  const bg = 0.02 * (rand() - 0.5);
+  for (let i = 0; i < image.length; i++) image[i] = zodiLevel + bg + noise * gauss(rand);
+  const stamp = (sra, sdec, flux, fwhm) => {
+    const [x, y] = w.skyToPix(sra, sdec);
+    if (!Number.isFinite(x) || x < -6 || y < -6 || x > nx + 6 || y > ny + 6) return;
+    const sigma = (fwhm / PIX) / 2.3548;
+    const a = 1 / (Math.SQRT2 * sigma);
+    const R = Math.ceil(4.5 * sigma) + 1;
+    for (let py = Math.max(0, Math.round(y) - R); py <= Math.min(ny - 1, Math.round(y) + R); py++) {
+      const fy = 0.5 * (erf((py + 0.5 - y) * a) - erf((py - 0.5 - y) * a));
+      for (let px = Math.max(0, Math.round(x) - R); px <= Math.min(nx - 1, Math.round(x) + R); px++) {
+        const fx = 0.5 * (erf((px + 0.5 - x) * a) - erf((px - 0.5 - x) * a));
+        image[py * nx + px] += (flux / UJY) * fx * fy;
+      }
+    }
+  };
+  for (const st of starsNear(ra, dec, size)) stamp(st.ra, st.dec, st.flux * (wave / 1.2) ** st.slope, 7.46);
+  const pos = positionAt(entry.eph, mjd);
+  const b = entry.body;
+  if (b.flux > 0) stamp(pos.ra, pos.dec, b.flux * SPECTRA[b.spec](wave), b.fwhm || 7.46);
+  // Saturation: the detector tops out; those pixels are flagged OVERFLOW.
+  for (let i = 0; i < image.length; i++) {
+    if (image[i] > 320) { image[i] = 320; flags[i] |= 1 << 1; }
+  }
+  return {
+    id, det, nx, ny, mjd, exptime: 113.58, release: 'demo', obsid: `demo_${v}_${k}`, version: 'demo', wcs,
+    image, variance, zodi, flags, wave: waveArr, waveCenter: wave, bwCenter: wave / 41, psfFwhm: 7.46,
+  };
+}
+
+// ---- fake API ------------------------------------------------------------------------------------
+const api = { baseUrl: '/demo-api', cutout: fakeCutout };
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+if (useHooks) {
+  api.ephemeris = async (body, start, end, step) => {
+    log(`api.ephemeris(${JSON.stringify(body)}, ${start}, ${end}, ${step})`);
+    await wait(250);
+    return fakeEphemeris(body, start, end, step);
+  };
+  api.track = async (samples) => {
+    log(`api.track(${samples.length} samples)`);
+    await wait(300);
+    return fakeTrack(samples);
+  };
+} else {
+  // No api.ephemeris / api.track: the plugin falls back to fetch against api.baseUrl.
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (url, init) => {
+    const u = new URL(String(url), location.href);
+    if (!u.pathname.startsWith('/demo-api/')) return realFetch(url, init);
+    await wait(250);
+    const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    try {
+      if (u.pathname.endsWith('/ephemeris')) {
+        log(`GET ${u.pathname}${u.search}`);
+        return json(200, fakeEphemeris(u.searchParams.get('body'), Number(u.searchParams.get('start')), Number(u.searchParams.get('end')), Number(u.searchParams.get('step'))));
+      }
+      if (u.pathname.endsWith('/track')) {
+        const body = JSON.parse(init.body);
+        log(`POST ${u.pathname} (${body.samples.length} samples)`);
+        return json(200, fakeTrack(body.samples));
+      }
+    } catch (err) {
+      return json(err.status || 500, { error: err.message, retryable: !!err.retryable, code: err.code || '', matches: err.matches || '' });
+    }
+    return json(404, { error: 'no such route', retryable: false });
+  };
+}
+
+// ---- fake app --------------------------------------------------------------------------------------
+const state = { view: VIEW(), fov: 4, t: 0 };
+function VIEW() { return 'comoving'; }
+const subscribers = new Set();
+const views = new Map();
+let movie = [];
+let index = 0;
+let timer = null;
+let rebuildQueued = false;
+const canvas = document.getElementById('viewer-canvas');
+const captionEl = document.getElementById('viewer-caption');
+const emptyEl = document.getElementById('viewer-empty');
+const counter = document.getElementById('counter');
+const grid = makeGrid(0, 0, 4);
+
+function drawFrame() {
+  const f = movie[index];
+  emptyEl.hidden = !!f;
+  counter.textContent = `${movie.length ? index + 1 : 0} / ${movie.length}`;
+  if (!f) { captionEl.textContent = ''; return; }
+  const n = Math.round(Math.sqrt(f.image.length));
+  canvas.width = n; canvas.height = n;
+  const ctx = canvas.getContext('2d');
+  const out = ctx.createImageData(n, n);
+  const [lo, hi] = f.range;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const i = (n - 1 - y) * n + x;
+      const o = (y * n + x) * 4;
+      const v = f.image[i];
+      let g = 0.03;
+      if (!(f.mask && f.mask[i]) && v - v === 0) g = Math.asinh(Math.min(1, Math.max(0, (v - lo) / (hi - lo))) * 6) / Math.asinh(6);
+      out.data[o] = 23 + 224 * g; out.data[o + 1] = 23 + 219 * g; out.data[o + 2] = 21 + 210 * g; out.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  captionEl.innerHTML = '';
+  const c = f.caption;
+  captionEl.append(c.title, document.createElement('br'), `${c.date}  `, Object.assign(document.createElement('b'), { textContent: c.wave }), document.createElement('br'), Object.assign(document.createElement('b'), { textContent: c.note }));
+}
+
+async function rebuild() {
+  rebuildQueued = false;
+  const view = views.get(state.view);
+  movie = [];
+  if (view) {
+    try {
+      movie = (await view.build({ app, state, grid, layers: [], layersByDet: new Map(), frames: [], gaia: [] })) || [];
+    } catch (err) {
+      console.error('view failed', err);
+    }
+  }
+  index = 0;
+  log(`view "${state.view}" built ${movie.length} movie frames`);
+  drawFrame();
+}
+function queueRebuild() {
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(rebuild);
+}
+
+const app = {
+  version: 'demo',
+  api,
+  store: {
+    get: () => ({ ...state }),
+    set(patch) {
+      const changed = Object.keys(patch).filter((k) => state[k] !== patch[k]);
+      Object.assign(state, patch);
+      if (changed.length) for (const fn of subscribers) fn({ ...state }, changed);
+      if ('view' in patch) queueRebuild();
+    },
+    subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
+  },
+  viewer: null,
+  target: () => null,
+  grid: () => grid,
+  frames: () => [],
+  layers: () => [],
+  movie: () => ({ frames: movie.slice(), index, playing: !!timer, view: state.view }),
+  goTo: (t) => log(`app.goTo(${t.ra.toFixed(4)}, ${t.dec.toFixed(4)}, ${JSON.stringify(t.name)})`),
+  on: () => () => {},
+  toast: (message) => log(`toast: ${message}`),
+  addTool({ id, label, title, icon, onClick }) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = title || label;
+    btn.dataset.tool = id;
+    btn.innerHTML = typeof icon === 'string' ? icon : '';
+    btn.append(label);
+    btn.addEventListener('click', onClick);
+    document.getElementById('toolstrip').append(btn);
+    return { setActive: (on) => btn.setAttribute('aria-pressed', on ? 'true' : 'false'), setDisabled: (on) => { btn.disabled = !!on; }, remove: () => btn.remove() };
+  },
+  addPanel({ id, title, render }) {
+    document.getElementById('panel-title').textContent = `PANEL: ${title.toUpperCase()}`;
+    const host = document.getElementById('panel');
+    let rendered = null;
+    const show = () => {
+      if (!rendered) rendered = render(host) || {};
+      else if (rendered.update) rendered.update();
+      host.scrollIntoView({ block: 'nearest' });
+    };
+    show();
+    return { show, hide() {}, remove() { if (rendered && rendered.dispose) rendered.dispose(); } };
+  },
+  addView(view) {
+    views.set(view.id, view);
+    log(`view registered: ${view.id} ("${view.label}")`);
+    return { remove: () => views.delete(view.id) };
+  },
+  addOverlay: () => () => {},
+  explain() {},
+  openModal: () => ({ close() {} }),
+};
+
+document.getElementById('prev').addEventListener('click', () => { if (movie.length) { index = (index + movie.length - 1) % movie.length; drawFrame(); } });
+document.getElementById('next').addEventListener('click', () => { if (movie.length) { index = (index + 1) % movie.length; drawFrame(); } });
+document.getElementById('play').addEventListener('click', (e) => {
+  if (timer) { clearInterval(timer); timer = null; e.target.textContent = 'Play'; return; }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; // step by hand instead
+  timer = setInterval(() => { if (movie.length) { index = (index + 1) % movie.length; drawFrame(); } }, 600);
+  e.target.textContent = 'Pause';
+});
+
+log(`plugin: ${meta.id}: ${meta.description}`);
+log(useHooks ? 'using app.api.ephemeris / app.api.track' : 'no API hooks: the plugin fetches /demo-api/ephemeris and /demo-api/track');
+const handle = install(app);
+window.demo = { app, handle, state, movie: () => movie };
+drawFrame();
+
+// ?body=Pluto follows a body straight away; &load=1 also loads its exposures.
+const auto = params.get('body');
+if (auto) {
+  const input = document.querySelector('.tbm-input');
+  input.value = auto;
+  input.form.requestSubmit();
+}
+</script>
+</body>
+</html>

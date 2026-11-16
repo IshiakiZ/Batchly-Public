@@ -6,3 +6,6 @@ catalog/** -text
 
 # AI Fight's source and web manifests pin the exact reviewed artifact bytes.
 apps/ai-fight/** -text
+
+# Tombaugh (NASA Space Apps 2026): plain text source, LF line endings.
+apps/tombaugh/** text=auto eol=lf
